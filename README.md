@@ -125,21 +125,19 @@ Gamepad button/axis layouts are resolved through SDL2's community-maintained [`g
 
 Live demo clips for every controller in the built-in model library. (The `+` badge on `3dco+` itself is a nod to this: everything below is an addition on top of what the original project shipped with.)
 
-> The clips below are placeholders — I'll be swapping each one for real capture footage as I record it.
+> **Note:** The clips below are animated WebP previews that autoplay directly in GitHub. If you're viewing this locally, the original `.mp4` files are also in the `images/` folder.
 
-| Controller 1                                                                                                                    | Controller 2                                                                                                    |
-| ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **Steam Controller 2026**<br><video width="200" controls><source src="images/steamcontroller2026.mp4" type="video/mp4"></video> | **DualSense**<br><video width="200" controls><source src="images/dualsense.mp4" type="video/mp4"></video>       |
-| **DualShock 4**<br><video width="200" controls><source src="images/dualshock4.mp4" type="video/mp4"></video>                    | **GameCube**<br><video width="200" controls><source src="images/gamecube.mp4" type="video/mp4"></video>         |
-| **Joy-Con Grip**<br><video width="200" controls><source src="images/joycongrip.mp4" type="video/mp4"></video>                   | **Keyboard**<br><video width="200" controls><source src="images/keyboard.mp4" type="video/mp4"></video>         |
-| **Left Joy-Con**<br><video width="200" controls><source src="images/leftjoycon.mp4" type="video/mp4"></video>                   | **Right Joy-Con**<br><video width="200" controls><source src="images/rightjoycon.mp4" type="video/mp4"></video> |
-| **Xbox One**<br><video width="200" controls><source src="images/xboxone.mp4" type="video/mp4"></video>                          | **Xbox 360**<br><video width="200" controls><source src="images/xbox360.mp4" type="video/mp4"></video>          |
-| **Mouse**<br><video width="200" controls><source src="images/mouse.mp4" type="video/mp4"></video>                               | **Switch Pro**<br><video width="200" controls><source src="images/switchpro.mp4" type="video/mp4"></video>      |
-| **Wavebird**<br><video width="200" controls><source src="images/wavebird.mp4" type="video/mp4"></video>                         | **Flightstick**<br><video width="200" controls><source src="images/flightstick.mp4" type="video/mp4"></video>   |
+| Controller 1                                                                           | Controller 2                                                   |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| **Steam Controller 2026**<br>![Steam Controller 2026](images/steamcontroller2026.webp) | **DualSense**<br>![DualSense](images/dualsense.webp)           |
+| **DualShock 4**<br>![DualShock 4](images/dualshock4.webp)                              | **GameCube**<br>![GameCube](images/gamecube.webp)              |
+| **Joy-Con Grip**<br>![Joy-Con Grip](images/joycongrip.webp)                            | **Keyboard**<br>![Keyboard](images/keyboard.webp)              |
+| **Left Joy-Con**<br>![Left Joy-Con](images/leftjoycon.webp)                            | **Right Joy-Con**<br>![Right Joy-Con](images/rightjoycon.webp) |
+| **Xbox One**<br>![Xbox One](images/xboxone.webp)                                       | **Xbox 360**<br>![Xbox 360](images/xbox360.webp)               |
+| **Mouse**<br>![Mouse](images/mouse.webp)                                               | **Switch Pro**<br>![Switch Pro](images/switchpro.webp)         |
+| **Wavebird**<br>![Wavebird](images/wavebird.webp)                                      | **Flightstick**<br>![Flightstick](images/flightstick.webp)     |
 
 ## Work in progress / known bugs
-
-h
 
 - **Racing wheel / flightstick support** — planned for pedal/wheel/stick/force-feedback devices; not yet in the model library or input path.
 - **Windows/macOS coverage** — both platforms build and run, but get less real-world testing than Linux. Expect the occasional platform-specific rough edge.
