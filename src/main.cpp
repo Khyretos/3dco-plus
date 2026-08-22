@@ -2,6 +2,7 @@
 #include "log_window.h"
 #include "settings.h"
 #include "settings_window.h"
+#include <filesystem>
 #include <iostream>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>

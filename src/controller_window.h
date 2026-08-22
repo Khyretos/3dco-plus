@@ -130,7 +130,7 @@ typedef struct controller_window_struct {
   int swap_interval = 1;
   bool wireframe = false;
   Uint8 frame_cap = 60;
-  float bg_color[4] = {0.256f, 0.2f, 0.3f, 1.0f};
+  float bg_color[4] = {0.2f, 0.3f, 0.3f, 1.0f};
   bool freelook = false;
 
   double deltaTime = 0.0f;
@@ -181,7 +181,8 @@ typedef struct controller_window_struct {
   GLuint lighting_normal_data = 0;
   GLuint lighting_texture_data = 0;
   GLuint lighting_vao = 0;
-  GLuint lighting_ebo = 0;
+  // lighting_ebo removed - declared but never created or used anywhere;
+  // the lighting geometry is drawn without an index buffer.
 
   std::string model_name = "";
   std::string mesh_name = "";

@@ -212,9 +212,10 @@ void loadModel(Model &m, std::string path);
 
 void loadMesh(Mesh &m, std::string path);
 
-void readInfo(Model &m, std::string path);
-
-void writeInfo(Model &m, std::string path);
+// readInfo(...) / writeInfo(...) removed - dead code with zero call sites
+// anywhere in the codebase. They implemented the legacy plain-text
+// info.txt format, which loadModel()'s own inline fallback reader already
+// handles directly, and every save path goes through writeJson() instead.
 
 void loadTexture(GLuint &id, std::string path);
 
