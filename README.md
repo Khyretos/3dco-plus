@@ -127,17 +127,19 @@ Live demo clips for every controller in the built-in model library. (The `+` bad
 
 > The clips below are placeholders — I'll be swapping each one for real capture footage as I record it.
 
-|                                                                                                                 |                                                                                         |
-| --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| **Steam Controller 2026** ![Steam Controller 2026 demo placeholder](images/steamcontroller2026_placeholder.gif) | **DualSense** ![DualSense demo placeholder](images/dualsense_placeholder.gif)           |
-| **DualShock 4** ![DualShock 4 demo placeholder](images/dualshock4_placeholder.gif)                              | **GameCube** ![GameCube demo placeholder](images/gamecube_placeholder.gif)              |
-| **Joy-Con Grip** ![Joy-Con Grip demo placeholder](images/joycongrip_placeholder.gif)                            | **Keyboard** ![Keyboard demo placeholder](images/keyboard_placeholder.gif)              |
-| **Left Joy-Con** ![Left Joy-Con demo placeholder](images/leftjoycon_placeholder.gif)                            | **Right Joy-Con** ![Right Joy-Con demo placeholder](images/rightjoycon_placeholder.gif) |
-| **Xbox One** ![Xbox One demo placeholder](images/xboxone_placeholder.gif)                                       | **Xbox 360** ![Xbox 360 demo placeholder](images/xbox360_placeholder.gif)               |
-| **Mouse** ![Mouse demo placeholder](images/mouse_placeholder.gif)                                               | **Switch Pro** ![Switch Pro demo placeholder](images/switchpro_placeholder.gif)         |
-| **Wavebird** ![Wavebird demo placeholder](images/wavebird_placeholder.gif)                                      | **Flightstick** ![Flightstick demo placeholder](images/flightstick_placeholder.gif)     |
+|                                                                                                     |                                                                             |
+| --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| **Steam Controller 2026** ![Steam Controller 2026 demo placeholder](images/steamcontroller2026.mp4) | **DualSense** ![DualSense demo placeholder](images/dualsense.mp4)           |
+| **DualShock 4** ![DualShock 4 demo placeholder](images/dualshock4.mp4)                              | **GameCube** ![GameCube demo placeholder](images/gamecube.mp4)              |
+| **Joy-Con Grip** ![Joy-Con Grip demo placeholder](images/joycongrip.mp4)                            | **Keyboard** ![Keyboard demo placeholder](images/keyboard.mp4)              |
+| **Left Joy-Con** ![Left Joy-Con demo placeholder](images/leftjoycon.mp4)                            | **Right Joy-Con** ![Right Joy-Con demo placeholder](images/rightjoycon.mp4) |
+| **Xbox One** ![Xbox One demo placeholder](images/xboxone.mp4)                                       | **Xbox 360** ![Xbox 360 demo placeholder](images/xbox360.mp4)               |
+| **Mouse** ![Mouse demo placeholder](images/mouse.mp4)                                               | **Switch Pro** ![Switch Pro demo placeholder](images/switchpro.mp4)         |
+| **Wavebird** ![Wavebird demo placeholder](images/wavebird.mp4)                                      | **Flightstick** ![Flightstick demo placeholder](images/flightstick.mp4)     |
 
 ## Work in progress / known bugs
+
+h
 
 - **Racing wheel / flightstick support** — planned for pedal/wheel/stick/force-feedback devices; not yet in the model library or input path.
 - **Windows/macOS coverage** — both platforms build and run, but get less real-world testing than Linux. Expect the occasional platform-specific rough edge.
