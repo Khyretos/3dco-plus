@@ -127,15 +127,15 @@ Live demo clips for every controller in the built-in model library. (The `+` bad
 
 > The clips below are placeholders — I'll be swapping each one for real capture footage as I record it.
 
-|                                                                                                     |                                                                             |
-| --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| **Steam Controller 2026** ![Steam Controller 2026 demo placeholder](images/steamcontroller2026.mp4) | **DualSense** ![DualSense demo placeholder](images/dualsense.mp4)           |
-| **DualShock 4** ![DualShock 4 demo placeholder](images/dualshock4.mp4)                              | **GameCube** ![GameCube demo placeholder](images/gamecube.mp4)              |
-| **Joy-Con Grip** ![Joy-Con Grip demo placeholder](images/joycongrip.mp4)                            | **Keyboard** ![Keyboard demo placeholder](images/keyboard.mp4)              |
-| **Left Joy-Con** ![Left Joy-Con demo placeholder](images/leftjoycon.mp4)                            | **Right Joy-Con** ![Right Joy-Con demo placeholder](images/rightjoycon.mp4) |
-| **Xbox One** ![Xbox One demo placeholder](images/xboxone.mp4)                                       | **Xbox 360** ![Xbox 360 demo placeholder](images/xbox360.mp4)               |
-| **Mouse** ![Mouse demo placeholder](images/mouse.mp4)                                               | **Switch Pro** ![Switch Pro demo placeholder](images/switchpro.mp4)         |
-| **Wavebird** ![Wavebird demo placeholder](images/wavebird.mp4)                                      | **Flightstick** ![Flightstick demo placeholder](images/flightstick.mp4)     |
+| Controller 1                                                                                                                    | Controller 2                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Steam Controller 2026**<br><video width="200" controls><source src="images/steamcontroller2026.mp4" type="video/mp4"></video> | **DualSense**<br><video width="200" controls><source src="images/dualsense.mp4" type="video/mp4"></video>       |
+| **DualShock 4**<br><video width="200" controls><source src="images/dualshock4.mp4" type="video/mp4"></video>                    | **GameCube**<br><video width="200" controls><source src="images/gamecube.mp4" type="video/mp4"></video>         |
+| **Joy-Con Grip**<br><video width="200" controls><source src="images/joycongrip.mp4" type="video/mp4"></video>                   | **Keyboard**<br><video width="200" controls><source src="images/keyboard.mp4" type="video/mp4"></video>         |
+| **Left Joy-Con**<br><video width="200" controls><source src="images/leftjoycon.mp4" type="video/mp4"></video>                   | **Right Joy-Con**<br><video width="200" controls><source src="images/rightjoycon.mp4" type="video/mp4"></video> |
+| **Xbox One**<br><video width="200" controls><source src="images/xboxone.mp4" type="video/mp4"></video>                          | **Xbox 360**<br><video width="200" controls><source src="images/xbox360.mp4" type="video/mp4"></video>          |
+| **Mouse**<br><video width="200" controls><source src="images/mouse.mp4" type="video/mp4"></video>                               | **Switch Pro**<br><video width="200" controls><source src="images/switchpro.mp4" type="video/mp4"></video>      |
+| **Wavebird**<br><video width="200" controls><source src="images/wavebird.mp4" type="video/mp4"></video>                         | **Flightstick**<br><video width="200" controls><source src="images/flightstick.mp4" type="video/mp4"></video>   |
 
 ## Work in progress / known bugs
 
