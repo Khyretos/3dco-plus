@@ -1,6 +1,6 @@
 # 3D Controller Overlay +
 
-![3D Controller Overlay + banner](images/banner_placeholder.png)
+![3D Controller Overlay + banner](images/banner.png)
 
 > ⚠️ **AI-assisted project — read before you judge the code.**
 > This fork is built with heavy use of AI coding assistance. That does **not** mean "vibe coded and shipped blind." Every architectural decision — how input flows from SDL into the mesh hierarchy, how the settings/import system is structured, what gets a raw joystick fallback vs. a GameController mapping, how the build/packaging pipeline is put together — was made, reviewed, and debugged by me. AI was the tool; the design, the testing, and the responsibility for what ships are mine. I'm building this openly as a way to test how far I can push my own skills with AI as a collaborator, not to hide behind it. If you find something that looks wrong, please open an issue — I'd genuinely rather know.
