@@ -124,18 +124,15 @@ Gamepad button/axis layouts are resolved through SDL2's community-maintained [`g
 ## Controller showcase
 
 Live demo clips for every controller in the built-in model library. (The `+` badge on `3dco+` itself is a nod to this: everything below is an addition on top of what the original project shipped with.)
-
-> **Note:** The clips below are animated WebP previews that autoplay directly in GitHub. If you're viewing this locally, the original `.mp4` files are also in the `images/` folder.
-
-| Controller 1                                                                           | Controller 2                                                   |
+| Controller 1 | Controller 2 |
 | -------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| **Steam Controller 2026**<br>![Steam Controller 2026](images/steamcontroller2026.webp) | **DualSense**<br>![DualSense](images/dualsense.webp)           |
-| **DualShock 4**<br>![DualShock 4](images/dualshock4.webp)                              | **GameCube**<br>![GameCube](images/gamecube.webp)              |
-| **Joy-Con Grip**<br>![Joy-Con Grip](images/joycongrip.webp)                            | **Keyboard**<br>![Keyboard](images/keyboard.webp)              |
-| **Left Joy-Con**<br>![Left Joy-Con](images/leftjoycon.webp)                            | **Right Joy-Con**<br>![Right Joy-Con](images/rightjoycon.webp) |
-| **Xbox One**<br>![Xbox One](images/xboxone.webp)                                       | **Xbox 360**<br>![Xbox 360](images/xbox360.webp)               |
-| **Mouse**<br>![Mouse](images/mouse.webp)                                               | **Switch Pro**<br>![Switch Pro](images/switchpro.webp)         |
-| **Wavebird**<br>![Wavebird](images/wavebird.webp)                                      | **Flightstick**<br>![Flightstick](images/flightstick.webp)     |
+| **Steam Controller 2026**<br>![Steam Controller 2026](images/steamcontroller2026.webp) | **DualSense**<br>![DualSense](images/dualsense.webp) |
+| **DualShock 4**<br>![DualShock 4](images/dualshock4.webp) | **GameCube**<br>![GameCube](images/gamecube.webp) |
+| **Joy-Con Grip**<br>![Joy-Con Grip](images/joycongrip.webp) | **Keyboard**<br>![Keyboard](images/keyboard.webp) |
+| **Left Joy-Con**<br>![Left Joy-Con](images/leftjoycon.webp) | **Right Joy-Con**<br>![Right Joy-Con](images/rightjoycon.webp) |
+| **Xbox One**<br>![Xbox One](images/xboxone.webp) | **Xbox 360**<br>![Xbox 360](images/xbox360.webp) |
+| **Mouse**<br>![Mouse](images/mouse.webp) | **Switch Pro**<br>![Switch Pro](images/switchpro.webp) |
+| **Wavebird**<br>![Wavebird](images/wavebird.webp) | **Flightstick**<br>![Flightstick](images/flightstick.webp) |
 
 ## Work in progress / known bugs
 
