@@ -87,8 +87,16 @@ void Draw() {
 
 void MainLoop() {
   while (!gQuit) {
-    Input();
-    Draw();
+    try {
+      Input();
+      Draw();
+    } catch (const std::exception &e) {
+      spdlog::critical("Unhandled exception in main loop: {}", e.what());
+      gQuit = true;
+    } catch (...) {
+      spdlog::critical("Unknown exception in main loop.");
+      gQuit = true;
+    }
   }
 }
 

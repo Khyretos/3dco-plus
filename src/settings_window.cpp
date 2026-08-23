@@ -13,6 +13,7 @@
 #endif
 
 #include "controller_window.h"
+#include "icon_data.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include "keyboard_input.h"
@@ -20,6 +21,7 @@
 #include "model.h"
 #include "settings.h"
 #include "settings_window.h"
+#include "stb_image.h"
 #include "strings.h"
 #include <cstring>
 #include <filesystem>
@@ -30,6 +32,29 @@
 #include <set>
 #include <spdlog/spdlog.h>
 #include <stdio.h>
+
+static GLuint getHelpIcon() {
+  static GLuint iconTex = 0;
+  if (iconTex)
+    return iconTex;
+
+  int w, h, comp;
+  unsigned char *data = stbi_load_from_memory(
+      Embedded::icon_data, static_cast<int>(Embedded::icon_size), &w, &h, &comp,
+      4);
+  if (!data) {
+    spdlog::warn("Failed to load embedded icon for help section");
+    return 0;
+  }
+  glGenTextures(1, &iconTex);
+  glBindTexture(GL_TEXTURE_2D, iconTex);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+               data);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  stbi_image_free(data);
+  return iconTex;
+}
 
 // ---- Capture state for auto‑binding (global) ----
 static struct CaptureState {
@@ -234,35 +259,59 @@ bool g_log_mouse = false;
 
 static int last_logged_device_index = -1;
 
+// Helper to center a piece of text or a widget horizontally within the current
+// content region.
+static void CenterItem(float itemWidth) {
+  float availWidth = ImGui::GetContentRegionAvail().x;
+  float offset = (availWidth - itemWidth) * 0.5f;
+  if (offset > 0.0f) {
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offset);
+  }
+}
+
+static void CenterText(const char *text) {
+  float textWidth = ImGui::CalcTextSize(text).x;
+  CenterItem(textWidth);
+}
+
 // ------------------------------------------------------------------
 // Shaded submenu helper
 // ------------------------------------------------------------------
 static void BeginShadedGroup() {
   ImGui::GetWindowDrawList()->ChannelsSplit(2);
-  ImGui::GetWindowDrawList()->ChannelsSetCurrent(1); // draw widgets on top
+  ImGui::GetWindowDrawList()->ChannelsSetCurrent(1);
   ImGui::Indent(6.0f);
-  ImGui::Dummy(ImVec2(0.0f, 2.0f)); // top padding
+  ImGui::Dummy(ImVec2(0.0f, 4.0f)); // top padding
   ImGui::BeginGroup();
 }
 
 static void EndShadedGroup(ImU32 bgColor, ImU32 borderColor) {
   ImGui::EndGroup();
 
-  // Capture the group's bounding box before any further layout calls move
-  // the "last item rect" that GetItemRectMin/Max reports.
+  // Get the group's bounding rectangle
+  ImVec2 rectMin = ImGui::GetItemRectMin();
+  ImVec2 rectMax = ImGui::GetItemRectMax();
+
+  // Extend the background to the full window width (minus a small margin)
+  float fullWidth =
+      ImGui::GetWindowWidth() - ImGui::GetStyle().WindowPadding.x * 2;
+  rectMin.x = ImGui::GetWindowPos().x + ImGui::GetStyle().WindowPadding.x;
+  rectMax.x = rectMin.x + fullWidth;
+
+  // Add some padding inside the background
   ImVec2 pad(8.0f, 4.0f);
-  ImVec2 rectMin = ImVec2(ImGui::GetItemRectMin().x - pad.x,
-                          ImGui::GetItemRectMin().y - pad.y);
-  ImVec2 rectMax = ImVec2(ImGui::GetItemRectMax().x + pad.x,
-                          ImGui::GetItemRectMax().y + pad.y);
+  rectMin.x -= pad.x;
+  rectMax.x += pad.x;
+  rectMin.y -= pad.y;
+  rectMax.y += pad.y;
 
   ImDrawList *dl = ImGui::GetWindowDrawList();
-  dl->ChannelsSetCurrent(0); // background, drawn behind channel 1's widgets
+  dl->ChannelsSetCurrent(0);
   dl->AddRectFilled(rectMin, rectMax, bgColor, 6.0f);
   dl->AddRect(rectMin, rectMax, borderColor, 6.0f);
   dl->ChannelsMerge();
 
-  ImGui::Dummy(ImVec2(0.0f, 2.0f)); // bottom padding
+  ImGui::Dummy(ImVec2(0.0f, 4.0f)); // bottom padding
   ImGui::Unindent(6.0f);
 }
 
@@ -401,14 +450,15 @@ void createSettingsWindow() {
                                  settings_framebuffer_size_callback);
 
   GLFWimage images[1];
-  images[0].pixels =
-      stbi_load("icon.png", &images[0].width, &images[0].height, 0, 4);
+  images[0].pixels = stbi_load_from_memory(
+      Embedded::icon_data, static_cast<int>(Embedded::icon_size),
+      &images[0].width, &images[0].height, nullptr, 4);
   if (images[0].pixels == NULL) {
-    spdlog::warn("Could not load settings window icon (icon.png).");
+    spdlog::warn("Could not load embedded icon for settings window.");
   } else {
     glfwSetWindowIcon(glfw_settings_window, 1, images);
+    stbi_image_free(images[0].pixels);
   }
-  stbi_image_free(images[0].pixels);
 
   primary_monitor = glfwGetPrimaryMonitor();
   vid_mode = glfwGetVideoMode(primary_monitor);
@@ -2948,21 +2998,107 @@ void drawSettingsWindow() {
     // HELP
     // ============================================================
     if (ImGui::CollapsingHeader("Help")) {
-      ImGui::Text("3D Controller Overlay version 1.12");
+      // Main two columns: icon (left) and content (right)
+      ImGui::Columns(2, "HelpColumns", false);
+      ImGui::SetColumnWidth(0, 80.0f);
+
+      // Left: icon
+      GLuint iconTex = getHelpIcon();
+      if (iconTex) {
+        ImGui::Image((void *)(intptr_t)iconTex, ImVec2(64, 64));
+      } else {
+        ImGui::Dummy(ImVec2(64, 64));
+      }
+      ImGui::NextColumn();
+
+      // Right: your project info
+      ImGui::TextColored(ImVec4(0.8f, 0.4f, 1.0f, 1.0f),
+                         "3D Controller Overlay +");
+      ImGui::SameLine();
+      ImGui::TextDisabled("v1.0.0");
+
       ImGui::NewLine();
-      ImGui::Text("https://github.com/larfingshnew/3d-controller-overlay");
-      if (ImGui::Button("Open Github Page")) {
+      ImGui::Text("A feature-rich fork of the original 3D Controller Overlay.");
+      ImGui::Text("Developed by Khyretos with AI assistence.");
+      ImGui::NewLine();
+
+      // ---- Two‑column table for repository & Discord ----
+      if (ImGui::BeginTable("HelpLinks", 2,
+                            ImGuiTableFlags_SizingStretchProp |
+                                ImGuiTableFlags_NoBordersInBody)) {
+        // Label column: 35% of available width, Widgets column: 65%
+        ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthStretch,
+                                0.35f);
+        ImGui::TableSetupColumn("Widgets", ImGuiTableColumnFlags_WidthStretch,
+                                0.65f);
+
+        // Row 1: Repository
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::Text("Repository (this fork):");
+
+        ImGui::TableSetColumnIndex(1);
+        if (ImGui::Button("Open Khyretos/3dco-plus")) {
+          OsOpenInShell("https://github.com/Khyretos/3dco-plus");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Copy URL")) {
+          ImGui::SetClipboardText("https://github.com/Khyretos/3dco-plus");
+        }
+
+        // Row 2: Discord
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::Text("My Discord (support / feedback):");
+
+        ImGui::TableSetColumnIndex(1);
+        if (ImGui::Button("Join my Discord")) {
+          // Replace with your own invite link
+          OsOpenInShell("https://discord.com/invite/pRUfZhNaYQ");
+        }
+
+        ImGui::EndTable();
+      }
+
+      ImGui::Columns(1);
+
+      // ------------------------------------------------------------------
+      // Original project section – with shaded background, centered
+      // ------------------------------------------------------------------
+      ImGui::Separator();
+
+      BeginShadedGroup();
+
+      CenterText("Original Project");
+      ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.2f, 1.0f), "Original Project");
+
+      CenterText("3D Controller Overlay by Larf (larfingshnew)");
+      ImGui::Text("3D Controller Overlay by Larf (larfingshnew)");
+
+      CenterText("The original project this fork is based on.");
+      ImGui::Text("The original project this fork is based on.");
+
+      // Center the buttons row
+      const char *btn1 = "Open Original GitHub";
+      const char *btn2 = "Open Original Discord";
+      float btn1w = ImGui::CalcTextSize(btn1).x +
+                    ImGui::GetStyle().FramePadding.x * 2 + 2;
+      float btn2w = ImGui::CalcTextSize(btn2).x +
+                    ImGui::GetStyle().FramePadding.x * 2 + 2;
+      float spacing = ImGui::GetStyle().ItemSpacing.x;
+      float totalWidth = btn1w + spacing + btn2w;
+      CenterItem(totalWidth);
+
+      if (ImGui::Button(btn1)) {
         OsOpenInShell("https://github.com/larfingshnew/3d-controller-overlay");
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Open the project repository in your browser.");
-      ImGui::NewLine();
-      ImGui::Text("https://discord.gg/aKwHHvCMnS");
-      if (ImGui::Button("Join Discord Server")) {
+      ImGui::SameLine();
+      if (ImGui::Button(btn2)) {
         OsOpenInShell("https://discord.gg/aKwHHvCMnS");
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Open the Discord invite link.");
+
+      EndShadedGroup(ShadeColor(0.30f, 0.20f, 0.30f, 0.40f),
+                     ShadeBorder(0.30f, 0.20f, 0.30f, 0.70f));
     }
   } // end big if (tabs.size() > 0 && new_controller_window == false)
 

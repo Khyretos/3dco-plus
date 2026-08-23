@@ -160,9 +160,10 @@ void readInfoJson(Model &m, const std::string &path) {
   json data;
   try {
     f >> data;
-  } catch (...) {
-    spdlog::warn("Failed to parse JSON: {}", path);
-    return;
+  } catch (const std::exception &e) {
+    spdlog::error("Failed to parse JSON {}: {}", path, e.what());
+    m.meshes.clear();
+    return; // <-- exit early on failure
   }
 
   if (!data.contains("parts") || !data["parts"].is_array())
@@ -175,6 +176,7 @@ void readInfoJson(Model &m, const std::string &path) {
     Mesh mesh;
     // Load OBJ file
     std::string filename = p.value("filename", "");
+    spdlog::info("Loading mesh: {}", filename);
     mesh.filename = filename;
     if (filename.empty())
       continue;
@@ -662,42 +664,49 @@ void loadMesh(Mesh &m, std::string path) {
     m.hasBBox = false;
   }
 
-  GLfloat vertex_data[vertices.size() * 8];
-  for (unsigned long i = 0; i < vertices.size(); i++) {
+  // ---- Use std::vector instead of VLAs ----
+  std::vector<GLfloat> vertex_data;
+  vertex_data.reserve(vertices.size() * 8);
+  for (size_t i = 0; i < vertices.size(); i++) {
     int pos_idx = vertices[i].position;
     int norm_idx = vertices[i].normal;
     int tex_idx = vertices[i].texcoord;
+
+    // Position
     if (pos_idx >= 0 && pos_idx < (int)positions.size()) {
-      vertex_data[0 + (8 * i)] = positions[pos_idx].x;
-      vertex_data[1 + (8 * i)] = positions[pos_idx].y;
-      vertex_data[2 + (8 * i)] = positions[pos_idx].z;
+      vertex_data.push_back(positions[pos_idx].x);
+      vertex_data.push_back(positions[pos_idx].y);
+      vertex_data.push_back(positions[pos_idx].z);
     } else {
-      vertex_data[0 + (8 * i)] = 0.0f;
-      vertex_data[1 + (8 * i)] = 0.0f;
-      vertex_data[2 + (8 * i)] = 0.0f;
+      vertex_data.push_back(0.0f);
+      vertex_data.push_back(0.0f);
+      vertex_data.push_back(0.0f);
     }
+    // Normal
     if (norm_idx >= 0 && norm_idx < (int)normals.size()) {
-      vertex_data[3 + (8 * i)] = normals[norm_idx].x;
-      vertex_data[4 + (8 * i)] = normals[norm_idx].y;
-      vertex_data[5 + (8 * i)] = normals[norm_idx].z;
+      vertex_data.push_back(normals[norm_idx].x);
+      vertex_data.push_back(normals[norm_idx].y);
+      vertex_data.push_back(normals[norm_idx].z);
     } else {
-      vertex_data[3 + (8 * i)] = 0.0f;
-      vertex_data[4 + (8 * i)] = 1.0f;
-      vertex_data[5 + (8 * i)] = 0.0f;
+      vertex_data.push_back(0.0f);
+      vertex_data.push_back(1.0f);
+      vertex_data.push_back(0.0f);
     }
+    // Texcoord
     if (tex_idx >= 0 && tex_idx < (int)texcoords.size()) {
-      vertex_data[6 + (8 * i)] = texcoords[tex_idx].x;
-      vertex_data[7 + (8 * i)] = texcoords[tex_idx].y;
+      vertex_data.push_back(texcoords[tex_idx].x);
+      vertex_data.push_back(texcoords[tex_idx].y);
     } else {
-      vertex_data[6 + (8 * i)] = 0.0f;
-      vertex_data[7 + (8 * i)] = 0.0f;
+      vertex_data.push_back(0.0f);
+      vertex_data.push_back(0.0f);
     }
   }
 
   m.elements = indices.size();
-  GLuint index_data[m.elements];
-  for (unsigned long i = 0; i < m.elements; i++) {
-    index_data[i] = indices[i];
+  std::vector<GLuint> index_data;
+  index_data.reserve(m.elements);
+  for (size_t i = 0; i < m.elements; i++) {
+    index_data.push_back(indices[i]);
   }
 
   glGenVertexArrays(1, &m.vao);
@@ -705,8 +714,8 @@ void loadMesh(Mesh &m, std::string path) {
   glBindVertexArray(m.vao);
 
   glBindBuffer(GL_ARRAY_BUFFER, m.vbo);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_data), vertex_data,
-               GL_STATIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, vertex_data.size() * sizeof(GLfloat),
+               vertex_data.data(), GL_STATIC_DRAW);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat),
                         (void *)0);
   glEnableVertexAttribArray(0);
@@ -719,8 +728,8 @@ void loadMesh(Mesh &m, std::string path) {
 
   glGenBuffers(1, &m.ebo);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m.ebo);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(index_data), index_data,
-               GL_STATIC_DRAW);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, index_data.size() * sizeof(GLuint),
+               index_data.data(), GL_STATIC_DRAW);
 
   glBindVertexArray(0);
 }
@@ -1019,12 +1028,27 @@ glm::mat4 computeMeshTransform(const Model &m, int meshIndex,
 }
 
 glm::mat4 getMeshFinalMatrix(const Model &m, int idx, const glm::mat4 &parent) {
-  if (idx < 0 || idx >= (int)m.meshes.size())
+  if (idx < 0 || idx >= (int)m.meshes.size()) {
+    spdlog::warn("getMeshFinalMatrix: invalid idx {}", idx);
     return glm::mat4(1.0f);
+  }
   const Mesh &mesh = m.meshes[idx];
-  if (mesh.parentIndex != -1) {
-    glm::mat4 parentMat = getMeshFinalMatrix(m, mesh.parentIndex, parent);
-    return computeMeshTransform(m, idx, parentMat);
+  int parentIdx = mesh.parentIndex;
+  if (parentIdx != -1) {
+    // Additional bounds check for parent
+    if (parentIdx < 0 || parentIdx >= (int)m.meshes.size()) {
+      spdlog::warn("Mesh '{}' has out‑of‑range parent index {} – clearing it.",
+                   mesh.name, parentIdx);
+      // Fix the mesh data (we can't modify const m, but we can log and treat as
+      // -1)
+      parentIdx = -1;
+    }
+    if (parentIdx != -1) {
+      glm::mat4 parentMat = getMeshFinalMatrix(m, parentIdx, parent);
+      return computeMeshTransform(m, idx, parentMat);
+    } else {
+      return computeMeshTransform(m, idx, parent);
+    }
   } else {
     return computeMeshTransform(m, idx, parent);
   }

@@ -94,9 +94,26 @@ add_custom_command(
 set_source_files_properties(${DB_HEADER} PROPERTIES GENERATED TRUE)
 
 # ------------------------------------------------------------------
+# Generate icon_data.h from assets/icon.png
+# ------------------------------------------------------------------
+set(ICON_SCRIPT "${CMAKE_SOURCE_DIR}/tools/generate_icon_header.py")
+set(ICON_HEADER "${CMAKE_SOURCE_DIR}/src/icon_data.h")
+set(ICON_SOURCE "${CMAKE_SOURCE_DIR}/assets/icon.png")
+
+add_custom_command(
+    OUTPUT ${ICON_HEADER}
+    COMMAND python3 ${ICON_SCRIPT}
+    DEPENDS ${ICON_SOURCE} ${ICON_SCRIPT}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Generating icon_data.h from assets/icon.png"
+)
+
+set_source_files_properties(${ICON_HEADER} PROPERTIES GENERATED TRUE)
+
+# ------------------------------------------------------------------
 # Executable – uses the collected sources + generated headers
 # ------------------------------------------------------------------
-add_executable(3dco+ ${SRC_FILES} ${GEN_HEADER} ${DB_HEADER})
+add_executable(3dco+ ${SRC_FILES} ${GEN_HEADER} ${DB_HEADER} ${ICON_HEADER})
 
 # Include the source directory
 target_include_directories(3dco+ PRIVATE
@@ -208,6 +225,28 @@ if(WIN32)
                     "${dll}" "$<TARGET_FILE_DIR:3dco+>"
             )
         endforeach()
+    endif()
+
+    # ------------------------------------------------------------------
+    # Embed Windows icon resource (for .exe file icon in Explorer)
+    # ------------------------------------------------------------------
+    find_program(WINDRES windres)
+    if(WINDRES)
+        set(RC_FILE "${CMAKE_SOURCE_DIR}/packaging/windows/3dco+.rc")
+        set(RES_OUT "${CMAKE_CURRENT_BINARY_DIR}/3dco+.res")
+        add_custom_command(
+            OUTPUT ${RES_OUT}
+            COMMAND ${WINDRES} ${RC_FILE} -O coff -o ${RES_OUT}
+            DEPENDS ${RC_FILE} ${CMAKE_SOURCE_DIR}/packaging/windows/icon.ico
+            COMMENT "Compiling Windows resource file"
+        )
+        # Link the .res file into the executable
+        target_sources(3dco+ PRIVATE ${RES_OUT})
+        # Ensure the resource is built before linking
+        add_custom_target(GenerateResource DEPENDS ${RES_OUT})
+        add_dependencies(3dco+ GenerateResource)
+    else()
+        message(WARNING "windres not found – .exe will have no embedded file icon.")
     endif()
 endif()
 

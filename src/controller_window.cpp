@@ -1,5 +1,6 @@
 #include "controller_window.h"
 #include "cube_info.h"
+#include "icon_data.h"
 #include "keyboard_input.h"
 #include "settings.h"
 #include "settings_window.h"
@@ -271,13 +272,14 @@ void createControllerWindow(std::string title, std::string model_path) {
   glEnable(GL_MULTISAMPLE);
 
   GLFWimage images[1];
-  images[0].pixels =
-      stbi_load("icon.png", &images[0].width, &images[0].height, 0, 4);
+  images[0].pixels = stbi_load_from_memory(
+      Embedded::icon_data, static_cast<int>(Embedded::icon_size),
+      &images[0].width, &images[0].height, nullptr, 4);
   if (images[0].pixels) {
     glfwSetWindowIcon(w.glfw_window, 1, images);
     stbi_image_free(images[0].pixels);
   } else {
-    spdlog::warn("Could not load icon.png");
+    spdlog::warn("Could not load embedded icon for controller window");
   }
 
   glfwSetScrollCallback(w.glfw_window, controller_window_scroll_callback);
@@ -488,6 +490,19 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
     return map;
   }();
 
+  // ---- Early exit if no controller is connected ----
+  if (!w.sdl_controller && !w.sdl_joystick) {
+    for (auto &mesh : w.model.meshes) {
+      mesh.press = 0.0f;
+      mesh.highlight_value = 0.0f;
+      mesh.pull = 0.0f;
+      mesh.axis_highlight_value = 0.0f;
+      mesh.travel_value = 0.0f;
+      mesh.travel_signed = 0.0f;
+    }
+    return;
+  }
+
   for (int meshIdx = 0; meshIdx < (int)w.model.meshes.size(); ++meshIdx) {
     Mesh &mesh = w.model.meshes[meshIdx];
     // Reset axis highlight value – will be set only for axis bindings below
@@ -509,12 +524,7 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
     mesh.pull = 0.0f;
 
     // ------------------------------------------------------------------
-    // Guard against malformed/incompatible bindings (e.g. a model saved on
-    // one platform referencing an axis/touchpad index that isn't produced
-    // by this platform's SDL backend for this controller). std::stoi and
-    // friends below throw on unexpected input; without this, one bad
-    // binding used to be able to bring down the whole app with no log at
-    // all on a console-less Windows build. Now we skip just that mesh.
+    // Guard against malformed/incompatible bindings
     // ------------------------------------------------------------------
     try {
 
@@ -718,6 +728,16 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
               char axis = rest2.back();
               int touchpadIdx = std::stoi(touchStr);
               int fingerIdx = std::stoi(fingerStr.substr(1));
+
+              int numTouchpads =
+                  SDL_GameControllerGetNumTouchpads(w.sdl_controller);
+              if (touchpadIdx >= numTouchpads)
+                continue; // skip this mesh
+              int numFingers = SDL_GameControllerGetNumTouchpadFingers(
+                  w.sdl_controller, touchpadIdx);
+              if (fingerIdx >= numFingers)
+                continue;
+
               if (touchpadIdx >= 0 && touchpadIdx < 4 && fingerIdx >= 0 &&
                   fingerIdx < 2) {
                 auto &ts = w.touchpad_data[touchpadIdx][fingerIdx];
@@ -1115,6 +1135,8 @@ void controller_window_input() {
               w.gyro_data[2] = sensor_data[2];
             }
           } else {
+            spdlog::warn("Gyro enabled but no valid source; disabling.");
+
             w.gyro_enabled = false;
             w.gyro_debug_logging = false;
           }
