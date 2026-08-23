@@ -217,6 +217,7 @@ endif()
 
 if(WIN32)
     target_link_libraries(3dco+ PRIVATE ws2_32 winmm user32)
+    
     if(NOT BUILD_STATIC)
         file(GLOB WINDOWS_REDIST "${CMAKE_SOURCE_DIR}/packaging/windows/redist/*.dll")
         foreach(dll ${WINDOWS_REDIST})
@@ -227,27 +228,8 @@ if(WIN32)
         endforeach()
     endif()
 
-    # ------------------------------------------------------------------
-    # Embed Windows icon resource (for .exe file icon in Explorer)
-    # ------------------------------------------------------------------
-    find_program(WINDRES windres)
-    if(WINDRES)
-        set(RC_FILE "${CMAKE_SOURCE_DIR}/packaging/windows/3dco+.rc")
-        set(RES_OUT "${CMAKE_CURRENT_BINARY_DIR}/3dco+.res")
-        add_custom_command(
-            OUTPUT ${RES_OUT}
-            COMMAND ${WINDRES} ${RC_FILE} -O coff -o ${RES_OUT}
-            DEPENDS ${RC_FILE} ${CMAKE_SOURCE_DIR}/packaging/windows/icon.ico
-            COMMENT "Compiling Windows resource file"
-        )
-        # Link the .res file into the executable
-        target_sources(3dco+ PRIVATE ${RES_OUT})
-        # Ensure the resource is built before linking
-        add_custom_target(GenerateResource DEPENDS ${RES_OUT})
-        add_dependencies(3dco+ GenerateResource)
-    else()
-        message(WARNING "windres not found – .exe will have no embedded file icon.")
-    endif()
+    # Embed Windows icon resource
+    target_sources(3dco+ PRIVATE packaging/windows/3dco+.rc)
 endif()
 
 # ------------------------------------------------------------------
