@@ -2543,8 +2543,12 @@ void drawSettingsWindow() {
 
       if (has_gyro && current_window->gyro_enabled) {
         ImGui::SliderFloat("Gyro Sensitivity",
-                           &current_window->gyro_sensitivity, 0.1f, 100.0f,
+                           &current_window->gyro_sensitivity, 0.1f, 10.0f,
                            "%.1f");
+        if (ImGui::IsItemHovered())
+          ImGui::SetTooltip(
+              "Sensitivity multiplier (internally scaled by 0.1). "
+              "Range 0-10 gives effective sensitivity 0-1.0.");
         ImGui::SliderInt("Gyro Correction", &current_window->gyro_correction, 0,
                          10);
         if (ImGui::Button("Reset Gyro")) {

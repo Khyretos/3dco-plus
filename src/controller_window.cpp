@@ -349,24 +349,38 @@ void createControllerWindow(std::string title, std::string model_path) {
           spdlog::info("Opened gamecontroller: {}",
                        SDL_GetGamepadName(w.sdl_controller));
           // Safely enable gyro
+          if (SDL_SetGamepadSensorEnabled(w.sdl_controller, SDL_SENSOR_GYRO,
+                                          true) == 0) {
+            spdlog::info("Controller has gyro: true");
+            w.gyro_enabled = true;
+            // Optionally read a first sample to verify, but don't rely on it.
+            float dummy[3];
+            if (SDL_GetGamepadSensorData(w.sdl_controller, SDL_SENSOR_GYRO,
+                                         dummy, 3) == 0) {
+              w.gyro_toggled = true; // first read will set time properly
+            } else {
+              spdlog::warn("Initial gyro read failed: {}", SDL_GetError());
+            }
+          } else {
+            spdlog::warn("Failed to enable gyro sensor: {}", SDL_GetError());
+          }
           if (SDL_GamepadHasSensor(w.sdl_controller, SDL_SENSOR_GYRO)) {
             if (SDL_SetGamepadSensorEnabled(w.sdl_controller, SDL_SENSOR_GYRO,
                                             true) == 0) {
-              spdlog::info("Controller has gyro: true");
+              spdlog::info("Gyro sensor enabled successfully.");
               w.gyro_enabled = true;
-              Uint64 timestamp;
-              if (SDL_GetGamepadSensorData(w.sdl_controller, SDL_SENSOR_GYRO,
-                                           w.gyro_data, 3) == 0) {
-                w.gyro_time = timestamp;
-                w.gyro_toggled = true;
+              // Verify it's actually enabled
+              if (SDL_GamepadSensorEnabled(w.sdl_controller, SDL_SENSOR_GYRO)) {
+                spdlog::info("Gyro sensor is now active.");
+              } else {
+                spdlog::warn(
+                    "Sensor enabled flag returned false after enabling.");
               }
             } else {
-              spdlog::warn("Failed to enable gyro sensor");
+              spdlog::warn("Failed to enable gyro: {}", SDL_GetError());
             }
-          }
-          if (SDL_GamepadHasSensor(w.sdl_controller, SDL_SENSOR_ACCEL)) {
-            SDL_SetGamepadSensorEnabled(w.sdl_controller, SDL_SENSOR_ACCEL,
-                                        true);
+          } else {
+            spdlog::warn("Controller does not have a gyro sensor.");
           }
         } else {
           spdlog::error("Failed to open gamecontroller {}: {}", chosen,
@@ -1026,14 +1040,12 @@ void controller_window_input() {
           bool has_gyro_source = false;
           if (w.is_gamecontroller && w.sdl_controller) {
             has_gyro_source = true;
-            Uint64 timestamp;
-            if (SDL_GetGamepadSensorData(w.sdl_controller, SDL_SENSOR_GYRO,
-                                         w.gyro_data, 3) == 0) {
+            int ret = SDL_GetGamepadSensorData(w.sdl_controller,
+                                               SDL_SENSOR_GYRO, w.gyro_data, 3);
+            if (ret >= 0) {
               if (isnan(w.gyro_data[0]) || isnan(w.gyro_data[1]) ||
                   isnan(w.gyro_data[2])) {
-                if (w.gyro_debug_logging) {
-                  spdlog::warn("Gyro data contains NaN, skipping frame");
-                }
+                spdlog::debug("Gyro data contains NaN, skipping frame");
                 goto skip_gyro_processing;
               }
               if (fabs(w.gyro_data[0]) < 1e-6f &&
@@ -1052,16 +1064,15 @@ void controller_window_input() {
                       glm::degrees(euler.z));
                 }
               }
+              double current_time = glfwGetTime(); // seconds
               if (w.gyro_toggled) {
-                w.gyro_time = timestamp;
+                w.gyro_time = current_time;
                 w.gyro_toggled = false;
               } else {
-                float dt = (timestamp - w.gyro_time) * 0.000001f;
-                if (dt > 0.1f)
-                  dt = 0.1f;
-                if (dt < 0.0001f)
-                  dt = 0.0001f;
-                float sens = w.gyro_sensitivity;
+                float dt = (float)(current_time - w.gyro_time);
+                dt = glm::clamp(dt, 0.0001f, 0.1f);
+                const float SCALE = 0.1f;
+                float sens = w.gyro_sensitivity * SCALE;
                 w.gyro_matrix =
                     glm::rotate(w.gyro_matrix, w.gyro_data[0] * dt * sens,
                                 glm::vec3(1, 0, 0));
@@ -1090,7 +1101,7 @@ void controller_window_input() {
                   if (w.gyro_debug_logging)
                     spdlog::warn("Gyro reset due to excessive drift");
                 }
-                w.gyro_time = timestamp;
+                w.gyro_time = current_time;
                 glm::vec3 up_error =
                     glm::cross(glm::vec3(0, 1, 0),
                                glm::vec3(0, 1, 0) * glm::mat3(w.gyro_matrix));
@@ -1126,24 +1137,22 @@ void controller_window_input() {
                         glm::degrees(euler.z));
                   }
                 }
-              }
-            } else {
-              if (w.gyro_debug_logging) {
-                spdlog::debug("Failed to read gamecontroller gyro data");
+                w.gyro_time = current_time;
               }
             }
           } else if (w.gyro_sensor) {
             has_gyro_source = true;
             float sensor_data[3];
-            Uint64 timestamp;
             if (SDL_GetSensorData(w.gyro_sensor, sensor_data, 3) == 0) {
               w.gyro_data[0] = sensor_data[0];
               w.gyro_data[1] = sensor_data[1];
               w.gyro_data[2] = sensor_data[2];
+            } else {
+              spdlog::debug("Failed to read gyro sensor data: {}",
+                            SDL_GetError());
             }
           } else {
             spdlog::warn("Gyro enabled but no valid source; disabling.");
-
             w.gyro_enabled = false;
             w.gyro_debug_logging = false;
           }
