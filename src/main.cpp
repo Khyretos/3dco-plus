@@ -54,6 +54,16 @@ void InitializeProgram() {
   }
   spdlog::info("SDL initialized");
 
+  spdlog::info("SDL_NumJoysticks() = {}", SDL_NumJoysticks());
+  for (int i = 0; i < SDL_NumJoysticks(); ++i) {
+    SDL_JoystickGUID guid = SDL_JoystickGetDeviceGUID(i);
+    char guid_str[64];
+    SDL_JoystickGetGUIDString(guid, guid_str, sizeof(guid_str));
+    spdlog::info("  [{}] name='{}' guid={} is_gamecontroller={}", i,
+                 SDL_JoystickNameForIndex(i), guid_str,
+                 SDL_IsGameController(i) ? "true" : "false");
+  }
+
   // ---- 5. Start the platform-specific global keyboard backend.
   // This is independent of the GLFW window focus and is required for
   // keyboard overlays while another application is focused.

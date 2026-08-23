@@ -7,26 +7,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     && apt-get clean
 
-# The MXE sysroot for this image's target triple. $CROSS_ROOT/$MXE_TARGET are
-# NOT real exported environment variables — they only exist inside the
-# wrapper scripts (x86_64-w64-mingw32.static-cmake, etc). Hardcoding the
-# real path (confirmed from "Using MXE toolchain" in build logs).
 ARG MXE_SYSROOT=/usr/src/mxe/usr/x86_64-w64-mingw32.static
 
-# ---------- Build most dependencies via MXE's own package system ----------
-# The base dockcross image only ships the MXE toolchain itself, not
-# pre-built packages. GLFW, SDL2, fmt, and spdlog all have MXE recipes in
-# this image's pinned MXE checkout, so build them the normal MXE way.
-# (nlohmann-json is handled separately below — see next step.)
+# Build dependencies via MXE (including SDL2)
 RUN cd /usr/src/mxe && \
     make glfw3 sdl2 fmt spdlog zlib -j$(nproc) MXE_TARGETS='x86_64-w64-mingw32.static'
 
-# ---------- nlohmann_json: header-only, no MXE recipe in this image ----------
-# This image's pinned MXE checkout predates nlohmann-json.mk upstream, so
-# `make nlohmann-json` doesn't exist here. It's header-only anyway — no
-# compilation needed — so just drop the single header in place and write
-# our own pkg-config file. Note: CMakeLists.txt looks for module name
-# "nlohmann_json" (underscore), so the .pc filename must match exactly.
+# nlohmann_json header-only
 RUN mkdir -p ${MXE_SYSROOT}/include/nlohmann && \
     wget -q https://github.com/nlohmann/json/releases/download/v3.11.3/json.hpp \
     -O ${MXE_SYSROOT}/include/nlohmann/json.hpp && \
@@ -34,8 +21,7 @@ RUN mkdir -p ${MXE_SYSROOT}/include/nlohmann && \
     printf 'prefix=%s\nincludedir=${prefix}/include\n\nName: nlohmann_json\nDescription: JSON for Modern C++\nVersion: 3.11.3\nCflags: -I${includedir}\n' "${MXE_SYSROOT}" \
     > ${MXE_SYSROOT}/lib/pkgconfig/nlohmann_json.pc
 
-# ---------- Build Assimp from source (no MXE recipe used, built manually) ----------
-WORKDIR /tmp
+# Build Assimp
 RUN wget -q https://github.com/assimp/assimp/archive/refs/tags/v5.4.3.tar.gz && \
     tar xzf v5.4.3.tar.gz && \
     cd assimp-5.4.3 && \
@@ -52,7 +38,7 @@ RUN wget -q https://github.com/assimp/assimp/archive/refs/tags/v5.4.3.tar.gz && 
     make install && \
     cd ../.. && rm -rf assimp-5.4.3*
 
-# Verify every dependency's pkg-config file actually landed where expected
+# Verify pkg-config files
 RUN for pc in assimp glfw3 sdl2 fmt spdlog nlohmann_json; do \
     ls -l ${MXE_SYSROOT}/lib/pkgconfig/${pc}.pc || \
     (echo "MISSING: ${pc}.pc" && find ${MXE_SYSROOT} -iname "${pc}*.pc"); \

@@ -19,6 +19,7 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 - [What's new in the `+`](#whats-new-in-the-)
 - [How it works](#how-it-works)
 - [Supported platforms](#supported-platforms)
+- [Platform showcase](#platform-showcase)
 - [Where your data lives](#where-your-data-lives)
 - [Supported input](#supported-input)
 - [A couple of things you'll notice](#a-couple-of-things-youll-notice)
@@ -89,6 +90,16 @@ All three major desktop platforms are targeted and built for:
 
 Since day-to-day development happens on Linux, the Windows and macOS builds get comparatively less mileage. If you hit a platform-specific issue on Windows or macOS, please file an issue with your OS version and build method — those reports genuinely help.
 
+## Platform showcase
+
+The same live overlay, running natively on all three targets.
+
+| Platform       | Preview                         |
+| -------------- | ------------------------------- |
+| 🐧 **Linux**   | ![Linux](images/linux.webp)     |
+| 🪟 **Windows** | ![Windows](images/windows.webp) |
+| 🍎 **macOS**   | ![macOS](images/macos.webp)     |
+
 ## Where your data lives
 
 `3dco+` keeps all of its writable data — settings, imported models, the extracted model library, logs, and the controller mapping database — in a single per-user config directory, not next to the executable:
@@ -107,7 +118,7 @@ You can jump straight there from inside the app via **Settings → Open Data Dir
 | ---------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | Standard gamepads (Xbox, DualShock/DualSense, Switch Pro, Joy-Con, GameCube, etc.) | ✅ Supported (via SDL GameController)                  |
 | Unmapped/generic joysticks                                                         | ✅ Supported (via raw SDL Joystick fallback)           |
-| Steam Controller                                                                   | ✅ Supported (added to the model library)              |
+| Steam Controller                                                                   | ⚠️ Limited on Windows/macOS (see note below)           |
 | Keyboard overlay                                                                   | ✅ Supported (system-wide, works without window focus) |
 | Mouse overlay                                                                      | ✅ Supported (position, buttons, scroll — system-wide) |
 | Gyro / accelerometer                                                               | ✅ Supported, with sensitivity/correction tuning       |
@@ -115,6 +126,10 @@ You can jump straight there from inside the app via **Settings → Open Data Dir
 | Racing wheel / flightstick                                                         | 🚧 Work in progress                                    |
 
 Gamepad button/axis layouts are resolved through SDL2's community-maintained [`gamecontrollerdb.txt`](https://github.com/mdqinc/SDL_GameControllerDB) database (embedded in the app, covering most Xbox/PlayStation/Switch Pro/Steam Controller/third-party pads). If your controller shows up as a raw, unlabeled joystick instead of a named gamepad, it isn't in that database yet — you can either add an entry to `gamecontrollerdb.txt` in your [data directory](#where-your-data-lives) (e.g. using [SDL2 Gamepad Tool](https://generalarcade.com/gamepadtool/)) and restart, or just map it manually using raw joystick bindings in the Mapping panel, which works regardless of whether SDL recognizes the controller. If you do get a new controller working, consider [contributing the mapping upstream](https://github.com/mdqinc/SDL_GameControllerDB) so other SDL2-based apps benefit too.
+
+**A note on Steam Controller support (Windows/macOS):** on Linux, the Steam Controller is detected and works directly, no extra steps needed. On Windows and macOS, Valve's Steam Input layer only translates the controller into a usable input device for processes that Steam itself launches and tracks — any other app, including this one, sees it stuck in "lizard mode" (its raw default keyboard/mouse-emulation state) instead. The practical workaround today is adding `3dco+` to your Steam library as a **non-Steam game** and launching it through Steam, which lets Steam Input drive it properly.
+
+Proper native support would mean integrating Valve's Steamworks SDK (`ISteamInput`) directly, which requires a registered Steamworks partner account and redistributing Valve's runtime libraries — something I'm not currently set up to do, and don't want to get into a legal gray area on by bundling those files into an open-source repo without being sure of the redistribution terms. This is a **planned feature**, currently blocked on getting that sorted out properly rather than on anything technical. If you have relevant experience here (Steamworks partner, redistribution licensing, etc.), I'd welcome input on an issue.
 
 ## A couple of things you'll notice
 
@@ -137,6 +152,7 @@ Live demo clips for every controller in the built-in model library. (The `+` bad
 ## Work in progress / known bugs
 
 - **Racing wheel / flightstick support** — planned for pedal/wheel/stick/force-feedback devices; not yet in the model library or input path.
+- **Steam Controller on Windows/macOS** — currently limited to lizard mode unless launched through Steam as a non-Steam game; planned once native Steamworks (`ISteamInput`) integration is worked out. See the note in [Supported input](#supported-input).
 - **Windows/macOS coverage** — both platforms build and run, but get less real-world testing than Linux. Expect the occasional platform-specific rough edge.
 - General stability/edge-case bugs from the expanded input and import paths are still being ironed out. Please file issues with repro steps if you hit one.
 

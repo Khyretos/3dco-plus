@@ -1172,6 +1172,9 @@ void controller_window_input() {
                 float val = get_axis_value(w, i);
               }
               int numJoyButtons = SDL_JoystickNumButtons(joy);
+              // ---- SAFETY: clamp to our array size ----
+              if (numJoyButtons > 128)
+                numJoyButtons = 128;
               for (int b = 0; b < numJoyButtons; ++b) {
                 bool pressed = SDL_JoystickGetButton(joy, b);
                 if (pressed && !w.last_joy_button_values[b]) {
@@ -1218,6 +1221,9 @@ void controller_window_input() {
             }
           } else if (!w.is_gamecontroller && w.sdl_joystick) {
             int numButtons = SDL_JoystickNumButtons(w.sdl_joystick);
+            // ---- SAFETY: clamp to our array size ----
+            if (numButtons > 128)
+              numButtons = 128;
             for (int i = 0; i < numButtons; ++i) {
               bool pressed = SDL_JoystickGetButton(w.sdl_joystick, i);
               if (pressed && !w.last_joy_button_values[i]) {

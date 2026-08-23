@@ -15,16 +15,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxcb-sync-dev libxcb-xfixes0-dev libxcb-xinerama0-dev \
     libxcb-xkb-dev libxcb-xinput-dev libxkbcommon-x11-dev \
     libpulse-dev libudev-dev libasound2-dev \
+    libusb-1.0-0-dev \
     && apt-get clean
 
 # Build SDL2 statically
 RUN wget -q https://github.com/libsdl-org/SDL/releases/download/release-2.30.0/SDL2-2.30.0.tar.gz && \
     tar xzf SDL2-2.30.0.tar.gz && \
     cd SDL2-2.30.0 && \
-    ./configure --prefix=/usr --disable-shared --enable-static && \
-    make -j$(nproc) && \
-    make install && \
+    cmake -B build -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DSDL_STATIC=ON \
+    -DSDL_SHARED=OFF \
+    -DSDL_HIDAPI=ON \
+    -DSDL_HIDAPI_JOYSTICK=ON \
+    -DSDL_HIDAPI_LIBUSB=ON \
+    && cmake --build build -j$(nproc) && \
+    cmake --install build --prefix /usr && \
     cd .. && rm -rf SDL2-2.30.0*
+
+RUN find /usr -name 'libSDL2*' -exec echo "Found: {}" \; && \
+    SDLLIB=$(find /usr -name 'libSDL2.a' | head -n1) && \
+    echo "Checking: ${SDLLIB}" && \
+    ar t "${SDLLIB}" | grep -i -E 'gamecube|steam|hidapi' && \
+    echo "HIDAPI DEVICE DRIVERS FOUND" || echo "NO HIDAPI DEVICE DRIVERS FOUND"
 
 # Build GLFW statically
 RUN wget -q https://github.com/glfw/glfw/releases/download/3.3.8/glfw-3.3.8.zip && \

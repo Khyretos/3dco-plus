@@ -205,6 +205,25 @@ build_deps_for_arch() {
     cmake --install "${WORK}/glfw/build"
     refresh_archives
 
+    # ---- libusb ----
+    echo "-- libusb --"
+    download "https://github.com/libusb/libusb/releases/download/v1.0.27/libusb-1.0.27.tar.bz2" "${WORK}/libusb.tar.bz2"
+    rm -rf "${WORK}/libusb"
+    mkdir -p "${WORK}/libusb"
+    tar -xjf "${WORK}/libusb.tar.bz2" -C "${WORK}/libusb" --strip-components=1
+    (
+        cd "${WORK}/libusb"
+        ./configure \
+            --host="${TARGET}" \
+            --prefix="${PREFIX}" \
+            --disable-shared \
+            --enable-static \
+            CC="${CC}" CXX="${CXX}" AR="${AR}" RANLIB="${RANLIB}"
+        make -j"$(nproc)"
+        make install
+    )
+    refresh_archives
+
     # ---- SDL2 ----
     # SDL_GAMECONTROLLER / SDL_HAPTIC are disabled because this app
     # doesn't need them; note this does NOT disable the MFI/GameController
@@ -216,7 +235,8 @@ build_deps_for_arch() {
     download "https://github.com/libsdl-org/SDL/releases/download/release-2.30.1/SDL2-2.30.1.tar.gz" "${WORK}/sdl2.tar.gz"
     extract_tar "${WORK}/sdl2.tar.gz" "${WORK}/sdl2"
     cmake -S "${WORK}/sdl2" -B "${WORK}/sdl2/build" "${COMMON_CMAKE[@]}" \
-        -DSDL_TESTS=OFF -DSDL_GAMECONTROLLER=OFF -DSDL_HAPTIC=OFF
+    -DSDL_TESTS=OFF -DSDL_GAMECONTROLLER=OFF -DSDL_HAPTIC=OFF \
+    -DSDL_HIDAPI_LIBUSB=ON
     cmake --build "${WORK}/sdl2/build" --parallel
     cmake --install "${WORK}/sdl2/build"
     refresh_archives
@@ -281,6 +301,8 @@ PC
 
 build_deps_for_arch x86_64
 build_deps_for_arch arm64
+
+find /deps -name 'libSDL2.a' -exec sh -c 'echo "=== {} ==="; ar t "{}" | grep -i -E "gamecube|steam|hidapi"' \;
 
 rm -rf "${WORK_ROOT}"
 
