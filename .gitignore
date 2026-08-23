@@ -9,6 +9,7 @@ build.bat
 packaging/macos-deps*
 .macos-deps-build
 assets/models.zip
+compile_commands.json
 
 # Build directories (CMake out-of-source builds)
 build/
