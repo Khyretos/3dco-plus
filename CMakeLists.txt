@@ -42,11 +42,26 @@ else()
 endif()
 
 # ------------------------------------------------------------------
-# Collect all source files (including ImGui, miniz, glad, etc.)
+# Collect all source files (main src + only needed ImGui sources)
 # ------------------------------------------------------------------
+# Main sources from src/
 file(GLOB_RECURSE SRC_FILES src/*.cpp src/*.c)
-# Exclude backup folder if any
-list(FILTER SRC_FILES EXCLUDE REGEX "src/imgui/backup/.*")
+
+# ImGui core and backends – we need only GLFW and OpenGL3.
+# Explicitly list them to avoid pulling in Allegro, DX, Vulkan, etc.
+set(IMGUI_SRC
+    third_party/imgui/imgui.cpp
+    third_party/imgui/imgui_draw.cpp
+    third_party/imgui/imgui_tables.cpp
+    third_party/imgui/imgui_widgets.cpp
+    third_party/imgui/imgui_demo.cpp
+    third_party/imgui/backends/imgui_impl_glfw.cpp
+    third_party/imgui/backends/imgui_impl_opengl3.cpp
+)
+list(APPEND SRC_FILES ${IMGUI_SRC})
+
+# Exclude any backup folders if present (from any location)
+list(FILTER SRC_FILES EXCLUDE REGEX ".*/backup/.*")
 
 # ------------------------------------------------------------------
 # Generate models_zip_data.h from assets/models folder
@@ -115,9 +130,12 @@ set_source_files_properties(${ICON_HEADER} PROPERTIES GENERATED TRUE)
 # ------------------------------------------------------------------
 add_executable(3dco+ ${SRC_FILES} ${GEN_HEADER} ${DB_HEADER} ${ICON_HEADER})
 
-# Include the source directory
+# Include directories
 target_include_directories(3dco+ PRIVATE
     "${CMAKE_SOURCE_DIR}/src"
+    "${CMAKE_SOURCE_DIR}/third_party/include"
+    "${CMAKE_SOURCE_DIR}/third_party/imgui"          # for public headers
+    "${CMAKE_SOURCE_DIR}/third_party/imgui/backends" # for backend headers (imgui_impl_glfw.h etc.)
 )
 
 # ------------------------------------------------------------------
@@ -146,8 +164,9 @@ endif()
 
 target_include_directories(3dco+ PRIVATE
     ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/imgui
     ${CMAKE_SOURCE_DIR}/third_party/include
+    ${CMAKE_SOURCE_DIR}/third_party/imgui
+    ${CMAKE_SOURCE_DIR}/third_party/imgui/backends
     ${GLFW_INCLUDE_DIRS}
     ${SDL3_INCLUDE_DIRS}
     ${ASSIMP_INCLUDE_DIRS}
@@ -203,6 +222,7 @@ if(APPLE)
         "-framework Carbon"
         "-framework CoreHaptics"
         "-framework Foundation"
+        "-framework UniformTypeIdentifiers"
         "-lobjc"
         "-lresolv"
         ZLIB::ZLIB

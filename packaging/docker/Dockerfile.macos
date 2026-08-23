@@ -69,7 +69,7 @@ ENV LD_LIBRARY_PATH="/osxcross/lib"
 ENV MACOSX_DEPLOYMENT_TARGET=11.0
 
 # ============================================================================
-# STAGE 1 of 2: Build third-party dependencies (zlib, GLFW, SDL2, fmt,
+# STAGE 1 of 2: Build third-party dependencies (zlib, GLFW, SDL3, fmt,
 # spdlog, nlohmann-json, Assimp) for both architectures into /deps.
 #
 # IMPORTANT: this block intentionally does NOT depend on `/src` (the app
@@ -224,19 +224,31 @@ build_deps_for_arch() {
     )
     refresh_archives
 
-    # ---- SDL2 ----
-    # SDL_GAMECONTROLLER / SDL_HAPTIC are disabled because this app
-    # doesn't need them; note this does NOT disable the MFI/GameController
-    # *joystick* backend (that's a separate, auto-detected code path in
-    # SDL2's own CMake logic) - see platform_version_shim.c in the app
-    # source for why that backend needs a linker workaround under
-    # osxcross regardless of this flag.
-    echo "-- SDL2 --"
+    # ---- SDL3 ----
+    # Note: SDL_GAMECONTROLLER/SDL_HAPTIC were SDL2-only cmake options and
+    # no longer exist in SDL3 (gamepad support is now part of the core
+    # joystick subsystem) - see platform_version_shim.c in the app source
+    # for why the MFI/GameController joystick backend needs a linker
+    # workaround under osxcross regardless.
+    echo "-- SDL3 --"
     download "https://github.com/libsdl-org/SDL/releases/download/release-3.4.14/SDL3-3.4.14.tar.gz" "${WORK}/sdl3.tar.gz"
     extract_tar "${WORK}/sdl3.tar.gz" "${WORK}/sdl3"
+    # SDL_HIDAPI_LIBUSB is OFF on purpose: SDL3's CheckHIDAPI cmake macro
+    # requires a .dylib for the libusb HIDAPI backend (it's dlopen'd at
+    # runtime, not linked statically), but libusb is built static-only
+    # above (--disable-shared). macOS already gets HIDAPI support via the
+    # built-in IOKit backend, so libusb isn't needed here anyway.
+    # SDL_CAMERA is OFF on purpose: the app doesn't use SDL's camera API,
+    # and leaving it on builds SDL_camera_coremedia.m, which references
+    # AVFoundation symbols (AVCaptureDevice, AVCaptureSession, etc) that
+    # go unresolved at the final app-link step below because AVFoundation
+    # isn't in this project's macOS framework list. Since the feature is
+    # unused, disabling it here is simpler than adding -framework
+    # AVFoundation just to satisfy the linker.
     cmake -S "${WORK}/sdl3" -B "${WORK}/sdl3/build" "${COMMON_CMAKE[@]}" \
-    -DSDL_TESTS=OFF -DSDL_GAMECONTROLLER=OFF -DSDL_HAPTIC=OFF \
-    -DSDL_HIDAPI_LIBUSB=ON
+    -DSDL_TESTS=OFF \
+    -DSDL_HIDAPI_LIBUSB=OFF \
+    -DSDL_CAMERA=OFF
     cmake --build "${WORK}/sdl3/build" --parallel
     cmake --install "${WORK}/sdl3/build"
     refresh_archives
@@ -302,7 +314,7 @@ PC
 build_deps_for_arch x86_64
 build_deps_for_arch arm64
 
-find /deps -name 'libSDL2.a' -exec sh -c 'echo "=== {} ==="; ar t "{}" | grep -i -E "gamecube|steam|hidapi"' \;
+find /deps -name 'libSDL3.a' -exec sh -c 'echo "=== {} ==="; ar t "{}" | grep -i -E "gamecube|steam|hidapi"' \;
 
 rm -rf "${WORK_ROOT}"
 

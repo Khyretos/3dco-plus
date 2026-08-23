@@ -9,9 +9,36 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ARG MXE_SYSROOT=/usr/src/mxe/usr/x86_64-w64-mingw32.static
 
-# Build dependencies via MXE (including SDL2)
+# Build dependencies via MXE. NOTE: "sdl2" was dropped from this line -
+# MXE has no "sdl3" package upstream (only sdl.mk for SDL 1.2 and sdl2.mk
+# for SDL2), so SDL3 has to be built from source below, the same way
+# Assimp already is a few steps down.
 RUN cd /usr/src/mxe && \
-    make glfw3 sdl2 fmt spdlog zlib -j$(nproc) MXE_TARGETS='x86_64-w64-mingw32.static'
+    make glfw3 fmt spdlog zlib -j$(nproc) MXE_TARGETS='x86_64-w64-mingw32.static'
+
+# Build SDL3 statically from source. The dockcross base image already has
+# CC/CXX/AR/RANLIB/etc pointed at the MXE x86_64-w64-mingw32.static
+# cross-compiler, so a plain out-of-tree CMake build cross-compiles
+# correctly with no extra toolchain flags - same pattern used for Assimp
+# below. This installs SDL3's headers, static lib, and sdl3.pc into the
+# MXE sysroot so CMakeLists.txt's `pkg_check_modules(SDL3 REQUIRED sdl3)`
+# can find it.
+RUN wget -q https://github.com/libsdl-org/SDL/releases/download/release-3.4.14/SDL3-3.4.14.tar.gz && \
+    tar xzf SDL3-3.4.14.tar.gz && \
+    cd SDL3-3.4.14 && \
+    mkdir build && cd build && \
+    cmake .. \
+    -DCMAKE_INSTALL_PREFIX=${MXE_SYSROOT} \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DSDL_STATIC=ON \
+    -DSDL_SHARED=OFF \
+    -DSDL_TESTS=OFF \
+    -DSDL_HIDAPI=ON \
+    -DSDL_HIDAPI_JOYSTICK=ON \
+    && make -j$(nproc) && \
+    make install && \
+    cd ../../.. && rm -rf SDL3-3.4.14*
 
 # nlohmann_json header-only
 RUN mkdir -p ${MXE_SYSROOT}/include/nlohmann && \
@@ -38,8 +65,8 @@ RUN wget -q https://github.com/assimp/assimp/archive/refs/tags/v5.4.3.tar.gz && 
     make install && \
     cd ../.. && rm -rf assimp-5.4.3*
 
-# Verify pkg-config files
-RUN for pc in assimp glfw3 sdl2 fmt spdlog nlohmann_json; do \
+# Verify pkg-config files (sdl2 -> sdl3)
+RUN for pc in assimp glfw3 sdl3 fmt spdlog nlohmann_json; do \
     ls -l ${MXE_SYSROOT}/lib/pkgconfig/${pc}.pc || \
     (echo "MISSING: ${pc}.pc" && find ${MXE_SYSROOT} -iname "${pc}*.pc"); \
     done
