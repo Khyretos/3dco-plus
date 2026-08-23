@@ -2,6 +2,7 @@
 #include "log_window.h"
 #include "settings.h"
 #include "settings_window.h"
+#include <SDL3/SDL_joystick.h>
 #include <filesystem>
 #include <iostream>
 #include <spdlog/sinks/rotating_file_sink.h>
@@ -47,22 +48,25 @@ void InitializeProgram() {
   }
 
   // ---- 4. Init SDL ----
-  if (SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER | SDL_INIT_SENSOR) <
-      0) {
+  if (SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD | SDL_INIT_SENSOR) < 0) {
     spdlog::critical("SDL_Init failed: {}", SDL_GetError());
     exit(1);
   }
   spdlog::info("SDL initialized");
 
-  spdlog::info("SDL_NumJoysticks() = {}", SDL_NumJoysticks());
-  for (int i = 0; i < SDL_NumJoysticks(); ++i) {
-    SDL_JoystickGUID guid = SDL_JoystickGetDeviceGUID(i);
+  int num_joysticks = 0;
+  SDL_JoystickID *joy_ids = SDL_GetJoysticks(&num_joysticks);
+  spdlog::info("SDL_GetNumJoysticks() = {}", num_joysticks);
+  for (int i = 0; i < num_joysticks; ++i) {
+    SDL_JoystickID id = joy_ids[i];
+    SDL_GUID guid = SDL_GetJoystickGUIDForID(id);
     char guid_str[64];
-    SDL_JoystickGetGUIDString(guid, guid_str, sizeof(guid_str));
+    SDL_GUIDToString(guid, guid_str, sizeof(guid_str));
     spdlog::info("  [{}] name='{}' guid={} is_gamecontroller={}", i,
-                 SDL_JoystickNameForIndex(i), guid_str,
-                 SDL_IsGameController(i) ? "true" : "false");
+                 SDL_GetJoystickNameForID(id), guid_str,
+                 SDL_IsGamepad(id) ? "true" : "false");
   }
+  SDL_free(joy_ids);
 
   // ---- 5. Start the platform-specific global keyboard backend.
   // This is independent of the GLFW window focus and is required for

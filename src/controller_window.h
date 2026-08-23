@@ -16,7 +16,7 @@
 
 #include "model.h"
 #include <GLFW/glfw3.h>
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <glad/glad.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/spdlog.h>
@@ -69,7 +69,7 @@ typedef struct controller_window_struct {
   unsigned ID;
 
   union {
-    SDL_GameController *sdl_controller = nullptr;
+    SDL_Gamepad *sdl_controller = nullptr;
     SDL_Joystick *sdl_joystick;
   };
   bool is_gamecontroller = false; // true if opened as gamecontroller
@@ -194,8 +194,7 @@ typedef struct controller_window_struct {
   float last_axis_values[32] = {0.0f};
   Uint8 last_hat_values[16] = {SDL_HAT_CENTERED};
   struct TouchpadState {
-    Uint8 state; // 0=not touching, 1=touching, 2=released (SDL uses 1 for down,
-                 // 2 for up)
+    bool down; // true if touching, false otherwise
     float x, y;
   };
   TouchpadState touchpad_data[4][2]; // up to 4 touchpads, 2 fingers each

@@ -25,7 +25,7 @@ pkg_check_modules(ASSIMP REQUIRED assimp)
 pkg_check_modules(GLFW REQUIRED glfw3)
 pkg_check_modules(SPDLOG REQUIRED spdlog)
 pkg_check_modules(FMT REQUIRED fmt)
-pkg_check_modules(SDL2 REQUIRED sdl2)
+pkg_check_modules(SDL3 REQUIRED sdl3)
 pkg_check_modules(NLOHMANN_JSON REQUIRED nlohmann_json)
 
 find_package(OpenGL REQUIRED)
@@ -132,7 +132,7 @@ target_compile_options(3dco+ PRIVATE
     ${GLFW_CFLAGS_OTHER}
     ${SPDLOG_CFLAGS_OTHER}
     ${FMT_CFLAGS_OTHER}
-    ${SDL2_CFLAGS_OTHER}
+    ${SDL3_CFLAGS_OTHER}
     ${NLOHMANN_JSON_CFLAGS_OTHER}
 )
 
@@ -149,7 +149,7 @@ target_include_directories(3dco+ PRIVATE
     ${CMAKE_SOURCE_DIR}/src/imgui
     ${CMAKE_SOURCE_DIR}/third_party/include
     ${GLFW_INCLUDE_DIRS}
-    ${SDL2_INCLUDE_DIRS}
+    ${SDL3_INCLUDE_DIRS}
     ${ASSIMP_INCLUDE_DIRS}
     ${SPDLOG_INCLUDE_DIRS}
     ${FMT_INCLUDE_DIRS}
@@ -160,7 +160,7 @@ if(BUILD_STATIC)
     target_link_libraries(3dco+
         PRIVATE
         ${GLFW_STATIC_LIBRARIES}
-        ${SDL2_STATIC_LIBRARIES}
+        ${SDL3_STATIC_LIBRARIES}
         ${OPENGL_LIBRARIES}
         ${ASSIMP_STATIC_LIBRARIES}
         ${SPDLOG_STATIC_LIBRARIES}
@@ -171,7 +171,7 @@ else()
     target_link_libraries(3dco+
         PRIVATE
         ${GLFW_LIBRARIES}
-        ${SDL2_LIBRARIES}
+        ${SDL3_LIBRARIES}
         ${OPENGL_LIBRARIES}
         ${ASSIMP_LIBRARIES}
         ${SPDLOG_LIBRARIES}

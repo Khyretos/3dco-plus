@@ -31,7 +31,7 @@
 namespace GlobalKeyboard {
 namespace {
 
-std::array<std::atomic_bool, SDL_NUM_SCANCODES> g_keys{};
+std::array<std::atomic_bool, SDL_SCANCODE_COUNT> g_keys{};
 std::atomic_bool g_running{false};
 std::mutex g_lifecycleMutex;
 std::string g_status = "not initialized";
@@ -88,7 +88,7 @@ void clearKeys() {
 }
 
 void setKey(SDL_Scancode scancode, bool pressed) {
-  if (scancode > SDL_SCANCODE_UNKNOWN && scancode < SDL_NUM_SCANCODES)
+  if (scancode > SDL_SCANCODE_UNKNOWN && scancode < SDL_SCANCODE_COUNT)
     g_keys[scancode].store(pressed, std::memory_order_relaxed);
 }
 
@@ -1360,7 +1360,7 @@ void shutdown() {
 }
 
 bool isPressed(SDL_Scancode scancode) {
-  if (scancode <= SDL_SCANCODE_UNKNOWN || scancode >= SDL_NUM_SCANCODES)
+  if (scancode <= SDL_SCANCODE_UNKNOWN || scancode >= SDL_SCANCODE_COUNT)
     return false;
   return g_keys[scancode].load(std::memory_order_relaxed);
 }

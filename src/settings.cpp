@@ -2,7 +2,7 @@
 #include "gamecontrollerdb_data.h"
 #include "miniz.h"
 #include "models_zip_data.h"
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <filesystem>
 #include <spdlog/spdlog.h>
 #include <string>
@@ -11,7 +11,8 @@
 // the writable per-user data directory) - used below to look for a
 // portable/installed "models" folder sitting next to the binary before
 // falling back to the embedded model library.
-char *base_path = SDL_GetBasePath();
+const char *base_path = SDL_GetBasePath();
+
 std::string config_base_path;
 
 namespace {
@@ -213,19 +214,17 @@ void ensure_gamecontrollerdb() {
     return;
   }
 
-  SDL_RWops *rw = SDL_RWFromConstMem(Embedded::gamecontrollerdb_data,
-                                     Embedded::gamecontrollerdb_size);
+  SDL_IOStream *rw = SDL_IOFromConstMem(Embedded::gamecontrollerdb_data,
+                                        Embedded::gamecontrollerdb_size);
   if (!rw) {
     spdlog::error("Failed to create RWops from embedded gamecontrollerdb: {}",
                   SDL_GetError());
     return;
   }
 
-  int count =
-      SDL_GameControllerAddMappingsFromRW(rw, 1); // 1 = SDL frees the RWops
+  int count = SDL_AddGamepadMappingsFromIO(rw, 1); // 1 = SDL frees the RWops
   if (count < 0) {
-    spdlog::error("SDL_GameControllerAddMappingsFromRW failed: {}",
-                  SDL_GetError());
+    spdlog::error("SDL_AddGamepadMappingsFromIO failed: {}", SDL_GetError());
   } else {
     spdlog::info("Loaded {} gamecontroller mappings from embedded data", count);
   }

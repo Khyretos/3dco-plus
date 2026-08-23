@@ -7,7 +7,7 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 
 #include "imfilebrowser.h"
 // clang-format on

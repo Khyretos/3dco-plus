@@ -23,6 +23,7 @@
 #include "settings_window.h"
 #include "stb_image.h"
 #include "strings.h"
+#include <SDL3/SDL_joystick.h>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -62,7 +63,7 @@ static struct CaptureState {
   controller_window *window = nullptr;
   int mesh = -1;
   int type = -1; // 0=gamepad,1=joystick,2=keyboard,3=mouse
-  bool keyboard_snapshot[SDL_NUM_SCANCODES];
+  bool keyboard_snapshot[SDL_SCANCODE_COUNT];
   bool gamepad_snapshot[32];
   bool joystick_snapshot[128];
   bool mouse_snapshot[8];
@@ -82,19 +83,18 @@ static void startCapture(controller_window *w, int meshIdx, int type) {
   memset(capture.axis_snapshot, 0, sizeof(capture.axis_snapshot));
 
   if (type == 2) { // Keyboard
-    for (int i = 0; i < SDL_NUM_SCANCODES; ++i) {
+    for (int i = 0; i < SDL_SCANCODE_COUNT; ++i) {
       capture.keyboard_snapshot[i] = GlobalKeyboard::isPressed((SDL_Scancode)i);
     }
   } else if (type == 0) { // Gamepad
     if (w->sdl_controller) {
-      for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX && i < 32; ++i) {
-        capture.gamepad_snapshot[i] = SDL_GameControllerGetButton(
-            w->sdl_controller, (SDL_GameControllerButton)i);
+      for (int i = 0; i < SDL_GAMEPAD_BUTTON_COUNT && i < 32; ++i) {
+        capture.gamepad_snapshot[i] =
+            SDL_GetGamepadButton(w->sdl_controller, (SDL_GamepadButton)i);
       }
-      for (int i = 0; i < SDL_CONTROLLER_AXIS_MAX && i < 32; ++i) {
+      for (int i = 0; i < SDL_GAMEPAD_AXIS_COUNT && i < 32; ++i) {
         capture.axis_snapshot[i] =
-            SDL_GameControllerGetAxis(w->sdl_controller,
-                                      (SDL_GameControllerAxis)i) /
+            SDL_GetGamepadAxis(w->sdl_controller, (SDL_GamepadAxis)i) /
             32767.0f;
       }
     }
@@ -104,17 +104,17 @@ static void startCapture(controller_window *w, int meshIdx, int type) {
     if (w->sdl_joystick)
       joy = w->sdl_joystick;
     else if (w->sdl_controller)
-      joy = SDL_GameControllerGetJoystick(w->sdl_controller);
+      joy = SDL_GetGamepadJoystick(w->sdl_controller);
     if (joy) {
-      int numButtons = SDL_JoystickNumButtons(joy);
+      int numButtons = SDL_GetNumJoystickButtons(joy);
       int maxButtons = std::min(numButtons, 128);
       for (int i = 0; i < maxButtons; ++i) {
-        capture.joystick_snapshot[i] = SDL_JoystickGetButton(joy, i);
+        capture.joystick_snapshot[i] = SDL_GetJoystickButton(joy, i);
       }
-      int numAxes = SDL_JoystickNumAxes(joy);
+      int numAxes = SDL_GetNumJoystickAxes(joy);
       int maxAxes = std::min(numAxes, 128);
       for (int i = 0; i < maxAxes; ++i) {
-        capture.axis_snapshot[i] = SDL_JoystickGetAxis(joy, i) / 32767.0f;
+        capture.axis_snapshot[i] = SDL_GetJoystickAxis(joy, i) / 32767.0f;
       }
       spdlog::debug("Joystick snapshot: {} buttons, {} axes", maxButtons,
                     maxAxes);
@@ -145,7 +145,7 @@ static bool pollAndCapture(controller_window *w, int meshIdx, int type,
 
   // ---- Keyboard ----
   if (type == 2) {
-    for (int i = 0; i < SDL_NUM_SCANCODES; ++i) {
+    for (int i = 0; i < SDL_SCANCODE_COUNT; ++i) {
       bool current = GlobalKeyboard::isPressed((SDL_Scancode)i);
       if (current && !capture.keyboard_snapshot[i]) {
         const char *name = SDL_GetScancodeName((SDL_Scancode)i);
@@ -162,19 +162,18 @@ static bool pollAndCapture(controller_window *w, int meshIdx, int type,
 
   // ---- Gamepad ----
   if (type == 0 && w->sdl_controller) {
-    for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX && i < 32; ++i) {
-      bool current = SDL_GameControllerGetButton(w->sdl_controller,
-                                                 (SDL_GameControllerButton)i);
+    for (int i = 0; i < SDL_GAMEPAD_BUTTON_COUNT && i < 32; ++i) {
+      bool current =
+          SDL_GetGamepadButton(w->sdl_controller, (SDL_GamepadButton)i);
       if (current && !capture.gamepad_snapshot[i]) {
         outBinding = "b" + std::to_string(i);
         spdlog::debug("Gamepad button capture: {}", outBinding);
         return true;
       }
     }
-    for (int i = 0; i < SDL_CONTROLLER_AXIS_MAX && i < 32; ++i) {
-      float current = SDL_GameControllerGetAxis(w->sdl_controller,
-                                                (SDL_GameControllerAxis)i) /
-                      32767.0f;
+    for (int i = 0; i < SDL_GAMEPAD_AXIS_COUNT && i < 32; ++i) {
+      float current =
+          SDL_GetGamepadAxis(w->sdl_controller, (SDL_GamepadAxis)i) / 32767.0f;
       float snap = capture.axis_snapshot[i];
       if (fabs(current) > 0.8f && fabs(current - snap) > 0.2f) {
         std::string dir = (current > 0) ? "+" : "-";
@@ -191,22 +190,22 @@ static bool pollAndCapture(controller_window *w, int meshIdx, int type,
     if (w->sdl_joystick)
       joy = w->sdl_joystick;
     else if (w->sdl_controller)
-      joy = SDL_GameControllerGetJoystick(w->sdl_controller);
+      joy = SDL_GetGamepadJoystick(w->sdl_controller);
     if (joy) {
-      int numButtons = SDL_JoystickNumButtons(joy);
+      int numButtons = SDL_GetNumJoystickButtons(joy);
       int maxButtons = std::min(numButtons, 128);
       for (int i = 0; i < maxButtons; ++i) {
-        bool current = SDL_JoystickGetButton(joy, i);
+        bool current = SDL_GetJoystickButton(joy, i);
         if (current && !capture.joystick_snapshot[i]) {
           outBinding = "b" + std::to_string(i);
           spdlog::debug("Joystick button capture: {}", outBinding);
           return true;
         }
       }
-      int numAxes = SDL_JoystickNumAxes(joy);
+      int numAxes = SDL_GetNumJoystickAxes(joy);
       int maxAxes = std::min(numAxes, 128);
       for (int i = 0; i < maxAxes; ++i) {
-        float current = SDL_JoystickGetAxis(joy, i) / 32767.0f;
+        float current = SDL_GetJoystickAxis(joy, i) / 32767.0f;
         float snap = capture.axis_snapshot[i];
         if (fabs(current) > 0.8f && fabs(current - snap) > 0.2f) {
           std::string dir = (current > 0) ? "+" : "-";
@@ -245,11 +244,11 @@ static bool HasTouchpadFinger(controller_window *w, int touchpadIdx,
                               int fingerIdx) {
   if (!w || !w->is_gamecontroller || !w->sdl_controller)
     return false;
-  int numTouchpads = SDL_GameControllerGetNumTouchpads(w->sdl_controller);
+  int numTouchpads = SDL_GetNumGamepadTouchpads(w->sdl_controller);
   if (touchpadIdx >= numTouchpads)
     return false;
   int numFingers =
-      SDL_GameControllerGetNumTouchpadFingers(w->sdl_controller, touchpadIdx);
+      SDL_GetNumGamepadTouchpadFingers(w->sdl_controller, touchpadIdx);
   return fingerIdx < numFingers;
 }
 
@@ -827,53 +826,57 @@ void drawSettingsWindow() {
     // CONTROLLER
     // ============================================================
     if (ImGui::CollapsingHeader("Controller")) {
-      std::vector<int> all_devices;
-      for (int i = 0; i < SDL_NumJoysticks(); ++i) {
-        all_devices.push_back(i);
+      // Get list of joysticks
+      int num_joy = 0;
+      SDL_JoystickID *joy_ids = SDL_GetJoysticks(&num_joy);
+      std::vector<SDL_JoystickID> device_ids;
+      if (joy_ids) {
+        device_ids.assign(joy_ids, joy_ids + num_joy);
+        SDL_free(joy_ids);
       }
 
       std::string device_name = "None";
       if (current_window->is_gamecontroller && current_window->sdl_controller) {
-        device_name = SDL_GameControllerName(current_window->sdl_controller);
+        device_name = SDL_GetGamepadName(current_window->sdl_controller);
       } else if (current_window->sdl_joystick) {
-        device_name = SDL_JoystickName(current_window->sdl_joystick);
+        device_name = SDL_GetJoystickName(current_window->sdl_joystick);
       }
 
       if (ImGui::BeginCombo("Controllers", device_name.c_str(), 0)) {
-        for (int idx : all_devices) {
-          const char *name = SDL_JoystickNameForIndex(idx);
-          bool is_game = SDL_IsGameController(idx);
+        for (int idx = 0; idx < (int)device_ids.size(); ++idx) {
+          SDL_JoystickID id = device_ids[idx];
+          const char *name = SDL_GetJoystickNameForID(id);
+          bool is_game = SDL_IsGamepad(id);
           std::string label = std::string(name ? name : "Unknown") +
                               (is_game ? " (gamepad)" : " (joystick)") + " [" +
                               std::to_string(idx) + "]";
           if (ImGui::Selectable(label.c_str())) {
             // ---- Close any currently open device ----
             if (current_window->sdl_controller) {
-              SDL_GameControllerClose(current_window->sdl_controller);
+              SDL_CloseGamepad(current_window->sdl_controller);
               current_window->sdl_controller = nullptr;
             }
             if (current_window->sdl_joystick) {
-              SDL_JoystickClose(current_window->sdl_joystick);
+              SDL_CloseJoystick(current_window->sdl_joystick);
               current_window->sdl_joystick = nullptr;
             }
             current_window->is_gamecontroller = false;
 
             // ---- Open the new device ----
             if (is_game) {
-              current_window->sdl_controller = SDL_GameControllerOpen(idx);
+              current_window->sdl_controller = SDL_OpenGamepad(id);
               if (current_window->sdl_controller) {
                 current_window->is_gamecontroller = true;
                 spdlog::info(
                     "Switched to gamecontroller: {}",
-                    SDL_GameControllerName(current_window->sdl_controller));
+                    SDL_GetGamepadName(current_window->sdl_controller));
 
                 // ---- Re‑enable gyro if it was previously enabled ----
                 if (current_window->gyro_enabled) {
-                  if (SDL_GameControllerHasSensor(
-                          current_window->sdl_controller, SDL_SENSOR_GYRO)) {
-                    SDL_GameControllerSetSensorEnabled(
-                        current_window->sdl_controller, SDL_SENSOR_GYRO,
-                        SDL_TRUE);
+                  if (SDL_GamepadHasSensor(current_window->sdl_controller,
+                                           SDL_SENSOR_GYRO)) {
+                    SDL_SetGamepadSensorEnabled(current_window->sdl_controller,
+                                                SDL_SENSOR_GYRO, true);
                     spdlog::info("Gyro re‑enabled on new controller.");
                   } else {
                     spdlog::warn(
@@ -882,35 +885,28 @@ void drawSettingsWindow() {
                   }
                 }
               } else {
-                spdlog::error("Failed to open gamecontroller {}: {}", idx,
+                spdlog::error("Failed to open gamecontroller ID {}: {}", id,
                               SDL_GetError());
               }
             } else {
-              int numJoy = SDL_NumJoysticks();
-              if (idx < 0 || idx >= numJoy) {
-                spdlog::error(
-                    "Joystick index {} out of range ({} joysticks present)",
-                    idx, numJoy);
+              current_window->sdl_joystick = SDL_OpenJoystick(id);
+              if (current_window->sdl_joystick) {
+                current_window->is_gamecontroller = false;
+                spdlog::info("Switched to generic joystick: {}",
+                             SDL_GetJoystickName(current_window->sdl_joystick));
               } else {
-                current_window->sdl_joystick = SDL_JoystickOpen(idx);
-                if (current_window->sdl_joystick) {
-                  current_window->is_gamecontroller = false;
-                  spdlog::info("Switched to generic joystick: {}",
-                               SDL_JoystickName(current_window->sdl_joystick));
-                } else {
-                  spdlog::error("Failed to open generic joystick {}: {}", idx,
-                                SDL_GetError() ? SDL_GetError()
-                                               : "(no error details)");
-                }
+                spdlog::error("Failed to open generic joystick ID {}: {}", id,
+                              SDL_GetError() ? SDL_GetError()
+                                             : "(no error details)");
               }
             }
-            current_window->joystick_index = idx;
+            current_window->joystick_index = idx; // store the index for logging
 
             // ---- Reset all input state ----
             // Reset touchpad states
             for (int t = 0; t < 4; ++t) {
               for (int f = 0; f < 2; ++f) {
-                current_window->touchpad_data[t][f].state = 0;
+                current_window->touchpad_data[t][f].down = false;
                 current_window->touchpad_data[t][f].x = 0.0f;
                 current_window->touchpad_data[t][f].y = 0.0f;
               }
@@ -1776,7 +1772,7 @@ void drawSettingsWindow() {
               // actually does anything (see the emplace() note next to
               // keyMap in controller_window.cpp for the full story).
               std::set<std::string> seenKeyNames;
-              for (int i = 0; i < SDL_NUM_SCANCODES; ++i) {
+              for (int i = 0; i < SDL_SCANCODE_COUNT; ++i) {
                 SDL_Scancode sc = static_cast<SDL_Scancode>(i);
                 const char *name = SDL_GetScancodeName(sc);
                 if (name && strcmp(name, "UNKNOWN") != 0) {
@@ -2515,8 +2511,8 @@ void drawSettingsWindow() {
     if (ImGui::CollapsingHeader("Gyro")) {
       bool has_gyro = false;
       if (current_window->is_gamecontroller && current_window->sdl_controller) {
-        has_gyro = SDL_GameControllerHasSensor(current_window->sdl_controller,
-                                               SDL_SENSOR_GYRO) == SDL_TRUE;
+        has_gyro = SDL_GamepadHasSensor(current_window->sdl_controller,
+                                        SDL_SENSOR_GYRO) == true;
       }
       if (!has_gyro && current_window->gyro_sensor) {
         has_gyro = true;
@@ -2528,16 +2524,15 @@ void drawSettingsWindow() {
         current_window->gyro_enabled = enabled;
         if (current_window->is_gamecontroller &&
             current_window->sdl_controller) {
-          SDL_GameControllerSetSensorEnabled(current_window->sdl_controller,
-                                             SDL_SENSOR_GYRO,
-                                             (SDL_bool)enabled);
+          SDL_SetGamepadSensorEnabled(current_window->sdl_controller,
+                                      SDL_SENSOR_GYRO, enabled);
         }
         if (enabled) {
           current_window->gyro_toggled = true;
           Uint64 timestamp;
-          if (SDL_GameControllerGetSensorDataWithTimestamp(
-                  current_window->sdl_controller, SDL_SENSOR_GYRO, &timestamp,
-                  current_window->gyro_data, 3) == 0) {
+          if (SDL_GetGamepadSensorData(current_window->sdl_controller,
+                                       SDL_SENSOR_GYRO,
+                                       current_window->gyro_data, 3) == 0) {
             current_window->gyro_time = timestamp;
           }
         } else {

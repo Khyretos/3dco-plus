@@ -1,7 +1,7 @@
 #ifndef KEYBOARD_INPUT_H
 #define KEYBOARD_INPUT_H
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 
 namespace GlobalKeyboard {
 

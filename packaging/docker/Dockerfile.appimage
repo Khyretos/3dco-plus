@@ -19,9 +19,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean
 
 # Build SDL2 statically
-RUN wget -q https://github.com/libsdl-org/SDL/releases/download/release-2.30.0/SDL2-2.30.0.tar.gz && \
-    tar xzf SDL2-2.30.0.tar.gz && \
-    cd SDL2-2.30.0 && \
+RUN wget -q https://github.com/libsdl-org/SDL/releases/download/release-3.4.14/SDL3-3.4.14.tar.gz && \
+    tar xzf SDL3-3.4.14.tar.gz && \
+    cd SDL3-3.4.14 && \
     cmake -B build -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_SHARED_LIBS=OFF \
     -DSDL_STATIC=ON \
@@ -31,7 +31,7 @@ RUN wget -q https://github.com/libsdl-org/SDL/releases/download/release-2.30.0/S
     -DSDL_HIDAPI_LIBUSB=ON \
     && cmake --build build -j$(nproc) && \
     cmake --install build --prefix /usr && \
-    cd .. && rm -rf SDL2-2.30.0*
+    cd .. && rm -rf SDL3-3.4.14*
 
 RUN find /usr -name 'libSDL2*' -exec echo "Found: {}" \; && \
     SDLLIB=$(find /usr -name 'libSDL2.a' | head -n1) && \

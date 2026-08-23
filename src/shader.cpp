@@ -75,7 +75,7 @@ GLuint CreateShaderProgram(const char *vertexShaderSource,
 }
 
 std::string GetShaderSource(std::string path) {
-  char *base_path = SDL_GetBasePath();
+  const char *base_path = SDL_GetBasePath();
   std::filesystem::path file_path;
   file_path = std::filesystem::path(base_path);
   std::filesystem::path sub_path(path);

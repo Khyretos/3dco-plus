@@ -232,13 +232,13 @@ build_deps_for_arch() {
     # source for why that backend needs a linker workaround under
     # osxcross regardless of this flag.
     echo "-- SDL2 --"
-    download "https://github.com/libsdl-org/SDL/releases/download/release-2.30.1/SDL2-2.30.1.tar.gz" "${WORK}/sdl2.tar.gz"
-    extract_tar "${WORK}/sdl2.tar.gz" "${WORK}/sdl2"
-    cmake -S "${WORK}/sdl2" -B "${WORK}/sdl2/build" "${COMMON_CMAKE[@]}" \
+    download "https://github.com/libsdl-org/SDL/releases/download/release-3.4.14/SDL3-3.4.14.tar.gz" "${WORK}/sdl3.tar.gz"
+    extract_tar "${WORK}/sdl3.tar.gz" "${WORK}/sdl3"
+    cmake -S "${WORK}/sdl3" -B "${WORK}/sdl3/build" "${COMMON_CMAKE[@]}" \
     -DSDL_TESTS=OFF -DSDL_GAMECONTROLLER=OFF -DSDL_HAPTIC=OFF \
     -DSDL_HIDAPI_LIBUSB=ON
-    cmake --build "${WORK}/sdl2/build" --parallel
-    cmake --install "${WORK}/sdl2/build"
+    cmake --build "${WORK}/sdl3/build" --parallel
+    cmake --install "${WORK}/sdl3/build"
     refresh_archives
 
     # ---- fmt ----
