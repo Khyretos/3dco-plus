@@ -24,6 +24,28 @@ extern std::string config_base_path;
 extern bool gQuit;
 extern GLFWwindow *glfw_settings_window;
 
+// ------------------------------------------------------------------
+// Set window click‑through (mouse passthrough).
+//
+// GLFW 3.4+ implements GLFW_MOUSE_PASSTHROUGH natively on X11, Win32, and
+// Wayland (on Wayland it does exactly what a hand‑rolled implementation
+// would do: sets an empty wl_surface input region and commits it), so a
+// single cross‑platform call is all that's needed. This only reliably
+// works on *undecorated* windows — callers must ensure GLFW_DECORATED is
+// false before/alongside enabling this.
+// ------------------------------------------------------------------
+void setWindowClickThrough(GLFWwindow *window, bool enable) {
+#if defined(GLFW_MOUSE_PASSTHROUGH) // GLFW 3.4+
+  glfwSetWindowAttrib(window, GLFW_MOUSE_PASSTHROUGH,
+                      enable ? GLFW_TRUE : GLFW_FALSE);
+  spdlog::debug("Mouse passthrough set to {}", enable);
+#else
+  (void)window;
+  (void)enable;
+  spdlog::warn("Click‑through not supported: GLFW < 3.4");
+#endif
+}
+
 static GLuint g_glowTexture = 0;
 const char *getMouseButtonName(int button) {
   switch (button) {
@@ -260,6 +282,7 @@ void createControllerWindow(std::string title, std::string model_path) {
   w.logger = spdlog::get("3dco+");
 
   glfwWindowHint(GLFW_SAMPLES, 4);
+  glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
   w.glfw_window =
       glfwCreateWindow(defaultWidth, defaultHeight, title.c_str(), NULL, NULL);
   if (!w.glfw_window) {
@@ -269,7 +292,48 @@ void createControllerWindow(std::string title, std::string model_path) {
   }
   glfwMakeContextCurrent(w.glfw_window);
   w.window_title = title;
+  setWindowClickThrough(w.glfw_window, false); // default: no passthrough
   glEnable(GL_MULTISAMPLE);
+
+  // ---- Diagnostics for transparency issues ----
+  // GLFW_TRANSPARENT_FRAMEBUFFER can silently fail depending on the
+  // GPU driver / platform combo. If the background renders solid instead
+  // of see-through, check this log line: glfw_transparent_attrib=0 means
+  // GLFW itself never actually got a transparency-capable framebuffer for
+  // this window, no matter what hint we requested — that's the real,
+  // authoritative signal (GL_ALPHA_BITS isn't usable here: it's a
+  // compatibility-profile-only query that glad doesn't expose for a core
+  // profile context).
+  {
+    int transparent_attrib =
+        glfwGetWindowAttrib(w.glfw_window, GLFW_TRANSPARENT_FRAMEBUFFER);
+    const char *gl_vendor = (const char *)glGetString(GL_VENDOR);
+    const char *gl_renderer = (const char *)glGetString(GL_RENDERER);
+#if defined(__linux__)
+    int platform = glfwGetPlatform();
+    const char *platform_name = platform == GLFW_PLATFORM_WAYLAND ? "Wayland"
+                                : platform == GLFW_PLATFORM_X11   ? "X11"
+                                                                  : "unknown";
+#else
+    const char *platform_name = "n/a";
+#endif
+    spdlog::info("Controller window '{}': platform={} gl_vendor='{}' "
+                 "gl_renderer='{}' glfw_transparent_attrib={}",
+                 title, platform_name, gl_vendor ? gl_vendor : "?",
+                 gl_renderer ? gl_renderer : "?", transparent_attrib);
+    // Authoritative signal used to warn the user in the UI (see
+    // settings_window.cpp): if GLFW itself reports the framebuffer isn't
+    // transparent even right after we requested it, no amount of
+    // clear-color/alpha juggling in our draw call will fix it — the
+    // driver/display server never granted an alpha-capable surface.
+    w.transparency_supported = (transparent_attrib == GLFW_TRUE);
+    if (!w.transparency_supported) {
+      spdlog::warn("Controller window '{}': transparent framebuffer was NOT "
+                   "granted by the driver/display server. \"Transparent "
+                   "Background\" will not work as expected on this system.",
+                   title);
+    }
+  }
 
   GLFWimage images[1];
   images[0].pixels = stbi_load_from_memory(
@@ -517,12 +581,25 @@ void recreateControllerWindow(controller_window *w) {
   glfwMakeContextCurrent(w->glfw_window);
   w->window_title = title;
   glfwSetWindowPos(w->glfw_window, x, y);
-  glfwSetWindowAttrib(w->glfw_window, GLFW_FLOATING, was_always_on_top);
-  glfwSetWindowAttrib(w->glfw_window, GLFW_DECORATED, !was_borderless);
+  // A transparent or click-through window must stay undecorated, or
+  // GLFW_MOUSE_PASSTHROUGH won't reliably work.
+  bool needs_undecorated =
+      was_borderless || w->transparent_bg || w->click_through;
+  glfwSetWindowAttrib(w->glfw_window, GLFW_FLOATING,
+                      was_always_on_top || w->transparent_bg ||
+                          w->click_through);
+  glfwSetWindowAttrib(w->glfw_window, GLFW_DECORATED, !needs_undecorated);
+#ifdef GLFW_MOUSE_PASSTHROUGH
+  glfwSetWindowAttrib(w->glfw_window, GLFW_MOUSE_PASSTHROUGH,
+                      w->click_through ? GLFW_TRUE : GLFW_FALSE);
+#endif
   glfwSwapInterval(was_swap_interval);
   w->grid = was_grid;
   w->wireframe = was_wireframe;
   memcpy(w->bg_color, bg_color, 4 * sizeof(float));
+
+  // Apply click-through after all attributes
+  setWindowClickThrough(w->glfw_window, w->click_through);
 
   // Recreate OpenGL resources that depend on the context
   // (shaders, VAOs, etc.) – these were destroyed when the old window was
@@ -1948,7 +2025,7 @@ void drawControllerWindows() {
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
       glClearColor(w.bg_color[0] * w.bg_color[3], w.bg_color[1] * w.bg_color[3],
-                   w.bg_color[2] * w.bg_color[3], 1.0f * w.bg_color[3]);
+                   w.bg_color[2] * w.bg_color[3], w.bg_color[3]);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
       if (w.grid) {

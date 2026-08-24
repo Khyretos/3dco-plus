@@ -230,6 +230,19 @@ typedef struct controller_window_struct {
   float camera_offset_y = 0.0f; // vertical pan
 
   bool transparent_bg = false;
+  // Independent of transparent_bg: whether mouse clicks pass through this
+  // window to whatever is behind it. Enabling transparency turns this on
+  // by default (a transparent overlay usually shouldn't eat clicks), but
+  // it can be toggled back off independently, e.g. to reposition a
+  // transparent window, or turned on for an opaque overlay too.
+  bool click_through = false;
+  // Set once at window creation from glfwGetWindowAttrib(GLFW_TRANSPARENT_
+  // FRAMEBUFFER) — the authoritative signal for whether this GPU driver /
+  // display server combo actually granted a transparent framebuffer, as
+  // opposed to just accepting the hint. Used to warn the user in the UI
+  // instead of silently showing an opaque window when they enable
+  // "Transparent Background" on a system that can't do it.
+  bool transparency_supported = true;
   std::string window_title;
 
 } controller_window;
@@ -257,5 +270,5 @@ void controller_window_scroll_callback(GLFWwindow *window, double xoffset,
 void controller_window_iconify_callback(GLFWwindow *window, int iconified);
 void createTouchAreaRect(controller_window &w);
 void recreateControllerWindow(controller_window *w);
-
+void setWindowClickThrough(GLFWwindow *window, bool enable);
 #endif

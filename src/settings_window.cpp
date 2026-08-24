@@ -34,6 +34,13 @@
 #include <spdlog/spdlog.h>
 #include <stdio.h>
 
+static std::string g_last_glfw_error;
+
+void glfw_error_callback(int error, const char *description) {
+  g_last_glfw_error = std::string(description);
+  spdlog::error("GLFW error {}: {}", error, description);
+}
+
 static GLuint getHelpIcon() {
   static GLuint iconTex = 0;
   if (iconTex)
@@ -411,7 +418,31 @@ ImVec4 clear_color = ImVec4(0.05f, 0.05f, 0.05f, 1.00f);
 ImGuiIO *io;
 
 void createSettingsWindow() {
-  glfwInit();
+  // Set error callback first
+  glfwSetErrorCallback(glfw_error_callback);
+
+  // Try to initialize GLFW without forcing a specific platform.
+  // On systems with both Wayland and X11, GLFW will choose Wayland if
+  // available, but if that fails (e.g. no Wayland compositor), we fall back to
+  // X11.
+  if (!glfwInit()) {
+    spdlog::warn("GLFW initialization failed. Retrying with X11 platform...");
+    glfwTerminate(); // clean up any partial state
+    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+    if (!glfwInit()) {
+      spdlog::critical("GLFW initialization failed even with X11 platform.");
+      exit(1);
+    }
+  }
+
+  // Log which platform GLFW is using
+#if defined(GLFW_PLATFORM_WAYLAND) && defined(GLFW_PLATFORM_X11)
+  int platform = glfwGetPlatform();
+  const char *platform_name = platform == GLFW_PLATFORM_WAYLAND ? "Wayland"
+                              : platform == GLFW_PLATFORM_X11   ? "X11"
+                                                                : "unknown";
+  spdlog::info("GLFW windowing backend: {}", platform_name);
+#endif
 
 #if defined(IMGUI_IMPL_OPENGL_ES2)
   const char *glsl_version = "#version 100";
@@ -430,19 +461,30 @@ void createSettingsWindow() {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 #endif
-  glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, 1);
 
+  // Try to create the window with transparent framebuffer first
+  glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
   glfw_settings_window =
       glfwCreateWindow(640, 480, "3D Controller Overlay", NULL, NULL);
-  if (glfw_settings_window == NULL) {
-    spdlog::critical("Failed to create settings window - GLFW returned "
-                     "NULL. Cannot continue.");
+
+  if (!glfw_settings_window) {
+    spdlog::warn("Failed to create window with transparent framebuffer: {}",
+                 g_last_glfw_error);
+    spdlog::info("Retrying without transparent framebuffer...");
+    // Clear the hint and try again
+    glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_FALSE);
+    glfw_settings_window =
+        glfwCreateWindow(640, 480, "3D Controller Overlay", NULL, NULL);
+  }
+
+  if (!glfw_settings_window) {
+    spdlog::critical(
+        "Failed to create settings window even without transparency: {}",
+        g_last_glfw_error);
     glfwTerminate();
-    // Previously execution fell through to glfwMakeContextCurrent(NULL)
-    // and beyond with no window at all, which would crash rather than
-    // fail cleanly with a logged reason.
     exit(1);
   }
+
   glfwMakeContextCurrent(glfw_settings_window);
   glfwSwapInterval(1);
   glfwSetFramebufferSizeCallback(glfw_settings_window,
@@ -702,58 +744,137 @@ void drawSettingsWindow() {
         ImGui::SetTooltip("Set the window title.");
       ImGui::NewLine();
 
-      if (ImGui::Checkbox("Always on Top", &current_window->always_on_top)) {
-        glfwSetWindowAttrib(current_window->glfw_window, GLFW_FLOATING,
-                            current_window->always_on_top);
-      }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Keep window above all others.");
-
-      if (ImGui::Checkbox("Borderless", &current_window->borderless)) {
-        glfwSetWindowAttrib(current_window->glfw_window, GLFW_DECORATED,
-                            !current_window->borderless);
-      }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Hide title bar and borders.");
-
-      ImGui::Checkbox("Drag to Move", &current_window->drag_to_move);
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Left‑click drag to move window.");
-
-      ImGui::Checkbox("Scroll to Resize", &current_window->scroll_to_resize);
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Scroll mouse wheel to resize window.");
-
-      ImGui::Checkbox("Show Grid", &current_window->grid);
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Show/hide reference grid.");
-
-      ImGui::Checkbox("Wireframe Mode", &current_window->wireframe);
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Toggle wireframe rendering.");
-      if (ImGui::Checkbox("Transparent Background",
-                          &current_window->transparent_bg)) {
-        // Toggle transparency: alpha = 0.0 -> transparent, 1.0 -> opaque
-        current_window->bg_color[3] =
-            current_window->transparent_bg ? 0.0f : 1.0f;
-        // Optionally, make the window borderless when transparent (cleaner
-        // desktop overlay)
-        if (current_window->transparent_bg) {
-          glfwSetWindowAttrib(current_window->glfw_window, GLFW_DECORATED,
-                              GLFW_FALSE);
-          glfwSetWindowAttrib(current_window->glfw_window, GLFW_FLOATING,
-                              GLFW_TRUE);
-        } else {
-          // Restore user's borderless setting
-          glfwSetWindowAttrib(current_window->glfw_window, GLFW_DECORATED,
-                              !current_window->borderless);
+      if (ImGui::BeginTable("WindowOptionsColumns", 2,
+                            ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableNextColumn();
+        if (ImGui::Checkbox("Always on Top", &current_window->always_on_top)) {
           glfwSetWindowAttrib(current_window->glfw_window, GLFW_FLOATING,
                               current_window->always_on_top);
         }
+        if (ImGui::IsItemHovered())
+          ImGui::SetTooltip("Keep window above all others.");
+
+        ImGui::TableNextColumn();
+        if (ImGui::Checkbox("Borderless", &current_window->borderless)) {
+          // Transparent / click-through windows must stay undecorated
+          // regardless of this checkbox, so only apply it when neither
+          // of those is forcing the window undecorated already.
+          if (!current_window->transparent_bg &&
+              !current_window->click_through) {
+            glfwSetWindowAttrib(current_window->glfw_window, GLFW_DECORATED,
+                                !current_window->borderless);
+          }
+        }
+        if (ImGui::IsItemHovered())
+          ImGui::SetTooltip("Hide title bar and borders.");
+
+        ImGui::TableNextColumn();
+        ImGui::Checkbox("Drag to Move", &current_window->drag_to_move);
+        if (ImGui::IsItemHovered())
+          ImGui::SetTooltip("Left‑click drag to move window.");
+
+        ImGui::TableNextColumn();
+        ImGui::Checkbox("Scroll to Resize", &current_window->scroll_to_resize);
+        if (ImGui::IsItemHovered())
+          ImGui::SetTooltip("Scroll mouse wheel to resize window.");
+
+        ImGui::TableNextColumn();
+        ImGui::Checkbox("Show Grid", &current_window->grid);
+        if (ImGui::IsItemHovered())
+          ImGui::SetTooltip("Show/hide reference grid.");
+
+        ImGui::TableNextColumn();
+        ImGui::Checkbox("Wireframe Mode", &current_window->wireframe);
+        if (ImGui::IsItemHovered())
+          ImGui::SetTooltip("Toggle wireframe rendering.");
+
+        ImGui::TableNextColumn();
+        if (ImGui::Checkbox("Transparent Background",
+                            &current_window->transparent_bg)) {
+          current_window->bg_color[3] =
+              current_window->transparent_bg ? 0.0f : 1.0f;
+          if (current_window->transparent_bg) {
+            glfwSetWindowAttrib(current_window->glfw_window, GLFW_DECORATED,
+                                GLFW_FALSE);
+            glfwSetWindowAttrib(current_window->glfw_window, GLFW_FLOATING,
+                                GLFW_TRUE);
+            // A transparent overlay usually shouldn't eat clicks, so turn
+            // click-through on by default. The button next to this one
+            // lets the user turn it back off (e.g. to reposition the
+            // window) without giving up transparency.
+            current_window->click_through = true;
+          } else if (!current_window->click_through) {
+            glfwSetWindowAttrib(current_window->glfw_window, GLFW_DECORATED,
+                                !current_window->borderless);
+            glfwSetWindowAttrib(current_window->glfw_window, GLFW_FLOATING,
+                                current_window->always_on_top);
+          }
+          glfwSetWindowAttrib(
+              current_window->glfw_window, GLFW_MOUSE_PASSTHROUGH,
+              current_window->click_through ? GLFW_TRUE : GLFW_FALSE);
+          setWindowClickThrough(current_window->glfw_window,
+                                current_window->click_through);
+        }
+        if (ImGui::IsItemHovered())
+          ImGui::SetTooltip("Make the window background fully transparent. "
+                            "The 3D model will appear on your desktop.");
+        if (!current_window->transparency_supported) {
+          ImGui::SameLine();
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.7f, 0.2f, 1.0f));
+          ImGui::TextUnformatted("(!)");
+          ImGui::PopStyleColor();
+          if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Your graphics driver / display server did not grant a "
+                "transparent framebuffer for this window, so the "
+                "background will stay solid regardless of this setting. "
+                "This is a driver/display-server limitation, not something "
+                "this app's settings can override. Check the log for "
+                "details.");
+        }
+
+        ImGui::TableNextColumn();
+        {
+          bool ct = current_window->click_through;
+          if (ct) {
+            ImGui::PushStyleColor(ImGuiCol_Button,
+                                  ImVec4(0.20f, 0.55f, 0.30f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                  ImVec4(0.25f, 0.65f, 0.35f, 1.0f));
+          }
+          if (ImGui::Button(ct ? "Click-Through: ON" : "Click-Through: OFF")) {
+            current_window->click_through = !current_window->click_through;
+            if (current_window->click_through) {
+              // Passthrough only works reliably on undecorated windows.
+              glfwSetWindowAttrib(current_window->glfw_window, GLFW_DECORATED,
+                                  GLFW_FALSE);
+              glfwSetWindowAttrib(current_window->glfw_window, GLFW_FLOATING,
+                                  GLFW_TRUE);
+            } else if (!current_window->transparent_bg) {
+              glfwSetWindowAttrib(current_window->glfw_window, GLFW_DECORATED,
+                                  !current_window->borderless);
+              glfwSetWindowAttrib(current_window->glfw_window, GLFW_FLOATING,
+                                  current_window->always_on_top);
+            }
+            glfwSetWindowAttrib(
+                current_window->glfw_window, GLFW_MOUSE_PASSTHROUGH,
+                current_window->click_through ? GLFW_TRUE : GLFW_FALSE);
+            setWindowClickThrough(current_window->glfw_window,
+                                  current_window->click_through);
+          }
+          if (ct) {
+            ImGui::PopStyleColor(2);
+          }
+        }
+        if (ImGui::IsItemHovered())
+          ImGui::SetTooltip(
+              "Let mouse clicks pass through this window to whatever is "
+              "behind it, turning it into a pure on-screen overlay.\n"
+              "Forces the window undecorated while enabled. Turn this off "
+              "temporarily if you need to drag or resize the window.");
+
+        ImGui::EndTable();
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Make the window background fully transparent. "
-                          "The 3D model will appear on your desktop.");
       ImGui::NewLine();
       int w = 0, h = 0;
       glfwGetWindowSize(current_window->glfw_window, &w, &h);
@@ -3779,6 +3900,8 @@ static void saveGlobalSettings() {
     tab["scroll_to_resize"] = w->scroll_to_resize;
     tab["grid"] = w->grid;
     tab["wireframe"] = w->wireframe;
+    tab["transparent_bg"] = w->transparent_bg;
+    tab["click_through"] = w->click_through;
 
     int ww, hh;
     glfwGetWindowSize(w->glfw_window, &ww, &hh);
@@ -3947,13 +4070,25 @@ static void loadGlobalSettings() {
     glfwSetWindowAttrib(w->glfw_window, GLFW_FLOATING, w->always_on_top);
 
     w->borderless = tab.value("borderless", false);
-    glfwSetWindowAttrib(w->glfw_window, GLFW_DECORATED, !w->borderless);
+    w->transparent_bg = tab.value("transparent_bg", false);
+    w->click_through = tab.value("click_through", w->transparent_bg);
 
     w->drag_to_move = tab.value("drag_to_move", false);
     w->scroll_to_resize = tab.value("scroll_to_resize", false);
     w->grid = tab.value("grid", false);
     w->wireframe = tab.value("wireframe", false);
 
+    // A transparent or click-through window must stay undecorated, or
+    // GLFW_MOUSE_PASSTHROUGH won't reliably work.
+    bool needs_undecorated =
+        w->borderless || w->transparent_bg || w->click_through;
+    glfwSetWindowAttrib(w->glfw_window, GLFW_DECORATED, !needs_undecorated);
+    if (w->transparent_bg || w->click_through) {
+      glfwSetWindowAttrib(w->glfw_window, GLFW_FLOATING, GLFW_TRUE);
+    }
+    glfwSetWindowAttrib(w->glfw_window, GLFW_MOUSE_PASSTHROUGH,
+                        w->click_through ? GLFW_TRUE : GLFW_FALSE);
+    setWindowClickThrough(w->glfw_window, w->click_through);
     int ww = tab.value("width", 640);
     int hh = tab.value("height", 480);
     glfwSetWindowSize(w->glfw_window, ww, hh);

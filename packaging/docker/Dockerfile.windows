@@ -14,7 +14,23 @@ ARG MXE_SYSROOT=/usr/src/mxe/usr/x86_64-w64-mingw32.static
 # for SDL2), so SDL3 has to be built from source below, the same way
 # Assimp already is a few steps down.
 RUN cd /usr/src/mxe && \
-    make glfw3 fmt spdlog zlib -j$(nproc) MXE_TARGETS='x86_64-w64-mingw32.static'
+    make fmt spdlog zlib -j$(nproc) MXE_TARGETS='x86_64-w64-mingw32.static'
+
+# Build GLFW 3.5.1 statically (instead of using MXE's outdated glfw3)
+RUN wget -q https://github.com/glfw/glfw/releases/download/3.5.1/glfw-3.5.1.zip && \
+    unzip glfw-3.5.1.zip && \
+    cd glfw-3.5.1 && \
+    mkdir build && cd build && \
+    cmake .. \
+    -DCMAKE_INSTALL_PREFIX=${MXE_SYSROOT} \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DGLFW_BUILD_EXAMPLES=OFF \
+    -DGLFW_BUILD_TESTS=OFF \
+    -DGLFW_BUILD_DOCS=OFF && \
+    make -j$(nproc) && \
+    make install && \
+    cd ../.. && rm -rf glfw-3.5.1*
 
 # Build SDL3 statically from source. The dockcross base image already has
 # CC/CXX/AR/RANLIB/etc pointed at the MXE x86_64-w64-mingw32.static

@@ -195,11 +195,11 @@ build_deps_for_arch() {
 
     # ---- GLFW ----
     echo "-- GLFW --"
-    download "https://github.com/glfw/glfw/archive/refs/tags/3.3.9.zip" "${WORK}/glfw.zip"
+    download "https://github.com/glfw/glfw/releases/download/3.5.1/glfw-3.5.1.zip" "${WORK}/glfw.zip"
     rm -rf "${WORK}/glfw" "${WORK}/glfw-src"
     mkdir -p "${WORK}/glfw-src"
     unzip -q "${WORK}/glfw.zip" -d "${WORK}/glfw-src"
-    mv "${WORK}/glfw-src/glfw-3.3.9" "${WORK}/glfw"
+    mv "${WORK}/glfw-src/glfw-3.5.1" "${WORK}/glfw"
     cmake -S "${WORK}/glfw" -B "${WORK}/glfw/build" "${COMMON_CMAKE[@]}" \
         -DGLFW_BUILD_DOCS=OFF -DGLFW_BUILD_TESTS=OFF -DGLFW_BUILD_EXAMPLES=OFF
     cmake --build "${WORK}/glfw/build" --parallel
