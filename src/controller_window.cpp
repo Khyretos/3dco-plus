@@ -268,6 +268,7 @@ void createControllerWindow(std::string title, std::string model_path) {
     return;
   }
   glfwMakeContextCurrent(w.glfw_window);
+  w.window_title = title;
   glEnable(GL_MULTISAMPLE);
 
   GLFWimage images[1];
@@ -486,6 +487,79 @@ void createControllerWindow(std::string title, std::string model_path) {
   windows.push_back(w);
 }
 
+void recreateControllerWindow(controller_window *w) {
+  if (!w)
+    return;
+  // Save window state
+  std::string title = w->window_title;
+  int x, y, width, height;
+  glfwGetWindowPos(w->glfw_window, &x, &y);
+  glfwGetWindowSize(w->glfw_window, &width, &height);
+  bool was_always_on_top = w->always_on_top;
+  bool was_borderless = w->borderless;
+  int was_swap_interval = w->swap_interval;
+  bool was_grid = w->grid;
+  bool was_wireframe = w->wireframe;
+  float bg_color[4];
+  memcpy(bg_color, w->bg_color, 4 * sizeof(float));
+
+  // Destroy old window (free resources)
+  glfwDestroyWindow(w->glfw_window);
+
+  // Recreate with GLFW_TRANSPARENT_FRAMEBUFFER if needed
+  glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER,
+                 w->transparent_bg ? GLFW_TRUE : GLFW_FALSE);
+  w->glfw_window = glfwCreateWindow(width, height, title.c_str(), NULL, NULL);
+  if (!w->glfw_window) {
+    spdlog::error("Failed to recreate controller window with transparency.");
+    return;
+  }
+  glfwMakeContextCurrent(w->glfw_window);
+  w->window_title = title;
+  glfwSetWindowPos(w->glfw_window, x, y);
+  glfwSetWindowAttrib(w->glfw_window, GLFW_FLOATING, was_always_on_top);
+  glfwSetWindowAttrib(w->glfw_window, GLFW_DECORATED, !was_borderless);
+  glfwSwapInterval(was_swap_interval);
+  w->grid = was_grid;
+  w->wireframe = was_wireframe;
+  memcpy(w->bg_color, bg_color, 4 * sizeof(float));
+
+  // Recreate OpenGL resources that depend on the context
+  // (shaders, VAOs, etc.) – these were destroyed when the old window was
+  // destroyed. The model and its meshes are still in memory; we just need to
+  // re‑upload their GL resources.
+  for (auto &mesh : w->model.meshes) {
+    // Re‑load the mesh from its OBJ file (or re‑upload from stored data)
+    // Since we have the mesh data (vertices, indices) still in memory, we can
+    // re‑create the buffers. For simplicity, we call loadMesh again – but that
+    // would read from disk. A better approach is to store the raw vertex/index
+    // data in Mesh and re‑upload. For a quick fix, we can reload from the OBJ
+    // file (which still exists).
+    if (!mesh.filename.empty()) {
+      std::string objPath = w->model.path + "/" + mesh.filename;
+      loadMesh(mesh, objPath);
+    }
+  }
+  // Recreate grid, lighting, touch area, etc.
+  make_grid(*w);
+  lightingSpecification(*w);
+  createTouchAreaRect(*w);
+  // Recreate shaders
+  createShader(w->shader, vertex_shader_code.c_str(),
+               fragment_shader_code.c_str());
+  createShader(w->grid_shader, grid_vertex_shader_code.c_str(),
+               grid_fragment_shader_code.c_str());
+  createShader(w->light_source_shader, light_source_vertex_shader_code.c_str(),
+               light_source_fragment_shader_code.c_str());
+  createShader(w->touch_shader, touch_area_vertex_shader_code.c_str(),
+               touch_area_fragment_shader_code.c_str());
+
+  // Restore the window in the windows list (if needed, but we already have the
+  // pointer)
+  spdlog::info("Recreated window with transparent background = {}",
+               w->transparent_bg);
+}
+
 void applyMappingToMeshes(controller_window &w, float globalMouseDx,
                           float globalMouseDy, float globalScrollDx,
                           float globalScrollDy) {
@@ -517,14 +591,18 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
   // ---- Early exit if no controller is connected ----
   if (!w.sdl_controller && !w.sdl_joystick) {
     for (auto &mesh : w.model.meshes) {
-      mesh.press = 0.0f;
-      mesh.highlight_value = 0.0f;
-      mesh.pull = 0.0f;
-      mesh.axis_highlight_value = 0.0f;
-      mesh.travel_value = 0.0f;
-      mesh.travel_signed = 0.0f;
+      // Only reset if the mesh is NOT a keyboard or mouse binding
+      if (mesh.inputType != INPUT_TYPE_KEYBOARD &&
+          mesh.inputType != INPUT_TYPE_MOUSE) {
+        mesh.press = 0.0f;
+        mesh.highlight_value = 0.0f;
+        mesh.pull = 0.0f;
+        mesh.axis_highlight_value = 0.0f;
+        mesh.travel_value = 0.0f;
+        mesh.travel_signed = 0.0f;
+      }
     }
-    return;
+    // Do NOT return; continue so keyboard/mouse meshes get processed.
   }
 
   for (int meshIdx = 0; meshIdx < (int)w.model.meshes.size(); ++meshIdx) {
@@ -1318,21 +1396,21 @@ void controller_window_input() {
 
             // Determine direction (8 directions)
             if (angle >= 22.5f && angle < 67.5f)
-              direction = "↗"; // Up-Right
+              direction = "NE"; // Up-Right
             else if (angle >= 67.5f && angle < 112.5f)
-              direction = "↑"; // Up
+              direction = "N"; // Up
             else if (angle >= 112.5f && angle < 157.5f)
-              direction = "↖"; // Up-Left
+              direction = "NW"; // Up-Left
             else if (angle >= 157.5f && angle < 202.5f)
-              direction = "←"; // Left
+              direction = "W"; // Left
             else if (angle >= 202.5f && angle < 247.5f)
-              direction = "↙"; // Down-Left
+              direction = "SW"; // Down-Left
             else if (angle >= 247.5f && angle < 292.5f)
-              direction = "↓"; // Down
+              direction = "S"; // Down
             else if (angle >= 292.5f && angle < 337.5f)
-              direction = "↘"; // Down-Right
+              direction = "SE"; // Down-Right
             else
-              direction = "→"; // Right
+              direction = "E"; // Right
 
             spdlog::info("[mouse] moved {}", direction);
             last_log_mouse_x = static_cast<float>(globalMouseX);

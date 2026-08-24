@@ -696,6 +696,7 @@ void drawSettingsWindow() {
                                    ImGuiInputTextFlags_EnterReturnsTrue)) {
         glfwSetWindowTitle(current_window->glfw_window, title);
         tabs[selected_tab].title = std::string(title);
+        current_window->window_title = std::string(title);
       }
       if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Set the window title.");
@@ -730,7 +731,29 @@ void drawSettingsWindow() {
       ImGui::Checkbox("Wireframe Mode", &current_window->wireframe);
       if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Toggle wireframe rendering.");
-
+      if (ImGui::Checkbox("Transparent Background",
+                          &current_window->transparent_bg)) {
+        // Toggle transparency: alpha = 0.0 -> transparent, 1.0 -> opaque
+        current_window->bg_color[3] =
+            current_window->transparent_bg ? 0.0f : 1.0f;
+        // Optionally, make the window borderless when transparent (cleaner
+        // desktop overlay)
+        if (current_window->transparent_bg) {
+          glfwSetWindowAttrib(current_window->glfw_window, GLFW_DECORATED,
+                              GLFW_FALSE);
+          glfwSetWindowAttrib(current_window->glfw_window, GLFW_FLOATING,
+                              GLFW_TRUE);
+        } else {
+          // Restore user's borderless setting
+          glfwSetWindowAttrib(current_window->glfw_window, GLFW_DECORATED,
+                              !current_window->borderless);
+          glfwSetWindowAttrib(current_window->glfw_window, GLFW_FLOATING,
+                              current_window->always_on_top);
+        }
+      }
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Make the window background fully transparent. "
+                          "The 3D model will appear on your desktop.");
       ImGui::NewLine();
       int w = 0, h = 0;
       glfwGetWindowSize(current_window->glfw_window, &w, &h);
@@ -1051,49 +1074,47 @@ void drawSettingsWindow() {
       if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Optional URL where the model was obtained.");
 
-      if (ImGui::Button("New Model")) {
-        ImGui::OpenPopup("new");
+      if (ImGui::Button("Duplicate Model")) {
+        ImGui::OpenPopup("duplicate");
       }
       if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Create a new empty model folder.");
+        ImGui::SetTooltip("Create a copy of the current model with all its "
+                          "meshes and settings.");
 
-      if (ImGui::BeginPopup("new")) {
+      if (ImGui::BeginPopup("duplicate")) {
         char name[32] = {};
         static bool name_valid = true;
-        if (ImGui::InputText("Model Name", name, IM_ARRAYSIZE(name),
+        if (ImGui::InputText("New Model Name", name, IM_ARRAYSIZE(name),
                              ImGuiInputTextFlags_EnterReturnsTrue)) {
           bool valid = check_filename_valid(name);
           name_valid = valid;
           if (valid) {
-            std::filesystem::path path(get_models_root());
-            path /= name;
-            std::filesystem::create_directory(path);
-            std::string new_model_path = path.string();
-            // Create a model with 35 default mesh slots (so the user can import
-            // OBJs into each)
-            current_window->model.meshes.resize(35);
-            for (int i = 0; i < 35; ++i) {
-              Mesh &m = current_window->model.meshes[i];
-              m.name = mesh_names[i];
-              m.filename = mesh_filenames[i];
-              m.assignedPart = i; // each slot corresponds to a controller part
-              m.parentIndex = -1;
-              m.elements = 0; // empty geometry
-              m.vao = m.vbo = m.ebo = 0;
-              m.visible = true;
-              m.touch_width = 1.0f;
-              m.touch_height = 1.0f;
-              m.isTouchpad = false; // optional, already false
-              m.inputBinding = "";  // already empty
-              m.inputType = INPUT_TYPE_GAMEPAD;
+            std::string src_path = current_window->model.path;
+            std::string dest_path = get_models_root() + "/" + name;
+            if (std::filesystem::exists(dest_path)) {
+              spdlog::warn("Model folder '{}' already exists.", name);
+            } else {
+              try {
+                // Copy entire model folder
+                std::filesystem::copy(
+                    src_path, dest_path,
+                    std::filesystem::copy_options::recursive |
+                        std::filesystem::copy_options::overwrite_existing);
+                // Load the new model
+                glfwMakeContextCurrent(current_window->glfw_window);
+                loadModel(current_window->model, dest_path);
+                glfwMakeContextCurrent(glfw_settings_window);
+                current_window->model_name = name;
+                current_window->model.path = dest_path;
+                spdlog::info("Duplicated model to '{}'", dest_path);
+              } catch (const std::exception &e) {
+                spdlog::error("Failed to duplicate model: {}", e.what());
+              }
             }
-            current_window->model.path = new_model_path;
-            current_window->model_name = name;
-            writeJson(current_window->model, new_model_path + "/info.json");
             ImGui::CloseCurrentPopup();
           } else {
-            spdlog::warn("Model folder name '{}' rejected: contains an "
-                         "invalid character (\\/:*?\"<>|).",
+            spdlog::warn("Model folder name '{}' rejected: contains an invalid "
+                         "character.",
                          name);
           }
         }

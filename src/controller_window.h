@@ -229,6 +229,9 @@ typedef struct controller_window_struct {
   float camera_offset_x = 0.0f; // horizontal pan
   float camera_offset_y = 0.0f; // vertical pan
 
+  bool transparent_bg = false;
+  std::string window_title;
+
 } controller_window;
 
 // Function declarations (unchanged)
@@ -252,6 +255,7 @@ void controller_window_size_callback(GLFWwindow *window, int width, int height);
 void controller_window_scroll_callback(GLFWwindow *window, double xoffset,
                                        double yoffset);
 void controller_window_iconify_callback(GLFWwindow *window, int iconified);
-
 void createTouchAreaRect(controller_window &w);
+void recreateControllerWindow(controller_window *w);
+
 #endif

@@ -48,9 +48,45 @@ void InitializeProgram() {
   }
 
   // ---- 4. Init SDL ----
-  if (SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD | SDL_INIT_SENSOR) < 0) {
-    spdlog::critical("SDL_Init failed: {}", SDL_GetError());
-    exit(1);
+  Uint32 init_flags = SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD | SDL_INIT_SENSOR;
+  if (SDL_Init(init_flags) != 0) {
+    spdlog::critical("SDL_Init failed with flags 0x{:x}: {}", init_flags,
+                     SDL_GetError());
+
+    // Try individual subsystems to see which one fails
+    spdlog::info("Attempting to init each subsystem separately...");
+    if (SDL_InitSubSystem(SDL_INIT_JOYSTICK) != 0) {
+      spdlog::critical("SDL_INIT_JOYSTICK failed: {}", SDL_GetError());
+    } else {
+      spdlog::info("SDL_INIT_JOYSTICK succeeded.");
+    }
+    if (SDL_InitSubSystem(SDL_INIT_GAMEPAD) != 0) {
+      spdlog::critical("SDL_INIT_GAMEPAD failed: {}", SDL_GetError());
+    } else {
+      spdlog::info("SDL_INIT_GAMEPAD succeeded.");
+    }
+    if (SDL_InitSubSystem(SDL_INIT_SENSOR) != 0) {
+      spdlog::critical("SDL_INIT_SENSOR failed: {}", SDL_GetError());
+    } else {
+      spdlog::info("SDL_INIT_SENSOR succeeded.");
+    }
+
+    // If at least JOYSTICK and GAMEPAD succeed, we can continue, else exit.
+    // We'll check if JOYSTICK and GAMEPAD are both initialised.
+    Uint32 subsystems = SDL_WasInit(SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD);
+    if ((subsystems & (SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD)) ==
+        (SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD)) {
+      spdlog::warn(
+          "Continuing without sensor support (gyro will be unavailable).");
+      // Clear the sensor flag from the init flags so we don't try to use it
+      // later. We'll handle this by not attempting to enable gyro if
+      // SDL_INIT_SENSOR wasn't init. But we can just set a global flag if
+      // needed.
+    } else {
+      spdlog::critical("Essential subsystems (JOYSTICK and GAMEPAD) failed to "
+                       "initialise. Exiting.");
+      exit(1);
+    }
   }
   spdlog::info("SDL initialized");
 
