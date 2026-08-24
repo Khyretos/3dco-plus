@@ -19,6 +19,8 @@ if(BUILD_STATIC)
     if(NOT APPLE)
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
     endif()
+    # For ZLIB, explicitly prefer static library
+    set(ZLIB_USE_STATIC_LIBS ON)
 endif()
 
 pkg_check_modules(ASSIMP REQUIRED assimp)
@@ -185,6 +187,7 @@ if(BUILD_STATIC)
         ${SPDLOG_STATIC_LIBRARIES}
         ${FMT_STATIC_LIBRARIES}
         ${THREAD_LIBRARY}
+        # ZLIB is handled separately below
     )
 else()
     target_link_libraries(3dco+
@@ -199,6 +202,7 @@ else()
     )
 endif()
 
+# ====== macOS‑specific linkage ======
 if(APPLE)
     target_link_options(3dco+ PRIVATE
         -L${CMAKE_PREFIX_PATH}/lib
@@ -225,8 +229,12 @@ if(APPLE)
         "-framework UniformTypeIdentifiers"
         "-lobjc"
         "-lresolv"
-        ZLIB::ZLIB
+        # ZLIB is forced via force_load below
     )
+
+    # Force static zlib: -Wl,-force_load forces the linker to include every
+    # object from the specified static library, overriding any dynamic search.
+    target_link_options(3dco+ PRIVATE -Wl,-force_load,${ZLIB_LIBRARY})
 else()
     target_link_libraries(3dco+ PRIVATE
         ${BASE_LIBS}
