@@ -157,6 +157,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: release-assets
+          # Explicitly download only the three main artifacts (skip docker cache artifacts)
+          pattern: |
+            3dco-linux-appimage
+            3dco-windows
+            3dco-macos
+          merge-multiple: false
 
       - name: Create release
         uses: softprops/action-gh-release@v2
