@@ -103,7 +103,7 @@ typedef struct controller_window_struct {
   bool mouse_buttons_prev[GLFW_MOUSE_BUTTON_LAST + 1] = {
       false}; // for edge detection
   float mouse_sensitivity =
-      0.01f; // scale factor for mouse->stick mapping (reduced from 0.005)
+      0.5f; // scale factor for mouse->stick mapping (reduced from 0.005)
 
   // ---- Scroll state accumulation ----
   float scroll_accum_x = 0.0f;

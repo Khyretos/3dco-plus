@@ -244,7 +244,7 @@ else()
 endif()
 
 if(WIN32)
-    target_link_libraries(3dco+ PRIVATE ws2_32 winmm user32)
+    target_link_libraries(3dco+ PRIVATE ws2_32 winmm user32 comctl32)
     
     if(NOT BUILD_STATIC)
         file(GLOB WINDOWS_REDIST "${CMAKE_SOURCE_DIR}/packaging/windows/redist/*.dll")

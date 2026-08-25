@@ -1620,11 +1620,13 @@ void drawSettingsWindow() {
         ImGui::SetTooltip("Toggle logging for each device type.");
       ImGui::NewLine();
       ImGui::SliderFloat("Mouse Sensitivity",
-                         &current_window->mouse_sensitivity, 0.001f, 1.0f,
-                         "%.3f");
+                         &current_window->mouse_sensitivity, 0.01f, 2.0f,
+                         "%.2f");
       if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Scale factor for mouse movement -> touchpoint "
-                          "displacement. Lower = slower, higher = faster.");
+        ImGui::SetTooltip(
+            "Scale factor for mouse movement -> touchpoint displacement. "
+            "Lower = slower, higher = faster. Default (0.5) gives a moderate "
+            "speed.");
       ImGui::NewLine();
       if (ImGui::BeginTable("MeshTable", 7,
                             ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |

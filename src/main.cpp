@@ -9,9 +9,86 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
+#if defined(_WIN32)
+#include <windows.h>
+#endif
+
 bool gQuit = false;
 
+#if defined(_WIN32)
+// ------------------------------------------------------------------
+// Windows aggressively deprioritizes background (non-foreground)
+// processes via "Efficiency Mode" / EcoQoS, and starves them further
+// once a fullscreen/borderless game engages Game Mode to protect its
+// own performance. With click-through enabled, every click on this
+// app's overlay windows passes straight through to whatever is behind
+// them — meaning those windows can never become the foreground/active
+// window, so Windows treats this process as an idle background app and
+// throttles its scheduling. Since the whole app is single-threaded
+// (Input() then Draw(), one loop), that throttling delays gamepad
+// polling right along with rendering, which is exactly the "input
+// detection lag" that only shows up with click-through on AND
+// something else actively rendering/competing for foreground priority.
+//
+// This is the same technique other "must stay responsive while a game
+// has focus" companion apps (macro tools, RGB control software, etc.)
+// use: explicitly opt the process out of power throttling, and nudge
+// its scheduling priority up slightly so it isn't starved of CPU time
+// while a demanding game is running.
+// ------------------------------------------------------------------
+static void DisableWindowsBackgroundThrottling() {
+#if defined(PROCESS_POWER_THROTTLING_EXECUTION_SPEED)
+  // SetProcessInformation (kernel32.dll, Windows 8+) isn't declared in this
+  // MinGW toolchain's headers even though the PROCESS_POWER_THROTTLING_*
+  // enum/struct types are — same class of header/toolchain gap as the
+  // glfwGetWin32Window issue earlier. Since the symbol is a plain export
+  // from kernel32.dll regardless of what the headers declare, load it
+  // dynamically via GetProcAddress instead of calling it directly. This
+  // also naturally no-ops on any Windows version too old to have it.
+  typedef BOOL(WINAPI * SetProcessInformation_t)(
+      HANDLE, PROCESS_INFORMATION_CLASS, LPVOID, DWORD);
+  HMODULE kernel32 = GetModuleHandleW(L"kernel32.dll");
+  SetProcessInformation_t pSetProcessInformation =
+      kernel32 ? reinterpret_cast<SetProcessInformation_t>(
+                     GetProcAddress(kernel32, "SetProcessInformation"))
+               : nullptr;
+
+  if (pSetProcessInformation) {
+    PROCESS_POWER_THROTTLING_STATE PowerThrottling{};
+    PowerThrottling.Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION;
+    PowerThrottling.ControlMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED;
+    PowerThrottling.StateMask = 0; // 0 = explicitly disable throttling
+    if (!pSetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling,
+                                &PowerThrottling, sizeof(PowerThrottling))) {
+      spdlog::warn(
+          "Failed to disable process power throttling (GetLastError={})",
+          GetLastError());
+    } else {
+      spdlog::info("Disabled Windows process power throttling (EcoQoS).");
+    }
+  } else {
+    spdlog::warn("SetProcessInformation unavailable on this system/kernel32 — "
+                 "skipping power-throttling opt-out.");
+  }
+#else
+  spdlog::warn("PROCESS_POWER_THROTTLING_EXECUTION_SPEED not available in "
+               "this SDK/toolchain — skipping power-throttling opt-out.");
+#endif
+
+  if (!SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS)) {
+    spdlog::warn("Failed to raise process priority (GetLastError={})",
+                 GetLastError());
+  } else {
+    spdlog::info("Raised process priority to ABOVE_NORMAL_PRIORITY_CLASS.");
+  }
+}
+#endif
+
 void InitializeProgram() {
+#if defined(_WIN32)
+  DisableWindowsBackgroundThrottling();
+#endif
+
   // ---- 1. Get writable config directory FIRST ----
   char *pref = SDL_GetPrefPath("", "3dco+");
   if (pref) {
@@ -46,6 +123,8 @@ void InitializeProgram() {
   } catch (const spdlog::spdlog_ex &ex) {
     std::cerr << "Log initialization failed: " << ex.what() << std::endl;
   }
+
+  SDL_SetHint(SDL_HINT_JOYSTICK_THREAD, "1");
 
   // ---- 4. Init SDL ----
   Uint32 init_flags = SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD | SDL_INIT_SENSOR;

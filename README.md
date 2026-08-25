@@ -5,28 +5,48 @@
 > ⚠️ **AI-assisted project — read before you judge the code.**
 > This fork is built with heavy use of AI coding assistance. That does **not** mean "vibe coded and shipped blind." Every architectural decision — how input flows from SDL into the mesh hierarchy, how the settings/import system is structured, what gets a raw joystick fallback vs. a GameController mapping, how the build/packaging pipeline is put together — was made, reviewed, and debugged by me. AI was the tool; the design, the testing, and the responsibility for what ships are mine. I'm building this openly as a way to test how far I can push my own skills with AI as a collaborator, not to hide behind it. If you find something that looks wrong, please open an issue — I'd genuinely rather know.
 
-**3D Controller Overlay +** (`3dco+`) is an AI-assisted continuation of [**3D Controller Overlay**](https://github.com/larfingshnew/3d-controller-overlay) by **Larf** ([larfingshnew](https://github.com/larfingshnew)). It's a lightweight OpenGL/SDL3 program that renders a live 3D model of your input device — buttons, sticks, triggers, touchpads, keys, gyro/accel — so content creators can show what their controller, keyboard, or mouse is doing without a handcam.
+**3D Controller Overlay +** (`3dco+`) is an AI‑assisted continuation of [**3D Controller Overlay**](https://github.com/larfingshnew/3d-controller-overlay) by **Larf**. It renders a live 3D model of your input device — buttons, sticks, triggers, touchpads, keys, gyro/accel — so content creators can show their controller, keyboard, or mouse in action without a handcam.
 
-This project is a **fork, not a replacement**. It exists as an homage to the original tool and its creator, rebuilt on top of the same rendering foundation but pushed further. All credit for the original concept, models, and engine goes to Larf. If you just want the classic, minimal version, go use [the original repo](https://github.com/larfingshnew/3d-controller-overlay) — it's great on its own.
+This is a **fork, not a replacement**. It exists as an homage to the original tool and its creator, rebuilt on top of the same rendering foundation but pushed further. All credit for the original concept, models, and engine goes to Larf. If you just want the classic, minimal version, go use [the original repo](https://github.com/larfingshnew/3d-controller-overlay) — it's great on its own.
 
 The **`+`** in the name means exactly that: **improvements and extra features** layered on top of the original — more controllers, more rendering features, more input paths, more build tooling — while keeping the same "point it at your input device and it just works" spirit. It's also a personal passion project: a way for me to see what I'm actually capable of building and maintaining with AI as a collaborator rather than a crutch.
 
+## What’s new in 1.0.0
+
+- **Custom model import** via Assimp (FBX, glTF, OBJ, etc.)
+- **Pivot‑point editing** by dragging in the 3D viewport
+- **Per‑part material alpha** (transparency)
+- **Dual‑highlight colors** for axes (positive/negative)
+- **Touch‑area visualization** for touchpads
+- **Multi‑touchpad support** (up to 4 pads × 2 fingers)
+- **Keyboard & mouse overlays** (system‑wide, works without window focus)
+- **Raw joystick fallback** for unrecognised controllers
+- **Gyro & accelerometer** sensitivity/correction, reset combo
+- **Structured logging** (spdlog) with in‑app log window
+- **CMake** build system + Docker cross‑build scripts
+- **AppImage, Windows .exe, macOS universal app** builds
+- **Embedded model library** – no separate assets folder
+
 ---
 
-## Table of contents
+## Table of Contents
 
 - [What stayed the same](#what-stayed-the-same)
 - [What's new in the `+`](#whats-new-in-the-)
 - [How it works](#how-it-works)
 - [Supported platforms](#supported-platforms)
+- [What’s new in 1.0.0](#whats-new-in-100)
+- [How it works](#how-it-works)
+- [Supported platforms](#supported-platforms)
 - [Platform showcase](#platform-showcase)
 - [Where your data lives](#where-your-data-lives)
 - [Supported input](#supported-input)
-- [Manual mapping for unrecognized devices](#manual-mapping-for-unrecognized-devices)
-- [A couple of things you'll notice](#a-couple-of-things-youll-notice)
+- [Manual mapping](#manual-mapping-for-unrecognized-devices)
 - [Controller showcase](#controller-showcase)
+- [Work in progress](#work-in-progress--known-bugs)
 - [Work in progress / known bugs](#work-in-progress--known-bugs)
 - [Building](#building)
+- [Contributing](#contributing)
 - [Credits](#credits)
 
 ---
@@ -127,7 +147,8 @@ You can jump straight there from inside the app via **Settings → Open Data Dir
 | Mouse overlay                                                                      | ✅ Supported (position, buttons, scroll — system-wide)                       |
 | Gyro / accelerometer                                                               | ✅ Supported, with sensitivity/correction tuning                             |
 | Touchpads (DualShock/DualSense)                                                    | ✅ Supported, multi-touch, multiple pads                                     |
-| Racing wheel / flightstick                                                         | 🚧 Work in progress                                                          |
+| flightstick / throttles                                                            | ✅ Supported, Manual mapping required since i only own 1 model               |
+| Racing wheel                                                                       | 🚧 Work in progress                                                          |
 
 Gamepad button/axis layouts are resolved through SDL3's community-maintained [`gamecontrollerdb.txt`](https://github.com/mdqinc/SDL_GameControllerDB) database (embedded in the app, covering most Xbox/PlayStation/Switch Pro/Steam Controller/third-party pads). If your controller shows up as a raw, unlabeled joystick instead of a named gamepad, it isn't in that database yet — you can either add an entry to `gamecontrollerdb.txt` in your [data directory](#where-your-data-lives) (e.g. using [SDL3 Gamepad Tool](https://generalarcade.com/gamepadtool/)) and restart, or just map it manually using raw joystick bindings in the Mapping panel, which works regardless of whether SDL3 recognizes the controller. If you do get a new controller working, consider [contributing the mapping upstream](https://github.com/mdqinc/SDL_GameControllerDB) so other SDL3-based apps benefit too.
 
@@ -166,9 +187,25 @@ Live demo clips for every controller in the built-in model library. (The `+` bad
 
 ## Work in progress / known bugs
 
-- **Racing wheel / flightstick support** — planned for pedal/wheel/stick/force-feedback devices; not yet in the model library or input path.
-- **Windows/macOS coverage** — both platforms build and run, but get less real-world testing than Linux. Expect the occasional platform-specific rough edge.
-- General stability/edge-case bugs from the expanded input and import paths are still being ironed out. Please file issues with repro steps if you hit one.
+- **Racing wheel / flightstick** – planned, not yet in model library or input path.
+- **macOS/Windows testing** – less real‑world mileage than Linux; expect occasional platform‑specific rough edges.
+- **General stability** – edge cases from expanded input and import paths are being ironed out.
+
+---
+
+## Known issues (tracked)
+
+| Issue                                                      | Status              | Notes                                                        |
+| ---------------------------------------------------------- | ------------------- | ------------------------------------------------------------ |
+| Click‑through performance on Windows                       | Under investigation | Reduced message‑loop overhead and suppressed WM_MOUSEMOVE.   |
+| Click‑through not registering clicks                       | Under investigation | Global hook now more responsive.                             |
+| “Show Grid” not visible                                    | Under investigation | Grid now smaller, positioned lower, and brighter.            |
+| Transparent background not working on some drivers         | Known limitation    | Depends on GPU/driver support. A warning is shown in the UI. |
+| macOS Accessibility permission required for keyboard/mouse | By design           | See README for instructions.                                 |
+| Gyro reset combo not working on certain controllers        | Under investigation | Use manual reset button as workaround.                       |
+| Imported model preview sometimes crashes on large files    | Rare                | Reduce polygon count or use simpler format.                  |
+
+---
 
 ## Building
 
@@ -217,18 +254,25 @@ pacman -S --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake \
   mingw-w64-x86_64-pkgconf mingw-w64-x86_64-glfw mingw-w64-x86_64-SDL2 \
   mingw-w64-x86_64-assimp mingw-w64-x86_64-spdlog mingw-w64-x86_64-fmt \
   mingw-w64-x86_64-nlohmann-json
-
 rm -rf build && mkdir build && cd build
 cmake -G "MinGW Makefiles" ..
 mingw32-make -j$(nproc)
 ```
 
+**"Windows protected your PC" / SmartScreen warning:** The Windows executable is not code-signed with a certificate from a trusted authority (Microsoft's code-signing process requires a yearly fee and a verification process, which I haven't gone through for this project). As a result, Windows SmartScreen may show a warning when you try to run the downloaded `.exe` file. This is normal for unsigned open-source software. To run it, click **"More info"** and then **"Run anyway"**. If you're still unsure, you can build the executable yourself from the source code — the build instructions are just above. The warning does not indicate that the software is malicious; it's simply Windows's way of telling you that the publisher is unknown.
+
 The resulting executable is **`3dco+`** (`3dco+.exe` on Windows).
 
 Convenience scripts (`build-all.sh`, `build-appimage.sh`, `build-macos.sh`, `build-windows.sh`) plus Docker cross-build files are also included, and are the easiest way to produce a Windows or macOS build from a Linux machine without installing a full native toolchain.
+
+## Contributing
+
+Bug reports and pull requests are welcome. Please open an issue first to discuss proposed changes.
 
 ## Credits
 
 - **Original creator & engine**: [Larf](https://github.com/larfingshnew) — [3D Controller Overlay](https://github.com/larfingshnew/3d-controller-overlay). Please go star/support the original.
 - **This fork**: designed, built, and maintained by me as a homage/continuation and a personal test of what I can build with AI-assisted coding — all architecture, debugging, and feature decisions are mine.
 - Third-party libraries: GLFW, glad, SDL2, GLM, Dear ImGui, stb_image, Assimp, spdlog/fmt, nlohmann_json, miniz.
+
+**Enjoy!** If you find this useful, please star the repository and consider supporting the original project.

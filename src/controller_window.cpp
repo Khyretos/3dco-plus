@@ -1,3 +1,7 @@
+#if defined(_WIN32)
+#define GLFW_EXPOSE_NATIVE_WIN32
+#endif
+
 #include "controller_window.h"
 #include "cube_info.h"
 #include "icon_data.h"
@@ -23,19 +27,81 @@ extern bool g_log_mouse;
 extern std::string config_base_path;
 extern bool gQuit;
 extern GLFWwindow *glfw_settings_window;
+// Forward declaration: `windows` is defined further down in this file, but
+// the Windows click-through subclass proc below needs to look windows up
+// by GLFWwindow* before that point.
+extern std::vector<controller_window> windows;
+
+#if defined(_WIN32)
+#include <GLFW/glfw3native.h>
+#include <commctrl.h>
+#include <windows.h>
+
+// ------------------------------------------------------------------
+// Windows-specific click-through via WM_NCHITTEST, instead of
+// GLFW_MOUSE_PASSTHROUGH (which sets WS_EX_TRANSPARENT).
+//
+// WS_EX_TRANSPARENT tells DWM this window's pixels depend on whatever is
+// beneath it, forcing a full recomposite of our window's region every
+// single time anything underneath redraws. With a game rendering behind
+// us at high fps, that becomes continuous compositor churn that stalls
+// our own SwapBuffers — and since gamepad polling and rendering share a
+// single thread here, that stalls input reads too, showing up as
+// "delayed" highlighting that only happens with click-through on AND
+// something actively rendering behind the window.
+//
+// Overriding WM_NCHITTEST to return HTTRANSPARENT gets the same
+// click-through behavior purely through message routing, so DWM never
+// sees us as dependent on our background.
+// ------------------------------------------------------------------
+static LRESULT CALLBACK clickThroughSubclassProc(HWND hwnd, UINT msg,
+                                                 WPARAM wParam, LPARAM lParam,
+                                                 UINT_PTR /*uIdSubclass*/,
+                                                 DWORD_PTR dwRefData) {
+  GLFWwindow *target = reinterpret_cast<GLFWwindow *>(dwRefData);
+  bool isClickThrough = false;
+  for (auto &w : windows) {
+    if (w.glfw_window == target) {
+      isClickThrough = w.click_through;
+      break;
+    }
+  }
+
+  if (msg == WM_NCHITTEST) {
+    if (isClickThrough)
+      return HTTRANSPARENT;
+  }
+
+  // Suppress mouse-move messages when click-through is enabled to reduce
+  // unnecessary processing overhead (especially when a game is running behind).
+  if (msg == WM_MOUSEMOVE && isClickThrough) {
+    return 0; // eat the message
+  }
+
+  return DefSubclassProc(hwnd, msg, wParam, lParam);
+}
+#endif
 
 // ------------------------------------------------------------------
 // Set window click‑through (mouse passthrough).
 //
 // GLFW 3.4+ implements GLFW_MOUSE_PASSTHROUGH natively on X11, Win32, and
-// Wayland (on Wayland it does exactly what a hand‑rolled implementation
-// would do: sets an empty wl_surface input region and commits it), so a
-// single cross‑platform call is all that's needed. This only reliably
-// works on *undecorated* windows — callers must ensure GLFW_DECORATED is
-// false before/alongside enabling this.
+// Wayland. On X11/Wayland this is fine and is what we use. On Windows,
+// however, its implementation sets WS_EX_TRANSPARENT, which has a real
+// performance cost when something is actively rendering behind the
+// window (see clickThroughSubclassProc above for the full explanation),
+// so on Windows we instead rely purely on the WM_NCHITTEST override
+// installed at window creation and make sure GLFW_MOUSE_PASSTHROUGH
+// itself always stays off. This only reliably works on *undecorated*
+// windows — callers must ensure GLFW_DECORATED is false before/alongside
+// enabling this.
 // ------------------------------------------------------------------
 void setWindowClickThrough(GLFWwindow *window, bool enable) {
-#if defined(GLFW_MOUSE_PASSTHROUGH) // GLFW 3.4+
+#if defined(_WIN32)
+  (void)enable; // handled dynamically by clickThroughSubclassProc via
+                // controller_window::click_through
+  glfwSetWindowAttrib(window, GLFW_MOUSE_PASSTHROUGH, GLFW_FALSE);
+#elif defined(GLFW_MOUSE_PASSTHROUGH) // GLFW 3.4+
   glfwSetWindowAttrib(window, GLFW_MOUSE_PASSTHROUGH,
                       enable ? GLFW_TRUE : GLFW_FALSE);
   spdlog::debug("Mouse passthrough set to {}", enable);
@@ -293,6 +359,22 @@ void createControllerWindow(std::string title, std::string model_path) {
   glfwMakeContextCurrent(w.glfw_window);
   w.window_title = title;
   setWindowClickThrough(w.glfw_window, false); // default: no passthrough
+
+#if defined(_WIN32)
+  // Install the WM_NCHITTEST override once per window (see
+  // clickThroughSubclassProc above). It checks controller_window::
+  // click_through dynamically on every hit-test, so toggling the
+  // checkbox/button later just flips that flag — no need to
+  // install/remove the subclass each time.
+  {
+    HWND hwnd = glfwGetWin32Window(w.glfw_window);
+    if (hwnd) {
+      SetWindowSubclass(hwnd, clickThroughSubclassProc, 1,
+                        (DWORD_PTR)w.glfw_window);
+    }
+  }
+#endif
+
   glEnable(GL_MULTISAMPLE);
 
   // ---- Diagnostics for transparency issues ----
@@ -580,6 +662,18 @@ void recreateControllerWindow(controller_window *w) {
   }
   glfwMakeContextCurrent(w->glfw_window);
   w->window_title = title;
+
+#if defined(_WIN32)
+  // The old HWND (and its subclass) is gone — reinstall on the new one.
+  {
+    HWND hwnd = glfwGetWin32Window(w->glfw_window);
+    if (hwnd) {
+      SetWindowSubclass(hwnd, clickThroughSubclassProc, 1,
+                        (DWORD_PTR)w->glfw_window);
+    }
+  }
+#endif
+
   glfwSetWindowPos(w->glfw_window, x, y);
   // A transparent or click-through window must stay undecorated, or
   // GLFW_MOUSE_PASSTHROUGH won't reliably work.
@@ -664,6 +758,8 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
     }
     return map;
   }();
+
+  const float MOUSE_SCALE = 0.005f;
 
   // ---- Early exit if no controller is connected ----
   if (!w.sdl_controller && !w.sdl_joystick) {
@@ -1027,8 +1123,8 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
             }
           }
 
-          dx *= w.mouse_sensitivity;
-          dy *= w.mouse_sensitivity;
+          dx *= w.mouse_sensitivity * MOUSE_SCALE;
+          dy *= w.mouse_sensitivity * MOUSE_SCALE;
           bool isTouchPoint = mesh.isTouchpoint;
           if (isTouchPoint) {
             // REMOVED: clamping cap – raw input is passed directly
@@ -1059,7 +1155,7 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
           }
           continue;
         } else if (value == "mouse_x" || value == "mouse_scroll_x") {
-          float val = dx * w.mouse_sensitivity;
+          float val = dx * w.mouse_sensitivity * MOUSE_SCALE;
           bool isTouchPoint = mesh.isTouchpoint;
           if (isTouchPoint) {
             // REMOVED: clamping cap
@@ -1081,7 +1177,7 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
           }
           continue;
         } else if (value == "mouse_y" || value == "mouse_scroll_y") {
-          float val = dy * w.mouse_sensitivity;
+          float val = dy * w.mouse_sensitivity * MOUSE_SCALE;
           bool isTouchPoint = mesh.isTouchpoint;
           if (isTouchPoint) {
             // REMOVED: clamping cap
@@ -1884,7 +1980,7 @@ void createPivotCircle(controller_window &w) {
 void make_grid(controller_window &w) {
   std::vector<glm::vec3> vertices;
   std::vector<glm::uvec4> indices;
-  int slices = 100;
+  int slices = 20;
   for (int j = 0; j <= slices; ++j) {
     for (int i = 0; i <= slices; ++i) {
       float x = (float)i / (float)slices;
@@ -1987,7 +2083,7 @@ void update_camera(controller_window &w, GLuint &shader, int window_width,
   }
   shaderUniformMat4(shader, "view", w.view_matrix);
   w.projection_matrix = glm::perspective(
-      glm::radians(45.0f), (float)window_width / window_height, 0.1f, 100.0f);
+      glm::radians(45.0f), (float)window_width / window_height, 0.1f, 200.0f);
   shaderUniformMat4(shader, "projection", w.projection_matrix);
   glUseProgram(0);
 }
@@ -2033,12 +2129,16 @@ void drawControllerWindows() {
         glUseProgram(w.grid_shader);
         glEnableVertexAttribArray(0);
         glm::mat4 grid_model = glm::mat4(1.0f);
-        grid_model =
-            glm::translate(grid_model, glm::vec3(-50.0f, 0.0f, -50.0f));
-        grid_model = glm::scale(grid_model, glm::vec3(100.0f, 0.0f, 100.0f));
+        // Smaller grid, placed slightly below the model
+        grid_model = glm::translate(grid_model, glm::vec3(-5.0f, -0.5f, -5.0f));
+        grid_model = glm::scale(grid_model, glm::vec3(10.0f, 0.0f, 10.0f));
         shaderUniformMat4(w.grid_shader, "model", grid_model);
         shaderUniformVec3(w.grid_shader, "gridColor",
-                          glm::vec3(0.5f, 0.5f, 0.5f));
+                          glm::vec3(0.8f, 0.8f, 0.8f));
+
+        // *** THIS IS THE MISSING LINE THAT MAKES IT VISIBLE ***
+        shaderUniformFloat(w.grid_shader, "alpha", 1.0f);
+
         glDrawElements(GL_LINES, w.grid_length, GL_UNSIGNED_INT, NULL);
       }
 
