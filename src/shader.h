@@ -8,6 +8,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include <SDL3/SDL.h>
+#include <vector>
 
 #include <string>
 
@@ -39,5 +40,15 @@ void shaderUniform3f(GLuint ID, const char *name, float value1, float value2,
 
 void shaderUniform4f(GLuint ID, const char *name, float value1, float value2,
                      float value3, float value4);
+
+// Shader caching and loading
+GLuint LoadShaderProgram(const std::string &name);
+void ReloadShaderPrograms(); // for hot-reload (optional)
+
+std::vector<std::string> GetShaderNames();
+
+GLuint getOutlineProgram();
+
+GLuint getWireframeProgram();
 
 #endif

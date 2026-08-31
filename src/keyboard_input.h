@@ -36,6 +36,29 @@ bool isMouseButtonPressed(int button);
 // frame). Positive dx = scroll right, positive dy = scroll up.
 void getScrollDelta(float &dx, float &dy);
 
+// ---- Responsiveness / idle CPU trade-off (Windows only) ----
+// On Windows, the low-level keyboard/mouse hooks are dispatched from a
+// dedicated thread that wakes up on a timer even when there's no input
+// at all, to check for pending hook messages promptly. How often it
+// wakes is a direct trade-off: a shorter interval means less delay
+// between a real key/mouse event happening and this app noticing it,
+// but the wake-and-check itself costs a small amount of CPU every time
+// it happens - at 1ms, that's up to 1000 wake-ups per second, all the
+// time, even sitting completely idle. Longer intervals cut that idle
+// cost at the expense of adding up to that same amount of extra input
+// latency in the worst case (an event landing just after a check has to
+// wait for the next one).
+//
+// setPollIntervalMs() takes effect immediately, without needing to
+// restart the backend - callers can change it any time after
+// initialize() has been called. Values are clamped to [1, 16]ms;
+// anything looser than that would add input lag well beyond what feels
+// responsive for a live input overlay. No-op on Linux/macOS: both of
+// those backends are already blocking/event-driven with no equivalent
+// poll loop to tune, so there's nothing for this to do there.
+void setPollIntervalMs(int ms);
+int getPollIntervalMs();
+
 } // namespace GlobalKeyboard
 
 #endif // KEYBOARD_INPUT_H

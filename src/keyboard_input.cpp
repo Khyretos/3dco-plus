@@ -35,6 +35,10 @@ namespace {
 
 std::array<std::atomic_bool, SDL_SCANCODE_COUNT> g_keys{};
 std::atomic_bool g_running{false};
+
+// See setPollIntervalMs()'s declaration in keyboard_input.h for the full
+// explanation. Only read/written on Windows; harmless (unused) elsewhere.
+std::atomic<int> g_pollIntervalMs{1};
 std::mutex g_lifecycleMutex;
 std::string g_status = "not initialized";
 
@@ -359,13 +363,6 @@ LRESULT CALLBACK lowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
         reinterpret_cast<const MSLLHOOKSTRUCT *>(lParam);
     POINT pt = event->pt;
 
-    // Track the previous absolute cursor position so we can report a
-    // relative delta. `havePos` guards against reporting a huge spurious
-    // delta on the very first callback (pos - 0 would otherwise be a jump
-    // from the origin to wherever the cursor currently is).
-    static bool havePos = false;
-    static LONG lastX = 0, lastY = 0;
-
     int idx = -1;
     switch (wParam) {
     case WM_LBUTTONDOWN:
@@ -404,13 +401,10 @@ LRESULT CALLBACK lowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
       setMouseButton(idx, down);
     }
 
-    if (havePos) {
-      addMouseDelta(static_cast<float>(pt.x - lastX),
-                    static_cast<float>(pt.y - lastY));
-    }
-    lastX = pt.x;
-    lastY = pt.y;
-    havePos = true;
+    // Relative motion (addMouseDelta) is no longer derived here - see
+    // createRawInputWindow()/RawInputWndProc below for why. Absolute
+    // position (for getMousePosition()) is unaffected by that issue and
+    // stays exactly as it was.
     setMousePosition(pt.x, pt.y);
   }
   return CallNextHookEx(nullptr, nCode, wParam, lParam);
@@ -429,6 +423,86 @@ LRESULT CALLBACK lowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
   }
   return CallNextHookEx(nullptr, nCode, wParam, lParam);
 }
+
+namespace {
+HWND g_rawInputWindow = nullptr;
+const wchar_t *kRawInputClassName = L"GlobalKeyboardRawInputWindow";
+
+LRESULT CALLBACK RawInputWndProc(HWND hwnd, UINT msg, WPARAM wParam,
+                                 LPARAM lParam) {
+  if (msg == WM_INPUT) {
+    UINT size = 0;
+    GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam), RID_INPUT, nullptr,
+                    &size, sizeof(RAWINPUTHEADER));
+    if (size > 0) {
+      std::vector<BYTE> buffer(size);
+      if (GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam), RID_INPUT,
+                          buffer.data(), &size,
+                          sizeof(RAWINPUTHEADER)) == size) {
+        const RAWINPUT *raw = reinterpret_cast<const RAWINPUT *>(buffer.data());
+        if (raw->header.dwType == RIM_TYPEMOUSE) {
+          const RAWMOUSE &mouse = raw->data.mouse;
+          // Only handle relative-mode motion (the overwhelmingly common
+          // case for physical mice). Absolute-mode devices (some
+          // tablets, RDP/virtual sessions) are rare and outside what
+          // this fix targets - diffing two absolute raw-input samples
+          // ourselves would just reintroduce the exact recenter-jump
+          // problem raw input exists to avoid, so those are silently
+          // ignored here rather than approximated incorrectly.
+          if (!(mouse.usFlags & MOUSE_MOVE_ABSOLUTE) &&
+              (mouse.lLastX != 0 || mouse.lLastY != 0)) {
+            addMouseDelta(static_cast<float>(mouse.lLastX),
+                          static_cast<float>(mouse.lLastY));
+          }
+        }
+      }
+    }
+  }
+  return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+// Called once from windowsThread(), on the same thread that runs its
+// PeekMessageW/DispatchMessageW loop - raw input is delivered as a
+// window message, so it can only be received by a real window whose
+// message queue is actually being pumped, unlike the low-level hooks
+// above which work via a separate callback mechanism entirely.
+bool createRawInputWindow() {
+  WNDCLASSW wc = {};
+  wc.lpfnWndProc = RawInputWndProc;
+  wc.hInstance = GetModuleHandleW(nullptr);
+  wc.lpszClassName = kRawInputClassName;
+  RegisterClassW(&wc);
+
+  // HWND_MESSAGE: a message-only window - never visible, never appears
+  // in the taskbar or Alt-Tab, exists purely to receive WM_INPUT.
+  g_rawInputWindow =
+      CreateWindowExW(0, kRawInputClassName, L"", 0, 0, 0, 0, 0, HWND_MESSAGE,
+                      nullptr, GetModuleHandleW(nullptr), nullptr);
+  if (!g_rawInputWindow) {
+    spdlog::warn(
+        "Global mouse: failed to create raw input window (GetLastError={})"
+        " - mouse-as-stick movement may show brief jumps in games that "
+        "recenter the cursor.",
+        GetLastError());
+    return false;
+  }
+
+  RAWINPUTDEVICE rid{};
+  rid.usUsagePage = 0x01;        // Generic Desktop Controls
+  rid.usUsage = 0x02;            // Mouse
+  rid.dwFlags = RIDEV_INPUTSINK; // receive input even without focus
+  rid.hwndTarget = g_rawInputWindow;
+  if (!RegisterRawInputDevices(&rid, 1, sizeof(rid))) {
+    spdlog::warn("Global mouse: RegisterRawInputDevices failed "
+                 "(GetLastError={})",
+                 GetLastError());
+    DestroyWindow(g_rawInputWindow);
+    g_rawInputWindow = nullptr;
+    return false;
+  }
+  return true;
+}
+} // namespace
 
 void windowsThread() {
   g_hook = SetWindowsHookExW(WH_KEYBOARD_LL, lowLevelKeyboardProc,
@@ -449,10 +523,18 @@ void windowsThread() {
   g_status = "Windows low-level keyboard + mouse hooks";
   spdlog::info("Global keyboard backend: {}", g_status);
 
+  createRawInputWindow();
+
   MSG msg{};
   while (g_running.load()) {
-    // Reduced timeout from 100ms to 1ms for more responsive hook processing
-    DWORD result = MsgWaitForMultipleObjects(0, nullptr, FALSE, 1, QS_ALLINPUT);
+    // See setPollIntervalMs()'s declaration in keyboard_input.h for the
+    // full CPU/latency trade-off explanation. Read fresh every
+    // iteration (not cached) so a call to setPollIntervalMs() takes
+    // effect on the very next wake-up, without needing to restart this
+    // thread.
+    DWORD wait_ms = (DWORD)g_pollIntervalMs.load();
+    DWORD result =
+        MsgWaitForMultipleObjects(0, nullptr, FALSE, wait_ms, QS_ALLINPUT);
     (void)result;
     while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
       if (msg.message == WM_QUIT)
@@ -460,6 +542,10 @@ void windowsThread() {
       TranslateMessage(&msg);
       DispatchMessageW(&msg);
     }
+  }
+  if (g_rawInputWindow) {
+    DestroyWindow(g_rawInputWindow);
+    g_rawInputWindow = nullptr;
   }
   if (g_hook) {
     UnhookWindowsHookEx(g_hook);
@@ -1493,5 +1579,15 @@ void getScrollDelta(float &dx, float &dy) {
   g_scroll_x_accum = 0.0f;
   g_scroll_y_accum = 0.0f;
 }
+
+void setPollIntervalMs(int ms) {
+  if (ms < 1)
+    ms = 1;
+  if (ms > 16)
+    ms = 16;
+  g_pollIntervalMs.store(ms);
+}
+
+int getPollIntervalMs() { return g_pollIntervalMs.load(); }
 
 } // namespace GlobalKeyboard

@@ -2,6 +2,7 @@
 #include "log_window.h"
 #include "settings.h"
 #include "settings_window.h"
+#include "tray_icon.h"
 #include <SDL3/SDL_joystick.h>
 #include <filesystem>
 #include <iostream>
@@ -11,6 +12,8 @@
 
 #if defined(_WIN32)
 #include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #endif
 
 bool gQuit = false;
@@ -169,6 +172,14 @@ void InitializeProgram() {
   }
   spdlog::info("SDL initialized");
 
+  // Initialize Winsock for network sockets
+#ifdef _WIN32
+  WSADATA wsaData;
+  if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+    spdlog::warn("WSAStartup failed");
+  }
+#endif
+
   int num_joysticks = 0;
   SDL_JoystickID *joy_ids = SDL_GetJoysticks(&num_joysticks);
   spdlog::info("SDL_GetNumJoysticks() = {}", num_joysticks);
@@ -193,11 +204,45 @@ void InitializeProgram() {
 
   // ---- 6. Now create the settings window (which initialises ImGui) ----
   createSettingsWindow();
+
+  // Wire tray icon menu actions before loadTabs(), since loading a
+  // saved "tray_enabled" setting can re-create the tray icon
+  // immediately - callbacks should already be in place by then.
+  TrayIcon::setOnQuit([]() { gQuit = true; });
+  TrayIcon::setOnShowMainWindow([]() {
+    GLFWwindow *sw = getSettingsWindow();
+    glfwRestoreWindow(sw);
+    glfwShowWindow(sw);
+    glfwFocusWindow(sw);
+  });
+  TrayIcon::setOnLeftClick([]() {
+    // Toggles: restore+focus if currently minimized, otherwise minimize.
+    GLFWwindow *sw = getSettingsWindow();
+    if (glfwGetWindowAttrib(sw, GLFW_ICONIFIED)) {
+      glfwRestoreWindow(sw);
+      glfwShowWindow(sw);
+      glfwFocusWindow(sw);
+    } else {
+      glfwIconifyWindow(sw);
+    }
+  });
+  TrayIcon::setOnToggleController([](unsigned id) {
+    controller_window *w = getControllerWindow(id);
+    if (!w)
+      return;
+    if (isControllerWindowMinimized(*w)) {
+      restoreControllerWindow(*w);
+    } else {
+      minimizeControllerWindow(*w);
+    }
+  });
+
   loadTabs();
 }
 
 void Input() {
   glfwPollEvents();
+  TrayIcon::update();
 
   settings_window_input(gQuit);
   controller_window_input();
@@ -216,6 +261,7 @@ void Draw() {
 
 void MainLoop() {
   while (!gQuit) {
+    Uint64 frame_start = SDL_GetTicks();
     try {
       Input();
       Draw();
@@ -226,14 +272,35 @@ void MainLoop() {
       spdlog::critical("Unknown exception in main loop.");
       gQuit = true;
     }
+
+    // Frame pacing lives here, as a plain sleep, rather than relying on
+    // glfwSwapInterval/vsync anywhere: on some GPU/driver combinations
+    // (confirmed on NVIDIA), waiting for vsync can stall indefinitely
+    // while a fullscreen or borderless game runs behind an unfocused
+    // controller window, freezing this entire loop - including input
+    // polling, since Input() and Draw() share it. See
+    // drawControllerWindows() in controller_window.cpp, where vsync is
+    // unconditionally disabled for controller windows. A sleep can't
+    // stall the same way: worst case it just sleeps for 0ms and this
+    // loop runs uncapped for that iteration.
+    unsigned target_hz = getFrameCapHz();
+    Uint64 target_ms = target_hz > 0 ? (1000u / target_hz) : 16;
+    Uint64 elapsed_ms = SDL_GetTicks() - frame_start;
+    if (elapsed_ms < target_ms) {
+      SDL_Delay((Uint32)(target_ms - elapsed_ms));
+    }
   }
 }
 
 void Cleanup() {
   saveTabs();
+  TrayIcon::disable();
   removeSettingsWindow();
   destroyWindows();
   GlobalKeyboard::shutdown();
+#ifdef _WIN32
+  WSACleanup();
+#endif
   SDL_Quit();
   glfwTerminate();
   spdlog::info("Shutdown complete.");

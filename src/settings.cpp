@@ -4,6 +4,7 @@
 #include "models_zip_data.h"
 #include <SDL3/SDL.h>
 #include <filesystem>
+#include <fstream>
 #include <spdlog/spdlog.h>
 #include <string>
 
@@ -208,24 +209,46 @@ void ensure_gamecontrollerdb() {
     return;
   loaded = true;
 
-  if (Embedded::gamecontrollerdb_size == 0) {
-    spdlog::warn(
-        "Embedded gamecontrollerdb data is empty; no mappings loaded.");
-    return;
+  std::string path = get_gamecontrollerdb_path();
+
+  // Seed the on-disk file from the embedded copy only if it doesn't
+  // already exist - this runs once, on first launch (or if the user
+  // deleted the file). Every subsequent launch finds the file already
+  // there and skips straight to loading from it. This is what makes
+  // exported/appended mappings (see settings_window.cpp's "Export
+  // Mapping" button) actually persist and take effect: appending to
+  // the embedded copy would do nothing, since it's baked into the
+  // executable and re-extracted fresh every time otherwise.
+  if (!std::filesystem::exists(path)) {
+    if (Embedded::gamecontrollerdb_size == 0) {
+      spdlog::warn(
+          "Embedded gamecontrollerdb data is empty; nothing to seed {} with.",
+          path);
+    } else {
+      std::ofstream out(path, std::ios::binary);
+      if (out) {
+        out.write(
+            reinterpret_cast<const char *>(Embedded::gamecontrollerdb_data),
+            (std::streamsize)Embedded::gamecontrollerdb_size);
+        out.close();
+        spdlog::info("Seeded {} from embedded gamecontrollerdb data ({} "
+                     "bytes) for first run.",
+                     path, Embedded::gamecontrollerdb_size);
+      } else {
+        spdlog::error("Failed to create {} for first-run seeding.", path);
+      }
+    }
   }
 
-  SDL_IOStream *rw = SDL_IOFromConstMem(Embedded::gamecontrollerdb_data,
-                                        Embedded::gamecontrollerdb_size);
-  if (!rw) {
-    spdlog::error("Failed to create RWops from embedded gamecontrollerdb: {}",
-                  SDL_GetError());
-    return;
-  }
-
-  int count = SDL_AddGamepadMappingsFromIO(rw, 1); // 1 = SDL frees the RWops
+  // Always load from disk from here on - never re-reads the embedded
+  // copy once the on-disk file exists, so any mappings added to it
+  // (including the user's own machine-local additions, or ones copied
+  // in from someone else's exported mapping) are picked up normally.
+  int count = SDL_AddGamepadMappingsFromFile(path.c_str());
   if (count < 0) {
-    spdlog::error("SDL_AddGamepadMappingsFromIO failed: {}", SDL_GetError());
+    spdlog::error("SDL_AddGamepadMappingsFromFile({}) failed: {}", path,
+                  SDL_GetError());
   } else {
-    spdlog::info("Loaded {} gamecontroller mappings from embedded data", count);
+    spdlog::info("Loaded {} gamecontroller mappings from {}", count, path);
   }
 }

@@ -14,6 +14,7 @@
 
 #include "controller_window.h"
 #include "icon_data.h"
+#include "imfilebrowser.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include "keyboard_input.h"
@@ -21,9 +22,13 @@
 #include "model.h"
 #include "settings.h"
 #include "settings_window.h"
+#include "shader.h"
 #include "stb_image.h"
 #include "strings.h"
+#include "tray_icon.h"
 #include <SDL3/SDL_joystick.h>
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -33,6 +38,11 @@
 #include <set>
 #include <spdlog/spdlog.h>
 #include <stdio.h>
+#include <sys/stat.h>
+
+static void DraggableTooltip(const char *text) {
+  ImGui::SetTooltip("%s", text);
+}
 
 static std::string g_last_glfw_error;
 
@@ -262,6 +272,16 @@ static bool HasTouchpadFinger(controller_window *w, int touchpadIdx,
 bool g_log_controller = false;
 bool g_log_keyboard = false;
 bool g_log_mouse = false;
+bool g_tray_enabled = false;
+
+// Export Mapping button's transient result banner (see the button's
+// handler further down) - not per-window, just reused for whichever
+// window's button was last clicked, matching how the network status
+// toast is scoped per-window instead (this one doesn't need to be,
+// since only one export can happen at a time from user interaction).
+std::string export_mapping_result;
+bool export_mapping_ok = false;
+double export_mapping_popup_until = 0.0;
 
 static int last_logged_device_index = -1;
 
@@ -632,6 +652,56 @@ void drawSettingsWindow() {
   glfwMakeContextCurrent(glfw_settings_window);
   glfwSwapInterval(1);
 
+  // Refresh the tray icon's menu data every frame, unconditionally
+  // (not nested inside the per-tab detail view below, which only draws
+  // when at least one controller window is open and selected) - so
+  // closing every controller window correctly clears the tray's
+  // "Controllers" submenu too, instead of leaving it showing windows
+  // that no longer exist.
+  if (g_tray_enabled) {
+    std::vector<TrayIcon::ControllerEntry> tray_controllers;
+    tray_controllers.reserve(tabs.size());
+
+    TrayIcon::NetworkStatus net_status = TrayIcon::NetworkStatus::Disabled;
+    std::vector<TrayIcon::ConnectionEntry> net_connections;
+
+    for (const auto &t : tabs) {
+      controller_window *cw = getControllerWindow(t.ID);
+      if (!cw)
+        continue;
+      TrayIcon::ControllerEntry entry;
+      entry.id = t.ID;
+      entry.title = t.title;
+      entry.minimized = isControllerWindowMinimized(*cw);
+      tray_controllers.push_back(entry);
+
+      if (!cw->network_enabled)
+        continue;
+      const char *proto = cw->network_protocol == 1 ? "TCP" : "UDP";
+      bool connecting =
+          cw->network_protocol == 1
+              ? cw->network_tcp_connecting
+              : (!cw->network_handshake_ack && cw->network_mode == 0);
+      if (cw->network_connected) {
+        if (net_status != TrayIcon::NetworkStatus::Connected)
+          net_status = TrayIcon::NetworkStatus::Connected;
+        TrayIcon::ConnectionEntry ce;
+        ce.label =
+            cw->network_mode == 0
+                ? (t.title + ": sending " + proto + " to " + cw->network_ip +
+                   ":" + std::to_string(cw->network_port))
+                : (t.title + ": receiving " + proto + " on port " +
+                   std::to_string(cw->network_port));
+        net_connections.push_back(ce);
+      } else if (connecting) {
+        if (net_status == TrayIcon::NetworkStatus::Disabled)
+          net_status = TrayIcon::NetworkStatus::Connecting;
+      }
+    }
+    TrayIcon::setControllerList(tray_controllers);
+    TrayIcon::setNetworkStatus(net_status, net_connections);
+  }
+
   // ---- Set viewport to framebuffer size (fixes Retina scaling) ----
   int fb_width, fb_height;
   glfwGetFramebufferSize(glfw_settings_window, &fb_width, &fb_height);
@@ -728,6 +798,9 @@ void drawSettingsWindow() {
       return;
     }
 
+    bool receiverMode =
+        (current_window->network_enabled && current_window->network_mode == 1);
+
     // ============================================================
     // WINDOW
     // ============================================================
@@ -744,6 +817,68 @@ void drawSettingsWindow() {
         ImGui::SetTooltip("Set the window title.");
       ImGui::NewLine();
 
+      // ---- System tray ----
+      // Global (app-wide) setting, not specific to this window, but
+      // grouped here under Window per request. Hidden entirely on
+      // platforms without a real implementation (see the comment at
+      // the top of tray_icon.h) rather than shown as a control that
+      // can't do anything. Note: since this now lives inside a
+      // per-tab section, it's only reachable while at least one
+      // controller window is open and this section is selected.
+      if (TrayIcon::isSupported()) {
+        if (ImGui::Checkbox("Enable Taskbar Icon", &g_tray_enabled)) {
+          if (g_tray_enabled) {
+            if (!TrayIcon::enable())
+              g_tray_enabled = false; // creation failed - don't claim it's on
+          } else {
+            TrayIcon::disable();
+          }
+        }
+        if (ImGui::IsItemHovered())
+          ImGui::SetTooltip(
+              "Adds a system tray icon. Click it to minimize/restore the "
+              "main window; right-click for a menu with per-controller "
+              "minimize/restore, network status, and Quit.");
+        ImGui::NewLine();
+      }
+
+#if defined(_WIN32)
+      // Minimize/Maximize/Restore buttons - only needed on Windows,
+      // where the window is always shown through the undecorated
+      // companion window (see createTransparentOverlay() in
+      // controller_window.cpp) regardless of the Borderless setting,
+      // so there's no title bar to double-click or grab a native
+      // minimize/maximize button from. On Linux/macOS the window has
+      // real OS decorations unless the user separately checks
+      // Borderless, so the native controls already exist there -
+      // hidden here entirely rather than shown as a redundant control.
+      // These call the wrappers in controller_window.cpp/h rather than
+      // GLFW's iconify/maximize/restore directly - on Windows those
+      // wrappers also re-hide the real GLFW window afterward, since
+      // GLFW's own Win32 implementation of these transitions appears to
+      // un-hide it as a side effect (see minimizeControllerWindow()'s
+      // comment in controller_window.h for the full explanation).
+      if (ImGui::Button("Minimize")) {
+        minimizeControllerWindow(*current_window);
+      }
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Minimize this window.");
+      ImGui::SameLine();
+      if (ImGui::Button("Maximize")) {
+        maximizeControllerWindow(*current_window);
+      }
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Maximize this window.");
+      ImGui::SameLine();
+      if (ImGui::Button("Restore")) {
+        restoreControllerWindow(*current_window);
+      }
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Restore from minimized/maximized back to its "
+                          "normal size and position.");
+      ImGui::NewLine();
+#endif
+
       if (ImGui::BeginTable("WindowOptionsColumns", 2,
                             ImGuiTableFlags_SizingStretchSame)) {
         ImGui::TableNextColumn();
@@ -755,18 +890,26 @@ void drawSettingsWindow() {
           ImGui::SetTooltip("Keep window above all others.");
 
         ImGui::TableNextColumn();
-        if (ImGui::Checkbox("Borderless", &current_window->borderless)) {
-          // Transparent / click-through windows must stay undecorated
-          // regardless of this checkbox, so only apply it when neither
-          // of those is forcing the window undecorated already.
-          if (!current_window->transparent_bg &&
-              !current_window->click_through) {
+#if !defined(_WIN32)
+        // Borderless only ever touches GLFW_DECORATED on the GLFW
+        // window. On Windows, every controller window is always shown
+        // through the layered companion window instead (see
+        // createTransparentOverlay() in controller_window.cpp) - an
+        // undecorated WS_POPUP by construction (that's what makes
+        // WS_EX_LAYERED legal on it at all) - so this setting would
+        // have no visible effect there. Rather than show a permanently
+        // greyed-out control, it's hidden entirely on that platform;
+        // still fully functional here on Linux/macOS, where the GLFW
+        // window itself is what's actually visible.
+        {
+          if (ImGui::Checkbox("Borderless", &current_window->borderless)) {
             glfwSetWindowAttrib(current_window->glfw_window, GLFW_DECORATED,
                                 !current_window->borderless);
           }
+          if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Hide title bar and borders.");
         }
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Hide title bar and borders.");
+#endif
 
         ImGui::TableNextColumn();
         ImGui::Checkbox("Drag to Move", &current_window->drag_to_move);
@@ -789,35 +932,50 @@ void drawSettingsWindow() {
           ImGui::SetTooltip("Toggle wireframe rendering.");
 
         ImGui::TableNextColumn();
+        // Transparent Background controls bg_color's alpha (the
+        // clear-color alpha channel, so the desktop/game shows through).
+        // On Linux/macOS that's the whole story - every window is
+        // already created with GLFW_TRANSPARENT_FRAMEBUFFER = true (see
+        // createControllerWindow()), so nothing else needs to change.
+        //
+        // On Windows, GLFW's own transparent-framebuffer support can't
+        // be used at all: GLFW's window class has CS_OWNDC, and
+        // Microsoft's documentation says WS_EX_LAYERED - the style real
+        // per-pixel window transparency requires - "cannot be used if
+        // the window has a class style of either CS_OWNDC or
+        // CS_CLASSDC." That's a hard rule, not a driver bug, and it's
+        // almost certainly why the one GLFW PR that tried to work around
+        // it (glfw/glfw#2681) never got merged, and why the resulting
+        // AMD-specific black-background report (glfw/glfw#2731) remains
+        // open with no accepted fix. So on Windows every controller
+        // window is always shown through a second, plain window with no
+        // CS_OWNDC (see createTransparentOverlay() in
+        // controller_window.cpp, created once at window-creation time,
+        // not toggled here) - the GLFW window keeps rendering hidden
+        // behind it. This checkbox only ever changes bg_color[3] (the
+        // alpha that window's per-pixel transparency is built from) -
+        // the companion window itself always exists on Windows
+        // regardless of this setting, since it's also what made input
+        // reliably keep working during Windows Fullscreen Optimizations
+        // (see the comment in createControllerWindow()).
         if (ImGui::Checkbox("Transparent Background",
                             &current_window->transparent_bg)) {
           current_window->bg_color[3] =
               current_window->transparent_bg ? 0.0f : 1.0f;
-          if (current_window->transparent_bg) {
-            glfwSetWindowAttrib(current_window->glfw_window, GLFW_DECORATED,
-                                GLFW_FALSE);
-            glfwSetWindowAttrib(current_window->glfw_window, GLFW_FLOATING,
-                                GLFW_TRUE);
-            // A transparent overlay usually shouldn't eat clicks, so turn
-            // click-through on by default. The button next to this one
-            // lets the user turn it back off (e.g. to reposition the
-            // window) without giving up transparency.
-            current_window->click_through = true;
-          } else if (!current_window->click_through) {
-            glfwSetWindowAttrib(current_window->glfw_window, GLFW_DECORATED,
-                                !current_window->borderless);
-            glfwSetWindowAttrib(current_window->glfw_window, GLFW_FLOATING,
-                                current_window->always_on_top);
-          }
-          glfwSetWindowAttrib(
-              current_window->glfw_window, GLFW_MOUSE_PASSTHROUGH,
-              current_window->click_through ? GLFW_TRUE : GLFW_FALSE);
-          setWindowClickThrough(current_window->glfw_window,
-                                current_window->click_through);
         }
         if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Make the window background fully transparent. "
-                            "The 3D model will appear on your desktop.");
+          ImGui::SetTooltip(
+              "Make the window background fully transparent. The 3D model "
+              "will appear on your desktop."
+#if defined(_WIN32)
+              "\nOn Windows the window is always shown through a "
+              "borderless companion window regardless of this setting "
+              "(Borderless isn't shown on this platform since it "
+              "wouldn't do anything) - this only changes whether its "
+              "background is see-through or solid."
+#endif
+          );
+#if !defined(_WIN32)
         if (!current_window->transparency_supported) {
           ImGui::SameLine();
           ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.7f, 0.2f, 1.0f));
@@ -832,6 +990,7 @@ void drawSettingsWindow() {
                 "this app's settings can override. Check the log for "
                 "details.");
         }
+#endif
 
         ImGui::TableNextColumn();
         {
@@ -844,21 +1003,14 @@ void drawSettingsWindow() {
           }
           if (ImGui::Button(ct ? "Click-Through: ON" : "Click-Through: OFF")) {
             current_window->click_through = !current_window->click_through;
-            if (current_window->click_through) {
-              // Passthrough only works reliably on undecorated windows.
-              glfwSetWindowAttrib(current_window->glfw_window, GLFW_DECORATED,
-                                  GLFW_FALSE);
-              glfwSetWindowAttrib(current_window->glfw_window, GLFW_FLOATING,
-                                  GLFW_TRUE);
-            } else if (!current_window->transparent_bg) {
-              glfwSetWindowAttrib(current_window->glfw_window, GLFW_DECORATED,
-                                  !current_window->borderless);
-              glfwSetWindowAttrib(current_window->glfw_window, GLFW_FLOATING,
-                                  current_window->always_on_top);
-            }
-            glfwSetWindowAttrib(
-                current_window->glfw_window, GLFW_MOUSE_PASSTHROUGH,
-                current_window->click_through ? GLFW_TRUE : GLFW_FALSE);
+            // setWindowClickThrough() is the single source of truth for
+            // click-through (see its definition in controller_window.cpp):
+            // GLFW_MOUSE_PASSTHROUGH on the GLFW window on Linux/macOS,
+            // or the layered companion window's WS_EX_TRANSPARENT on
+            // Windows (that window is now always active there - see
+            // createControllerWindow()). It does not force decoration or
+            // floating - each setting only ever does the one thing its
+            // name says.
             setWindowClickThrough(current_window->glfw_window,
                                   current_window->click_through);
           }
@@ -869,17 +1021,14 @@ void drawSettingsWindow() {
         if (ImGui::IsItemHovered())
           ImGui::SetTooltip(
               "Let mouse clicks pass through this window to whatever is "
-              "behind it, turning it into a pure on-screen overlay.\n"
-              "Forces the window undecorated while enabled. Turn this off "
-              "temporarily if you need to drag or resize the window.");
+              "behind it, turning it into a pure on-screen overlay.");
 
         ImGui::EndTable();
       }
       ImGui::NewLine();
       int w = 0, h = 0;
       glfwGetWindowSize(current_window->glfw_window, &w, &h);
-      if (ImGui::InputInt("Width", &w, 10, 100,
-                          ImGuiInputTextFlags_EnterReturnsTrue)) {
+      if (ImGui::DragInt("Width", &w, 1.0f, 10, vid_mode->width, "%d px")) {
         if (w < 10)
           w = 10;
         if (w > vid_mode->width)
@@ -887,10 +1036,10 @@ void drawSettingsWindow() {
         glfwSetWindowSize(current_window->glfw_window, w, h);
       }
       if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Window width in pixels.");
+        ImGui::SetTooltip(
+            "Drag the number or click to type. Window width in pixels.");
 
-      if (ImGui::InputInt("Height", &h, 10, 100,
-                          ImGuiInputTextFlags_EnterReturnsTrue)) {
+      if (ImGui::DragInt("Height", &h, 1.0f, 10, vid_mode->height, "%d px")) {
         if (h < 10)
           h = 10;
         if (h > vid_mode->height)
@@ -898,16 +1047,61 @@ void drawSettingsWindow() {
         glfwSetWindowSize(current_window->glfw_window, w, h);
       }
       if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Window height in pixels.");
+        ImGui::SetTooltip(
+            "Drag the number or click to type. Window height in pixels.");
 
       ImGui::NewLine();
-      ImGui::SliderInt("Swap Interval", &current_window->swap_interval, 0, 2);
+      // With vsync permanently off for controller windows on every
+      // platform (glfwSwapInterval(0) is unconditional now - a vsync
+      // wait was found to be able to stall this window indefinitely on
+      // some GPU/driver combinations, confirmed on NVIDIA, while a
+      // fullscreen or borderless game runs behind it), Frame Cap is the
+      // actual lever for CPU/GPU usage. Previously there was no UI for
+      // it at all, so it silently stayed at its 60 default no matter
+      // what. Lower this if the model doesn't need to visually update
+      // quickly (e.g. a slowly-changing gyro readout) to directly cut
+      // render cost.
+      int fc = current_window->frame_cap;
+      if (ImGui::SliderInt("Frame Cap", &fc, 5, 144, "%d FPS")) {
+        current_window->frame_cap = (Uint8)std::clamp(fc, 5, 144);
+      }
       if (ImGui::IsItemHovered())
         ImGui::SetTooltip(
-            "Controls V‑sync (vertical synchronisation).\n"
-            "0 = Off (unlimited FPS, may cause screen tearing).\n"
-            "1 = On (synchronised to screen refresh rate).\n"
-            "2 = Adaptive (attempts to maintain half refresh rate).");
+            "Caps how often this window redraws, via a plain sleep - "
+            "vsync is never used for controller windows on any platform "
+            "(a vsync wait was found to be able to stall this window "
+            "indefinitely on some GPU/driver combinations while a "
+            "fullscreen or borderless game runs behind it). This is the "
+            "main lever for this window's CPU/GPU usage. Lower values "
+            "reduce resource use at the cost of less smooth movement in "
+            "the model.");
+
+#if defined(_WIN32)
+      // Separate from Frame Cap above: on Windows, every controller
+      // window is actually presented through the layered companion
+      // window (see createTransparentOverlay() in controller_window.cpp)
+      // via a PBO readback + GDI blit, which has its own cost on top of
+      // the 3D render itself. Decoupling these two rates lets the model
+      // render smoothly while pushing it to the visible window less
+      // often, trading visual smoothness for a further cut in CPU/GDI
+      // usage without touching the render rate at all.
+      int overlay_hz =
+          current_window->overlay_update_interval > 0.0
+              ? (int)std::lround(1.0 / current_window->overlay_update_interval)
+              : 60;
+      if (ImGui::SliderInt("Overlay Update Rate", &overlay_hz, 5, 60,
+                           "%d Hz")) {
+        overlay_hz = std::clamp(overlay_hz, 5, 60);
+        current_window->overlay_update_interval = 1.0 / (double)overlay_hz;
+      }
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip(
+            "Windows only: how often the rendered model is actually "
+            "pushed to the visible overlay window, independent of Frame "
+            "Cap above. Lower values reduce CPU/GDI usage further, at "
+            "the cost of the visible overlay updating less smoothly "
+            "than the model is actually rendering internally.");
+#endif
 
       ImGui::NewLine();
       if (ImGui::Button("Open Data Directory")) {
@@ -938,24 +1132,33 @@ void drawSettingsWindow() {
     // CAMERA
     // ============================================================
     if (ImGui::CollapsingHeader("Camera")) {
-      ImGui::SliderFloat("Distance", &current_window->camera_distance, 1, 10);
+      ImGui::DragFloat("Distance", &current_window->camera_distance, 0.1f, 1,
+                       10);
       if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Camera distance from the model.");
-      ImGui::SliderFloat("Yaw", &current_window->camera_yaw, -360, 360);
+        ImGui::SetTooltip(
+            "Drag to change or click to type. Camera distance from the model.");
+      ImGui::DragFloat("Yaw", &current_window->camera_yaw, 0.5f, -360, 360);
       if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Horizontal camera orbit.");
-      ImGui::SliderFloat("Pitch", &current_window->camera_pitch, -180, 180);
+        ImGui::SetTooltip(
+            "Drag to change or click to type. Horizontal camera orbit.");
+      ImGui::DragFloat("Pitch", &current_window->camera_pitch, 0.5f, -180, 180);
       if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Vertical camera orbit.");
-      ImGui::SliderFloat("Roll", &current_window->camera_roll, -180, 180);
+        ImGui::SetTooltip(
+            "Drag to change or click to type. Vertical camera orbit.");
+      ImGui::DragFloat("Roll", &current_window->camera_roll, 0.5f, -180, 180);
       if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Camera roll (tilt).");
-      ImGui::SliderFloat("Pan X", &current_window->camera_offset_x, -5.0f, 5.0f,
-                         "%.2f");
-      ImGui::SliderFloat("Pan Y", &current_window->camera_offset_y, -5.0f, 5.0f,
-                         "%.2f");
+        ImGui::SetTooltip(
+            "Drag to change or click to type. Camera roll (tilt).");
+      ImGui::DragFloat("Pan X", &current_window->camera_offset_x, 0.01f, -5.0f,
+                       5.0f, "%.2f");
       if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Translate camera horizontally/vertically.");
+        ImGui::SetTooltip("Drag to change or click to type. Translate camera "
+                          "horizontally.");
+      ImGui::DragFloat("Pan Y", &current_window->camera_offset_y, 0.01f, -5.0f,
+                       5.0f, "%.2f");
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Drag to change or click to type. Translate camera "
+                          "vertically.");
       if (ImGui::Button("Reset")) {
         current_window->camera_distance = 3.3f;
         current_window->camera_yaw = 0.0f;
@@ -986,7 +1189,34 @@ void drawSettingsWindow() {
         device_name = SDL_GetJoystickName(current_window->sdl_joystick);
       }
 
+      if (receiverMode)
+        ImGui::BeginDisabled();
       if (ImGui::BeginCombo("Controllers", device_name.c_str(), 0)) {
+        // ---- "None" option ----
+        if (ImGui::Selectable("None", device_name == "None")) {
+          // Close any currently open device
+          if (current_window->sdl_controller) {
+            SDL_CloseGamepad(current_window->sdl_controller);
+            current_window->sdl_controller = nullptr;
+          }
+          if (current_window->sdl_joystick) {
+            SDL_CloseJoystick(current_window->sdl_joystick);
+            current_window->sdl_joystick = nullptr;
+          }
+          current_window->is_gamecontroller = false;
+          current_window->joystick_index = -1;
+          // Reset gyro
+          current_window->gyro_enabled = false;
+          current_window->gyro_matrix = glm::mat4(1.0f);
+          // Reset preferred GUID/name to empty (user manually chose None)
+          current_window->preferred_guid = "";
+          current_window->preferred_name = "";
+          current_window->preferred_index = -1;
+          current_window->preferred_serial = "";
+          current_window->preferred_path = "";
+        }
+
+        // ---- Existing device loop ----
         for (int idx = 0; idx < (int)device_ids.size(); ++idx) {
           SDL_JoystickID id = device_ids[idx];
           const char *name = SDL_GetJoystickNameForID(id);
@@ -1044,7 +1274,44 @@ void drawSettingsWindow() {
                                              : "(no error details)");
               }
             }
-            current_window->joystick_index = idx; // store the index for logging
+            current_window->joystick_index = idx;
+
+            // Store preferred GUID and name for this window
+            SDL_GUID dev_guid = SDL_GetJoystickGUIDForID(id);
+            char guid_str[64];
+            SDL_GUIDToString(dev_guid, guid_str, sizeof(guid_str));
+            current_window->preferred_guid = guid_str;
+            current_window->preferred_name = name ? name : "";
+
+            // Compute ordinal among devices with same GUID
+            current_window->preferred_guid_index = 0;
+            for (int k = 0; k < idx; ++k) {
+              SDL_JoystickID other_id = device_ids[k];
+              SDL_GUID other_guid = SDL_GetJoystickGUIDForID(other_id);
+              char other_guid_str[64];
+              SDL_GUIDToString(other_guid, other_guid_str,
+                               sizeof(other_guid_str));
+              if (strcmp(guid_str, other_guid_str) == 0)
+                current_window->preferred_guid_index++;
+            }
+
+            // Store index, serial and path for reliable re‑detection
+            current_window->preferred_index = idx;
+            if (current_window->sdl_controller) {
+              SDL_Joystick *joy =
+                  SDL_GetGamepadJoystick(current_window->sdl_controller);
+              const char *serial = SDL_GetJoystickSerial(joy);
+              const char *path = SDL_GetJoystickPath(joy);
+              current_window->preferred_serial = serial ? serial : "";
+              current_window->preferred_path = path ? path : "";
+            } else if (current_window->sdl_joystick) {
+              const char *serial =
+                  SDL_GetJoystickSerial(current_window->sdl_joystick);
+              const char *path =
+                  SDL_GetJoystickPath(current_window->sdl_joystick);
+              current_window->preferred_serial = serial ? serial : "";
+              current_window->preferred_path = path ? path : "";
+            }
 
             // ---- Reset all input state ----
             // Reset touchpad states
@@ -1080,46 +1347,114 @@ void drawSettingsWindow() {
         }
         ImGui::EndCombo();
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Select a gamepad or joystick.");
+      if (receiverMode)
+        ImGui::EndDisabled();
+    }
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("Select a gamepad or joystick.");
 
-      if (ImGui::TreeNode("Settings")) {
-        // Apply a dark purple background for the tree node
-        BeginShadedGroup();
-        ImGui::Checkbox("Popup Bumpers", &current_window->model.popup_bumpers);
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Animate bumpers when pressed.");
-        ImGui::SameLine();
-        ImGui::Checkbox("Popup Triggers",
-                        &current_window->model.popup_triggers);
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Animate triggers when pressed.");
-        ImGui::SameLine();
-        ImGui::Checkbox("Popup Paddles", &current_window->model.popup_paddles);
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Animate paddles when pressed.");
-        ImGui::NewLine();
-        if (current_window->model.meshes.size() > 7) {
-          ImGui::SliderInt(
-              "L-Stick Highlight Deadzone",
-              &current_window->model.meshes[7].ring_highlight_deadzone, 0, 100);
-        }
-        if (current_window->model.meshes.size() > 8) {
-          ImGui::SliderInt(
-              "R-Stick Highlight Deadzone",
-              &current_window->model.meshes[8].ring_highlight_deadzone, 0, 100);
-        }
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Deadzone for right stick highlight ring.");
-        ImGui::ColorEdit4("Highlight Color (Global)",
-                          current_window->highlight_color);
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Default highlight color for all meshes. Can be "
-                            "overridden per mesh.");
-        EndShadedGroup(ShadeColor(0.42f, 0.28f, 0.62f),
-                       ShadeBorder(0.42f, 0.28f, 0.62f));
-        ImGui::TreePop();
+    if (ImGui::TreeNode("Settings")) {
+      // Apply a dark purple background for the tree node
+      BeginShadedGroup();
+      ImGui::Checkbox("Popup Bumpers", &current_window->model.popup_bumpers);
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Animate bumpers when pressed.");
+      ImGui::SameLine();
+      ImGui::Checkbox("Popup Triggers", &current_window->model.popup_triggers);
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Animate triggers when pressed.");
+      ImGui::SameLine();
+      ImGui::Checkbox("Popup Paddles", &current_window->model.popup_paddles);
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Animate paddles when pressed.");
+      ImGui::NewLine();
+      if (current_window->model.meshes.size() > 7) {
+        ImGui::SliderInt(
+            "L-Stick Highlight Deadzone",
+            &current_window->model.meshes[7].ring_highlight_deadzone, 0, 100);
       }
+      if (current_window->model.meshes.size() > 8) {
+        ImGui::SliderInt(
+            "R-Stick Highlight Deadzone",
+            &current_window->model.meshes[8].ring_highlight_deadzone, 0, 100);
+      }
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Deadzone for right stick highlight ring.");
+      ImGui::ColorEdit4("Highlight Color (Global)",
+                        current_window->highlight_color);
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Default highlight color for all meshes. Can be "
+                          "overridden per mesh.");
+      EndShadedGroup(ShadeColor(0.42f, 0.28f, 0.62f),
+                     ShadeBorder(0.42f, 0.28f, 0.62f));
+
+      // Inside the Controller CollapsingHeader, after highlight color:
+      ImGui::NewLine();
+      ImGui::Text("Global Shader Effect");
+      std::vector<std::string> shaderNames = GetShaderNames();
+      int currentGlobalShaderIdx = 0;
+      if (!current_window->global_shader_name.empty()) {
+        for (int i = 1; i < (int)shaderNames.size(); ++i) {
+          if (shaderNames[i] == current_window->global_shader_name) {
+            currentGlobalShaderIdx = i;
+            break;
+          }
+        }
+      }
+      std::vector<const char *> shaderNamesCStr;
+      for (auto &s : shaderNames)
+        shaderNamesCStr.push_back(s.c_str());
+      if (ImGui::Combo("Global Shader", &currentGlobalShaderIdx,
+                       shaderNamesCStr.data(), (int)shaderNamesCStr.size())) {
+        if (currentGlobalShaderIdx == 0)
+          current_window->global_shader_name = "";
+        else
+          current_window->global_shader_name =
+              shaderNames[currentGlobalShaderIdx];
+      }
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Applies to all meshes unless a mesh has its own "
+                          "shader override.");
+
+      // ---- Logging toggle ----
+      ImGui::NewLine();
+      ImGui::Checkbox("Log Controller/Joystick", &g_log_controller);
+      ImGui::SameLine();
+      ImGui::Checkbox("Log Keyboard", &g_log_keyboard);
+      ImGui::SameLine();
+      ImGui::Checkbox("Log Mouse", &g_log_mouse);
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Toggle logging for each device type.");
+      ImGui::NewLine();
+
+      // ---- Input responsiveness / idle CPU trade-off ----
+      // Global (app-wide), not per-window, same as the logging toggles
+      // above - see setPollIntervalMs()'s declaration in
+      // keyboard_input.h for the full explanation. Windows only: on
+      // Linux/macOS the global keyboard/mouse backends are already
+      // blocking/event-driven with no equivalent poll loop, so this
+      // would have nothing to affect there - hidden entirely rather
+      // than shown as a control that silently does nothing.
+#if defined(_WIN32)
+      static int poll_ms = GlobalKeyboard::getPollIntervalMs();
+      if (ImGui::SliderInt("Input Responsiveness", &poll_ms, 1, 16, "%d ms")) {
+        GlobalKeyboard::setPollIntervalMs(poll_ms);
+      }
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip(
+            "How often the background keyboard/mouse listener wakes up "
+            "to check for input, even when nothing is being pressed. "
+            "Lower values (toward 1ms) notice a key/click sooner after "
+            "it happens, but cost a small amount of CPU every single "
+            "wake-up - at 1ms that's up to 1000 wake-ups per second, "
+            "all the time, even sitting completely idle. Higher values "
+            "cut that idle CPU cost, at the expense of adding up to "
+            "that same amount of extra delay before a real input is "
+            "noticed. Takes effect immediately.");
+#endif
+
+      ImGui::TreePop();
+
     } // end Controller
 
     // ============================================================
@@ -1326,22 +1661,28 @@ void drawSettingsWindow() {
 
           Mesh &matMesh = current_window->model.meshes[material_mesh];
           ImGui::NewLine();
-          ImGui::SliderFloat("Ambient", &matMesh.material.ambient, 0, 1);
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Ambient light reflection.");
-          ImGui::SliderFloat("Diffuse", &matMesh.material.diffuse, 0, 1);
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Diffuse light reflection.");
-          ImGui::SliderFloat("Specular", &matMesh.material.specular, 0, 1);
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Specular (shininess) intensity.");
-          ImGui::SliderFloat("Shininess", &matMesh.material.shininess, 1, 256);
+          ImGui::DragFloat("Ambient", &matMesh.material.ambient, 0.01f, 0, 1);
           if (ImGui::IsItemHovered())
             ImGui::SetTooltip(
-                "Specular exponent (higher = sharper highlights).");
+                "Drag to change or click to type. Ambient light reflection.");
+
+          ImGui::DragFloat("Diffuse", &matMesh.material.diffuse, 0.01f, 0, 1);
+          if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Drag to change or click to type. Diffuse light reflection.");
+          ImGui::DragFloat("Specular", &matMesh.material.specular, 0.01f, 0, 1);
+          if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Drag to change or click to type. Specular "
+                              "(shininess) intensity.");
+          ImGui::DragFloat("Shininess", &matMesh.material.shininess, 0.5f, 1,
+                           256);
+          if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Drag to change or click to type. Specular "
+                              "exponent (higher = sharper highlights).");
           ImGui::ColorEdit3("Color", matMesh.material.color);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Base colour of the mesh.");
+            ImGui::SetTooltip(
+                "Drag to change or click to type. Base colour of the mesh.");
           matMesh.original_color[0] = matMesh.material.color[0];
           matMesh.original_color[1] = matMesh.material.color[1];
           matMesh.original_color[2] = matMesh.material.color[2];
@@ -1456,7 +1797,7 @@ void drawSettingsWindow() {
             const char *type_name = (t->type >= 0 && t->type < type_count)
                                         ? type_names[t->type]
                                         : "Unknown";
-            ImGui::SliderInt("Type", &t->type, 0, type_count - 1, type_name);
+            ImGui::DragInt("Type", &t->type, 1, 0, type_count - 1, type_name);
             if (ImGui::IsItemHovered())
               ImGui::SetTooltip(
                   "Texture type: diffuse, specular, or emissive.");
@@ -1473,8 +1814,8 @@ void drawSettingsWindow() {
             const char *wrap_name_x = (t->wrapX >= 0 && t->wrapX < wrap_count)
                                           ? wrap_names[t->wrapX]
                                           : "Unknown";
-            if (ImGui::SliderInt("X Wrap", &t->wrapX, 0, wrap_count - 1,
-                                 wrap_name_x)) {
+            if (ImGui::DragInt("X Wrap", &t->wrapX, 1, 0, wrap_count - 1,
+                               wrap_name_x)) {
               glfwMakeContextCurrent(current_window->glfw_window);
               glBindTexture(GL_TEXTURE_2D, t->id);
               switch (t->wrapX) {
@@ -1503,8 +1844,8 @@ void drawSettingsWindow() {
             const char *wrap_name_y = (t->wrapY >= 0 && t->wrapY < wrap_count)
                                           ? wrap_names[t->wrapY]
                                           : "Unknown";
-            if (ImGui::SliderInt("Y Wrap", &t->wrapY, 0, wrap_count - 1,
-                                 wrap_name_y)) {
+            if (ImGui::DragInt("Y Wrap", &t->wrapY, 1, 0, wrap_count - 1,
+                               wrap_name_y)) {
               glfwMakeContextCurrent(current_window->glfw_window);
               glBindTexture(GL_TEXTURE_2D, t->id);
               switch (t->wrapY) {
@@ -1552,7 +1893,8 @@ void drawSettingsWindow() {
             ImGui::InputFloat("Scale Y", &t->scaleY, 0.01f, 1.0f, "%.3f");
             if (ImGui::IsItemHovered())
               ImGui::SetTooltip("Vertical texture scale.");
-            ImGui::SliderAngle("Rotation", &t->rotation, -180.0f, 180.0f);
+            ImGui::DragFloat("Rotation", &t->rotation, 0.1f, -180.0f, 180.0f,
+                             "%.1f deg");
             if (ImGui::IsItemHovered())
               ImGui::SetTooltip("Texture rotation angle.");
           }
@@ -1584,6 +1926,31 @@ void drawSettingsWindow() {
       if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Save current model settings to info.json.");
 
+      ImGui::SameLine();
+      if (ImGui::Button("Export Mapping")) {
+        std::string message;
+        bool ok = exportGamepadMapping(*current_window, message);
+        export_mapping_result = message;
+        export_mapping_ok = ok;
+        export_mapping_popup_until = glfwGetTime() + 6.0;
+      }
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip(
+            "Appends this controller's manually-configured bindings to "
+            "gamecontrollerdb.txt as a standard SDL mapping line, so you "
+            "can share that file (or just this one line) with others - "
+            "or so this same device gets recognized as a proper Gamepad "
+            "next time.\nOnly works for bindings using Input Type = "
+            "Joystick (a raw, unrecognized device) - if this device is "
+            "already a recognized Gamepad, there's nothing to export.");
+      if (glfwGetTime() < export_mapping_popup_until) {
+        ImGui::PushStyleColor(
+            ImGuiCol_Text, export_mapping_ok ? ImVec4(0.3f, 1.0f, 0.3f, 1.0f)
+                                             : ImVec4(1.0f, 0.6f, 0.3f, 1.0f));
+        ImGui::TextWrapped("%s", export_mapping_result.c_str());
+        ImGui::PopStyleColor();
+      }
+
       // --- Check-all buttons ---
       if (ImGui::Button("Toggle All Visible")) {
         for (auto &mesh : current_window->model.meshes) {
@@ -1610,21 +1977,13 @@ void drawSettingsWindow() {
       }
       ImGui::NewLine();
 
-      // ---- Logging toggle ----
-      ImGui::Checkbox("Log Controller/Joystick", &g_log_controller);
-      ImGui::SameLine();
-      ImGui::Checkbox("Log Keyboard", &g_log_keyboard);
-      ImGui::SameLine();
-      ImGui::Checkbox("Log Mouse", &g_log_mouse);
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Toggle logging for each device type.");
       ImGui::NewLine();
-      ImGui::SliderFloat("Mouse Sensitivity",
-                         &current_window->mouse_sensitivity, 0.01f, 2.0f,
-                         "%.2f");
+      ImGui::DragFloat("Mouse Sensitivity", &current_window->mouse_sensitivity,
+                       0.01f, 0.01f, 2.0f, "%.2f");
       if (ImGui::IsItemHovered())
         ImGui::SetTooltip(
-            "Scale factor for mouse movement -> touchpoint displacement. "
+            "Drag to change or click to type. Scale factor for mouse movement "
+            "-> touchpoint displacement. "
             "Lower = slower, higher = faster. Default (0.5) gives a moderate "
             "speed.");
       ImGui::NewLine();
@@ -2363,24 +2722,24 @@ void drawSettingsWindow() {
                               0.01f, 1.0f, "%.3f");
             ImGui::InputFloat("Popup Offset Z", &selectedMesh.popup_offset[2],
                               0.01f, 1.0f, "%.3f");
-            ImGui::SliderAngle("Popup Yaw", &selectedMesh.popup_rotation[1],
-                               -180, 180);
-            ImGui::SliderAngle("Popup Pitch", &selectedMesh.popup_rotation[0],
-                               -180, 180);
-            ImGui::SliderAngle("Popup Roll", &selectedMesh.popup_rotation[2],
-                               -180, 180);
+            ImGui::DragFloat("Popup Yaw", &selectedMesh.popup_rotation[1], 0.1f,
+                             -180.0f, 180.0f, "%.1f deg");
+            ImGui::DragFloat("Popup Pitch", &selectedMesh.popup_rotation[0],
+                             0.1f, -180.0f, 180.0f, "%.1f deg");
+            ImGui::DragFloat("Popup Roll", &selectedMesh.popup_rotation[2],
+                             0.1f, -180.0f, 180.0f, "%.1f deg");
             if (ImGui::IsItemHovered())
               ImGui::SetTooltip(
                   "Offset and rotation when the part 'pops up' (e.g. bumper).");
             ImGui::Separator();
             ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.8f, 1.0f),
                                "Stick / Trigger Limits");
-            ImGui::SliderAngle("Stick Max Angle", &selectedMesh.stick_max, 0.0f,
-                               45.0f);
+            ImGui::DragFloat("Stick Max Angle", &selectedMesh.stick_max, 0.1f,
+                             0.0f, 45.0f, "%.1f deg");
             if (ImGui::IsItemHovered())
               ImGui::SetTooltip("Maximum deflection angle for sticks.");
-            ImGui::SliderAngle("Trigger Max Angle", &selectedMesh.trigger_max,
-                               0.0f, 90.0f);
+            ImGui::DragFloat("Trigger Max Angle", &selectedMesh.trigger_max,
+                             0.1f, 0.0f, 90.0f, "%.1f deg");
             if (ImGui::IsItemHovered())
               ImGui::SetTooltip("Maximum pull angle for triggers.");
             EndShadedGroup(ShadeColor(0.16f, 0.48f, 0.52f),
@@ -2420,8 +2779,8 @@ void drawSettingsWindow() {
                                 selectedMesh.highlight_color_positive);
               ImGui::ColorEdit4("Negative Color",
                                 selectedMesh.highlight_color_negative);
-              ImGui::SliderFloat("Axis Deadzone", &selectedMesh.axis_deadzone,
-                                 0.0f, 0.5f, "%.3f");
+              ImGui::DragFloat("Axis Deadzone", &selectedMesh.axis_deadzone,
+                               0.001f, 0.0f, 0.5f, "%.3f");
               ImGui::TextWrapped("The highlight will be off when the axis "
                                  "value is within this deadzone. It ramps from "
                                  "0 to full between the deadzone and 1.");
@@ -2433,6 +2792,54 @@ void drawSettingsWindow() {
 
             EndShadedGroup(ShadeColor(0.58f, 0.16f, 0.16f),
                            ShadeBorder(0.58f, 0.16f, 0.16f));
+            ImGui::TreePop();
+          }
+
+          // ---- Shader Selection ----
+          if (ImGui::TreeNode("Shader Effect")) {
+            BeginShadedGroup();
+            ImGui::TextWrapped("Select a custom shader effect for this mesh.");
+
+            // Build list of shader names
+            std::vector<std::string> shaderNames;
+            shaderNames.push_back("None");
+
+            // Get the list from the shader manager
+            std::vector<std::string> customShaders =
+                GetShaderNames(); // declared in shader.h
+            for (const auto &s : customShaders) {
+              if (s != "None") // avoid duplicate
+                shaderNames.push_back(s);
+            }
+
+            // Determine index of selected shader
+            int current_shader_idx = 0;
+            if (!selectedMesh.shader_name.empty()) {
+              for (size_t i = 0; i < shaderNames.size(); ++i) {
+                if (shaderNames[i] == selectedMesh.shader_name) {
+                  current_shader_idx = (int)i;
+                  break;
+                }
+              }
+            }
+
+            // Build const char* array for ImGui::Combo
+            std::vector<const char *> shaderNamesCStr;
+            for (const auto &s : shaderNames)
+              shaderNamesCStr.push_back(s.c_str());
+
+            // Combo
+            if (ImGui::Combo("Shader", &current_shader_idx,
+                             shaderNamesCStr.data(),
+                             (int)shaderNamesCStr.size())) {
+              if (current_shader_idx == 0)
+                selectedMesh.shader_name = "";
+              else
+                selectedMesh.shader_name = shaderNames[current_shader_idx];
+            }
+
+            EndShadedGroup(ShadeColor(0.2f, 0.5f, 0.3f),
+                           ShadeBorder(0.2f, 0.5f, 0.3f));
             ImGui::TreePop();
           }
 
@@ -2573,10 +2980,10 @@ void drawSettingsWindow() {
             ImGui::SetTooltip("Mark this mesh as a touchpoint (moves with "
                               "mouse/touch input).");
           if (selectedMesh.isTouchpad) {
-            ImGui::SliderFloat("Touch Area Width", &selectedMesh.touch_width,
-                               0.01f, 5.0f, "%.2f");
-            ImGui::SliderFloat("Touch Area Height", &selectedMesh.touch_height,
-                               0.01f, 5.0f, "%.2f");
+            ImGui::DragFloat("Touch Area Width", &selectedMesh.touch_width,
+                             0.01f, 0.01f, 5.0f, "%.2f");
+            ImGui::DragFloat("Touch Area Height", &selectedMesh.touch_height,
+                             0.01f, 0.01f, 5.0f, "%.2f");
             if (ImGui::IsItemHovered())
               ImGui::SetTooltip("Width and height of the touch-sensitive area "
                                 "in world units.");
@@ -2686,15 +3093,14 @@ void drawSettingsWindow() {
       ImGui::EndDisabled();
 
       if (has_gyro && current_window->gyro_enabled) {
-        ImGui::SliderFloat("Gyro Sensitivity",
-                           &current_window->gyro_sensitivity, 0.1f, 10.0f,
-                           "%.1f");
+        ImGui::DragFloat("Gyro Sensitivity", &current_window->gyro_sensitivity,
+                         0.1f, 0.1f, 10.0f, "%.1f");
         if (ImGui::IsItemHovered())
           ImGui::SetTooltip(
               "Sensitivity multiplier (internally scaled by 0.1). "
               "Range 0-10 gives effective sensitivity 0-1.0.");
-        ImGui::SliderInt("Gyro Correction", &current_window->gyro_correction, 0,
-                         10);
+        ImGui::DragInt("Gyro Correction", &current_window->gyro_correction, 1,
+                       0, 10);
         if (ImGui::Button("Reset Gyro")) {
           current_window->gyro_matrix = glm::mat4(1.0f);
         }
@@ -2750,6 +3156,135 @@ void drawSettingsWindow() {
       } else if (!has_gyro) {
         ImGui::TextDisabled("No gyroscope detected for this controller.");
       }
+    }
+
+    // ============================================================
+    // NETWORK
+    // ============================================================
+    if (ImGui::CollapsingHeader("Network")) {
+      ImGui::TextWrapped(
+          "Send or receive controller input over the network as JSON.");
+      ImGui::Separator();
+
+      // ---- Status indicator ----
+      // Uses network_connected rather than network_status: the latter
+      // is only ever updated on the UDP code paths (see
+      // sendNetworkState()/receiveNetworkState() in
+      // controller_window.cpp) and is never touched anywhere in the
+      // TCP paths at all, so it could never turn green for a TCP
+      // connection regardless of whether one was actually established.
+      // network_connected is properly maintained for both protocols.
+      {
+        bool connected = current_window->network_connected;
+        ImU32 color;
+        const char *label;
+
+        if (!current_window->network_enabled) {
+          color = ImGui::GetColorU32(ImVec4(0.5f, 0.5f, 0.5f, 1.0f)); // gray
+          label = "Off";
+        } else if (connected) {
+          color = ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)); // green
+          label = "Connected";
+        } else {
+          color = ImGui::GetColorU32(ImVec4(1.0f, 0.8f, 0.0f, 1.0f)); // yellow
+          label = "Trying to connect...";
+        }
+
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+        ImGui::GetWindowDrawList()->AddCircleFilled(
+            ImVec2(pos.x + 6, pos.y + 6), 6.0f, color);
+        ImGui::Dummy(ImVec2(20, 12));
+        ImGui::SameLine();
+        ImGui::Text("%s", label);
+        ImGui::Spacing();
+
+        // ---- "Just connected" toast ----
+        // A small circle is easy to miss - this gives an unmissable,
+        // temporary confirmation the moment a connection actually
+        // completes, rather than making the user hunt for and stare at
+        // the indicator to notice it changed color.
+        if (connected && !current_window->network_was_connected) {
+          current_window->network_connected_toast_until = glfwGetTime() + 3.0;
+        }
+        current_window->network_was_connected = connected;
+        if (glfwGetTime() < current_window->network_connected_toast_until) {
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 1.0f, 0.3f, 1.0f));
+          if (current_window->network_mode == 0) {
+            ImGui::TextWrapped("\xE2\x9C\x93 Connected - now sending to %s:%d",
+                               current_window->network_ip.c_str(),
+                               current_window->network_port);
+          } else {
+            ImGui::TextWrapped("\xE2\x9C\x93 Connected - receiving on port %d",
+                               current_window->network_port);
+          }
+          ImGui::PopStyleColor();
+        }
+      }
+
+      // Mode
+      int mode = current_window->network_mode;
+      const char *mode_names[] = {"Sender", "Receiver"};
+      if (ImGui::Combo("Mode", &mode, mode_names, 2)) {
+        current_window->network_mode = mode;
+        if (current_window->network_enabled) {
+          initNetwork(*current_window);
+        }
+      }
+
+      // Protocol
+      int proto = current_window->network_protocol;
+      const char *proto_names[] = {"UDP", "TCP"};
+      if (ImGui::Combo("Protocol", &proto, proto_names, 2)) {
+        current_window->network_protocol = proto;
+        if (current_window->network_enabled) {
+          initNetwork(*current_window);
+        }
+      }
+
+      // IP / Port
+      char ip[256];
+      strncpy(ip, current_window->network_ip.c_str(), 255);
+      if (ImGui::InputText("IP Address", ip, 256)) {
+        current_window->network_ip = ip;
+      }
+      if (ImGui::InputInt("Port", &current_window->network_port, 1, 100)) {
+        current_window->network_port =
+            std::max(1, std::min(65535, current_window->network_port));
+      }
+
+      // Send rate
+      int rate = current_window->network_send_rate;
+      const char *rate_names[] = {"Max", "60 Hz", "30 Hz", "15 Hz", "10 Hz"};
+      int rate_vals[] = {0, 60, 30, 15, 10};
+      int rate_idx = 0;
+      for (int i = 0; i < 5; i++)
+        if (rate_vals[i] == rate)
+          rate_idx = i;
+      if (ImGui::Combo("Send Rate", &rate_idx, rate_names, 5)) {
+        current_window->network_send_rate = rate_vals[rate_idx];
+      }
+
+      // Enable toggle
+      bool enable = current_window->network_enabled;
+      if (ImGui::Checkbox("Enable Network", &enable)) {
+        current_window->network_enabled = enable;
+        if (enable) {
+          initNetwork(*current_window);
+        } else {
+          shutdownNetwork(*current_window);
+        }
+      }
+
+      // Explanation text
+      ImGui::TextWrapped(
+          "UDP: fast, connectionless, supports broadcast (e.g., "
+          "255.255.255.255). "
+          "TCP: reliable, one-to-one (receiver accepts one sender).");
+      ImGui::TextWrapped(
+          "Sender sends the current mesh state at the chosen rate. "
+          "Receiver listens on the port and applies received state.");
+      ImGui::TextWrapped(
+          "Note: In receiver mode, local controller input is ignored.");
     }
 
     // ============================================================
@@ -2846,15 +3381,18 @@ void drawSettingsWindow() {
           }
           if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Rename the light.");
-          ImGui::SliderFloat("X Direction", &d->direction.x, -1, 1);
+          ImGui::DragFloat("X Direction", &d->direction.x, 0.01f, -1, 1);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Light direction X.");
-          ImGui::SliderFloat("Y Direction", &d->direction.y, -1, 1);
+            ImGui::SetTooltip(
+                "Drag to change or click to type. Light direction X.");
+          ImGui::DragFloat("Y Direction", &d->direction.y, 0.01f, -1, 1);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Light direction Y.");
-          ImGui::SliderFloat("Z Direction", &d->direction.z, -1, 1);
+            ImGui::SetTooltip(
+                "Drag to change or click to type. Light direction Y.");
+          ImGui::DragFloat("Z Direction", &d->direction.z, 0.01f, -1, 1);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Light direction Z.");
+            ImGui::SetTooltip(
+                "Drag to change or click to type. Light direction Z.");
           ImGui::ColorEdit3("Color", d->color);
           if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Light colour.");
@@ -2957,16 +3495,16 @@ void drawSettingsWindow() {
           ImGui::Checkbox("Hide Source", &p->hide);
           if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Hide the light bulb visual.");
-          ImGui::SliderFloat("X Position", &p->position.x, -10, 10);
+          ImGui::DragFloat("X Position", &p->position.x, 0.1f, -10, 10);
           if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Light position X.");
-          ImGui::SliderFloat("Y Position", &p->position.y, -10, 10);
+          ImGui::DragFloat("Y Position", &p->position.y, 0.1f, -10, 10);
           if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Light position Y.");
-          ImGui::SliderFloat("Z Position", &p->position.z, -10, 10);
+          ImGui::DragFloat("Z Position", &p->position.z, 0.1f, -10, 10);
           if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Light position Z.");
-          ImGui::SliderFloat("Brightness", &p->intensity, 0, 1);
+          ImGui::DragFloat("Brightness", &p->intensity, 0.01f, 0, 1);
           if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Light intensity.");
           if (ImGui::ColorEdit3("Color", p->color)) {
@@ -3081,16 +3619,16 @@ void drawSettingsWindow() {
           ImGui::Checkbox("Hide Source", &s->hide);
           if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Hide the light bulb visual.");
-          ImGui::SliderFloat("X Position", &s->position.x, -10, 10);
+          ImGui::DragFloat("X Position", &s->position.x, 0.1f, -10, 10);
           if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Light position X.");
-          ImGui::SliderFloat("Y Position", &s->position.y, -10, 10);
+          ImGui::DragFloat("Y Position", &s->position.y, 0.1f, -10, 10);
           if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Light position Y.");
-          ImGui::SliderFloat("Z Position", &s->position.z, -10, 10);
+          ImGui::DragFloat("Z Position", &s->position.z, 0.1f, -10, 10);
           if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Light position Z.");
-          ImGui::SliderFloat("Brightness", &s->intensity, 0, 1);
+          ImGui::DragFloat("Brightness", &s->intensity, 0.01f, 0, 1);
           if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Light intensity.");
           if (ImGui::ColorEdit3("Color", s->color)) {
@@ -3106,7 +3644,7 @@ void drawSettingsWindow() {
           }
           if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Light colour.");
-          if (ImGui::SliderFloat("Yaw", &s->yaw, -180, 180)) {
+          if (ImGui::DragFloat("Yaw", &s->yaw, 0.5f, -180, 180)) {
             s->direction.x =
                 cos(glm::radians(s->pitch)) * sin(glm::radians(s->yaw + 180));
             s->direction.y = sin(glm::radians(s->pitch));
@@ -3115,7 +3653,7 @@ void drawSettingsWindow() {
           }
           if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Horizontal direction.");
-          if (ImGui::SliderFloat("Pitch", &s->pitch, -90, 90)) {
+          if (ImGui::DragFloat("Pitch", &s->pitch, 0.5f, -90, 90)) {
             s->direction.x =
                 cos(glm::radians(s->pitch)) * sin(glm::radians(s->yaw + 180));
             s->direction.y = sin(glm::radians(s->pitch));
@@ -3124,10 +3662,10 @@ void drawSettingsWindow() {
           }
           if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Vertical direction.");
-          ImGui::SliderFloat("Beam Angle", &s->cutoff, 0, 90);
+          ImGui::DragFloat("Beam Angle", &s->cutoff, 0.5f, 0, 90);
           if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Inner cone angle.");
-          ImGui::SliderFloat("Edge Blur", &s->outer_cutoff, 0, 100);
+          ImGui::DragFloat("Edge Blur", &s->outer_cutoff, 0.5f, 0, 100);
           if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Softness of the cone edge.");
         }
@@ -3880,6 +4418,12 @@ static std::string getSettingsFilePath() {
   return config_base_path + "/settings.json";
 }
 
+// Reserved top-level key in settings.json for app-wide (non-per-window)
+// settings - e.g. the logging toggles and input poll interval. Chosen
+// to be extremely unlikely to collide with a real tab title; skipped by
+// name wherever the per-tab loop iterates root's keys.
+static const char *kAppSettingsKey = "__app_settings__";
+
 // ------------------------------------------------------------------
 // saveGlobalSettings()
 // ------------------------------------------------------------------
@@ -3917,6 +4461,9 @@ static void saveGlobalSettings() {
 
     tab["swap_interval"] = w->swap_interval;
     tab["frame_cap"] = w->frame_cap;
+#if defined(_WIN32)
+    tab["overlay_update_interval"] = w->overlay_update_interval;
+#endif
     tab["bg_color"] = {w->bg_color[0], w->bg_color[1], w->bg_color[2],
                        w->bg_color[3]};
     tab["freelook"] = w->freelook;
@@ -3957,6 +4504,20 @@ static void saveGlobalSettings() {
     tab["reset_gyro_button2"] = w->reset_gyro_button2;
     tab["gyro_correction"] = w->gyro_correction;
     tab["gyro_sensitivity"] = w->gyro_sensitivity;
+
+    tab["preferred_guid"] = w->preferred_guid;
+    tab["preferred_name"] = w->preferred_name;
+    tab["preferred_index"] = w->preferred_index;
+    tab["preferred_guid_index"] = w->preferred_guid_index;
+    tab["preferred_serial"] = w->preferred_serial;
+    tab["preferred_path"] = w->preferred_path;
+
+    tab["network_enabled"] = w->network_enabled;
+    tab["network_mode"] = w->network_mode;
+    tab["network_ip"] = w->network_ip;
+    tab["network_port"] = w->network_port;
+    tab["network_protocol"] = w->network_protocol;
+    tab["network_send_rate"] = w->network_send_rate;
 
     // ---- Per-mesh data (highlight override etc.) ----
     json meshes = json::array();
@@ -4016,6 +4577,18 @@ static void saveGlobalSettings() {
     root[t.title] = tab;
   }
 
+  // App-wide settings that aren't tied to any one controller window -
+  // stored under a reserved key rather than a new file, and explicitly
+  // skipped (by name) in the per-tab loop below when loading, so it's
+  // never mistaken for a tab.
+  json app_settings = json::object();
+  app_settings["log_controller"] = g_log_controller;
+  app_settings["log_keyboard"] = g_log_keyboard;
+  app_settings["log_mouse"] = g_log_mouse;
+  app_settings["input_poll_interval_ms"] = GlobalKeyboard::getPollIntervalMs();
+  app_settings["tray_enabled"] = g_tray_enabled;
+  root[kAppSettingsKey] = app_settings;
+
   std::ofstream f(getSettingsFilePath());
   if (!f) {
     spdlog::error("Failed to open settings.json for writing");
@@ -4046,8 +4619,29 @@ static void loadGlobalSettings() {
   // Delete old settings folder if it still exists
   std::filesystem::remove_all(config_base_path + "/settings");
 
+  // Restore app-wide settings before creating any windows, so e.g. the
+  // input poll interval is correct from the very first frame rather
+  // than only after the user opens Settings once.
+  if (root.contains(kAppSettingsKey)) {
+    const json &app_settings = root[kAppSettingsKey];
+    g_log_controller = app_settings.value("log_controller", false);
+    g_log_keyboard = app_settings.value("log_keyboard", false);
+    g_log_mouse = app_settings.value("log_mouse", false);
+    GlobalKeyboard::setPollIntervalMs(
+        app_settings.value("input_poll_interval_ms", 1));
+    g_tray_enabled = app_settings.value("tray_enabled", false);
+    if (g_tray_enabled && TrayIcon::isSupported()) {
+      if (!TrayIcon::enable())
+        g_tray_enabled = false; // creation failed - don't claim it's on
+    } else if (!TrayIcon::isSupported()) {
+      g_tray_enabled = false; // never true on a platform that can't show it
+    }
+  }
+
   // We'll create tabs in the order they appear in the JSON
   for (auto &[title, tab] : root.items()) {
+    if (title == kAppSettingsKey)
+      continue; // not a tab - see saveGlobalSettings() above
     std::string modelPath = tab.value("model_path", "");
     if (modelPath.empty()) {
       spdlog::warn("Tab '{}' has no model_path, skipping.", title);
@@ -4068,6 +4662,277 @@ static void loadGlobalSettings() {
     w->ID = new_tab.ID;
 
     // ---- Apply all settings ----
+
+    // ---- Try to select preferred device ----
+    std::string guid = tab.value("preferred_guid", "");
+    std::string name = tab.value("preferred_name", "");
+    w->preferred_index = tab.value("preferred_index", -1);
+    w->preferred_serial = tab.value("preferred_serial", std::string());
+    w->preferred_path = tab.value("preferred_path", std::string());
+    w->preferred_guid_index = tab.value("preferred_guid_index", -1);
+    w->network_enabled = tab.value("network_enabled", false);
+    w->network_mode = tab.value("network_mode", 0);
+    w->network_ip = tab.value("network_ip", std::string("127.0.0.1"));
+    w->network_port = tab.value("network_port", 5000);
+    w->network_protocol = tab.value("network_protocol", 0);
+    w->network_send_rate = tab.value("network_send_rate", 60);
+
+    if (w->network_enabled) {
+      initNetwork(*w);
+    }
+
+    int num_joy = 0;
+    SDL_JoystickID *joy_ids = SDL_GetJoysticks(&num_joy);
+
+    auto openDevice = [&](SDL_JoystickID id, int idx) -> bool {
+      bool is_game = SDL_IsGamepad(id);
+      if (is_game) {
+        w->sdl_controller = SDL_OpenGamepad(id);
+        if (w->sdl_controller) {
+          w->is_gamecontroller = true;
+          spdlog::info("Auto‑selected gamecontroller: {}",
+                       SDL_GetGamepadName(w->sdl_controller));
+          if (w->gyro_enabled) {
+            if (SDL_GamepadHasSensor(w->sdl_controller, SDL_SENSOR_GYRO)) {
+              SDL_SetGamepadSensorEnabled(w->sdl_controller, SDL_SENSOR_GYRO,
+                                          true);
+            } else {
+              w->gyro_enabled = false;
+            }
+          }
+        } else {
+          spdlog::warn("Failed to auto‑open gamecontroller ID {}: {}", id,
+                       SDL_GetError());
+        }
+      } else {
+        w->sdl_joystick = SDL_OpenJoystick(id);
+        if (w->sdl_joystick) {
+          w->is_gamecontroller = false;
+          spdlog::info("Auto‑selected generic joystick: {}",
+                       SDL_GetJoystickName(w->sdl_joystick));
+        } else {
+          spdlog::warn("Failed to auto‑open generic joystick ID {}: {}", id,
+                       SDL_GetError());
+        }
+      }
+      if (w->sdl_controller || w->sdl_joystick) {
+        w->joystick_index = idx;
+        // Reset input state (same as manual selection)
+        for (int t = 0; t < 4; ++t)
+          for (int f = 0; f < 2; ++f) {
+            w->touchpad_data[t][f].down = false;
+            w->touchpad_data[t][f].x = 0.0f;
+            w->touchpad_data[t][f].y = 0.0f;
+          }
+        for (int j = 0; j < 32; ++j)
+          w->last_axis_values[j] = 0.0f;
+        for (int j = 0; j < 16; ++j)
+          w->last_hat_values[j] = SDL_HAT_CENTERED;
+        for (int j = 0; j < 128; ++j)
+          w->last_joy_button_values[j] = false;
+        for (int j = 0; j < 64; ++j)
+          w->last_button_values[j] = false;
+        w->gyro_matrix = glm::mat4(1.0f);
+        w->gyro_data[0] = w->gyro_data[1] = w->gyro_data[2] = 0.0f;
+        w->gyro_time = 0;
+        w->gyro_toggled = true;
+        w->lastTime = glfwGetTime();
+
+        // Immediately update the saved preferences to reflect the actual open
+        // device
+        SDL_Joystick *joy = w->sdl_controller
+                                ? SDL_GetGamepadJoystick(w->sdl_controller)
+                                : w->sdl_joystick;
+        if (joy) {
+          SDL_GUID dev_guid = SDL_GetJoystickGUID(joy);
+          char guid_str[64];
+          SDL_GUIDToString(dev_guid, guid_str, sizeof(guid_str));
+          w->preferred_guid = guid_str;
+          w->preferred_name = SDL_GetJoystickName(joy);
+          const char *serial = SDL_GetJoystickSerial(joy);
+          const char *path = SDL_GetJoystickPath(joy);
+          w->preferred_serial = serial ? serial : "";
+          w->preferred_path = path ? path : "";
+          // Compute ordinal
+          w->preferred_guid_index = 0;
+          for (int k = 0; k < num_joy; ++k) {
+            if (k == idx)
+              continue;
+            SDL_JoystickID other_id = joy_ids[k];
+            SDL_GUID other_guid = SDL_GetJoystickGUIDForID(other_id);
+            char other_guid_str[64];
+            SDL_GUIDToString(other_guid, other_guid_str,
+                             sizeof(other_guid_str));
+            if (strcmp(guid_str, other_guid_str) == 0)
+              w->preferred_guid_index++;
+          }
+          w->preferred_index = idx;
+        }
+        return true;
+      }
+      return false;
+    };
+
+    // 1. Try exact match by device path first (most reliable)
+    bool deviceOpened = false;
+    if (!w->preferred_path.empty() && num_joy > 0) {
+      for (int i = 0; i < num_joy; ++i) {
+        SDL_JoystickID id = joy_ids[i];
+        SDL_Joystick *tmpJoy = nullptr;
+        SDL_Gamepad *tmpPad = nullptr;
+        bool isGame = SDL_IsGamepad(id);
+        if (isGame) {
+          tmpPad = SDL_OpenGamepad(id);
+          if (tmpPad)
+            tmpJoy = SDL_GetGamepadJoystick(tmpPad);
+          else
+            continue;
+        } else {
+          tmpJoy = SDL_OpenJoystick(id);
+        }
+        if (tmpJoy) {
+          const char *path = SDL_GetJoystickPath(tmpJoy);
+          if (path && w->preferred_path == path) {
+            spdlog::debug("Device match: path '{}'", path);
+            if (openDevice(id, i)) {
+              deviceOpened = true;
+              break;
+            }
+          }
+          if (!isGame)
+            SDL_CloseJoystick(tmpJoy);
+          else if (tmpPad)
+            SDL_CloseGamepad(tmpPad);
+        }
+      }
+    }
+
+    // 2. Fallback to serial
+    if (!deviceOpened && !w->preferred_serial.empty()) {
+      for (int i = 0; i < num_joy; ++i) {
+        SDL_JoystickID id = joy_ids[i];
+        SDL_Joystick *tmpJoy = nullptr;
+        SDL_Gamepad *tmpPad = nullptr;
+        bool isGame = SDL_IsGamepad(id);
+        if (isGame) {
+          tmpPad = SDL_OpenGamepad(id);
+          if (tmpPad)
+            tmpJoy = SDL_GetGamepadJoystick(tmpPad);
+          else
+            continue;
+        } else {
+          tmpJoy = SDL_OpenJoystick(id);
+        }
+        if (tmpJoy) {
+          const char *serial = SDL_GetJoystickSerial(tmpJoy);
+          if (serial && w->preferred_serial == serial) {
+            spdlog::debug("Device match: serial '{}'", serial);
+            if (openDevice(id, i)) {
+              deviceOpened = true;
+              break;
+            }
+          }
+          if (!isGame)
+            SDL_CloseJoystick(tmpJoy);
+          else if (tmpPad)
+            SDL_CloseGamepad(tmpPad);
+        }
+      }
+    }
+
+    // 3. Fallback to GUID (ignore ordinal if only one match exists)
+    if (!deviceOpened && !guid.empty()) {
+      int guid_matches = 0;
+      int first_match_idx = -1;
+      for (int i = 0; i < num_joy; ++i) {
+        SDL_JoystickID id = joy_ids[i];
+        SDL_GUID dev_guid = SDL_GetJoystickGUIDForID(id);
+        char guid_str[64];
+        SDL_GUIDToString(dev_guid, guid_str, sizeof(guid_str));
+        if (guid == guid_str) {
+          guid_matches++;
+          if (first_match_idx == -1)
+            first_match_idx = i;
+        }
+      }
+      if (guid_matches == 1 && first_match_idx != -1) {
+        spdlog::debug("Device match: GUID '{}' (unique)", guid);
+        if (openDevice(joy_ids[first_match_idx], first_match_idx))
+          deviceOpened = true;
+      } else if (guid_matches > 1 && w->preferred_guid_index >= 0) {
+        // Multiple matches – use ordinal
+        int guid_match_count = 0;
+        for (int i = 0; i < num_joy; ++i) {
+          SDL_JoystickID id = joy_ids[i];
+          SDL_GUID dev_guid = SDL_GetJoystickGUIDForID(id);
+          char guid_str[64];
+          SDL_GUIDToString(dev_guid, guid_str, sizeof(guid_str));
+          if (guid == guid_str) {
+            if (guid_match_count == w->preferred_guid_index) {
+              spdlog::debug("Device match: GUID '{}' (ordinal {})", guid,
+                            w->preferred_guid_index);
+              if (openDevice(id, i)) {
+                deviceOpened = true;
+                break;
+              }
+            }
+            guid_match_count++;
+          }
+        }
+      }
+    }
+
+    // 4. Fallback to name (unique or ordinal)
+    if (!deviceOpened && !name.empty()) {
+      int name_matches = 0;
+      int first_match_idx = -1;
+      for (int i = 0; i < num_joy; ++i) {
+        const char *candidate = SDL_GetJoystickNameForID(joy_ids[i]);
+        if (candidate && name == candidate) {
+          name_matches++;
+          if (first_match_idx == -1)
+            first_match_idx = i;
+        }
+      }
+      if (name_matches == 1 && first_match_idx != -1) {
+        spdlog::debug("Device match: name '{}' (unique)", name);
+        if (openDevice(joy_ids[first_match_idx], first_match_idx))
+          deviceOpened = true;
+      } else if (name_matches > 1 && w->preferred_guid_index >= 0) {
+        int name_match_count = 0;
+        for (int i = 0; i < num_joy; ++i) {
+          const char *candidate = SDL_GetJoystickNameForID(joy_ids[i]);
+          if (candidate && name == candidate) {
+            if (name_match_count == w->preferred_guid_index) {
+              spdlog::debug("Device match: name '{}' (ordinal {})", name,
+                            w->preferred_guid_index);
+              if (openDevice(joy_ids[i], i)) {
+                deviceOpened = true;
+                break;
+              }
+            }
+            name_match_count++;
+          }
+        }
+      }
+    }
+
+    // 5. Fallback to stored index
+    if (!deviceOpened && w->preferred_index >= 0 &&
+        w->preferred_index < num_joy) {
+      spdlog::debug("Device match: index '{}'", w->preferred_index);
+      if (openDevice(joy_ids[w->preferred_index], w->preferred_index))
+        deviceOpened = true;
+    }
+
+    // 6. Last resort: first device
+    if (!deviceOpened && num_joy > 0) {
+      spdlog::warn("No saved device matched. Falling back to first device.");
+      openDevice(joy_ids[0], 0);
+    }
+
+    SDL_free(joy_ids);
+
     w->always_on_top = tab.value("always_on_top", false);
     glfwSetWindowAttrib(w->glfw_window, GLFW_FLOATING, w->always_on_top);
 
@@ -4080,16 +4945,17 @@ static void loadGlobalSettings() {
     w->grid = tab.value("grid", false);
     w->wireframe = tab.value("wireframe", false);
 
-    // A transparent or click-through window must stay undecorated, or
-    // GLFW_MOUSE_PASSTHROUGH won't reliably work.
-    bool needs_undecorated =
-        w->borderless || w->transparent_bg || w->click_through;
-    glfwSetWindowAttrib(w->glfw_window, GLFW_DECORATED, !needs_undecorated);
-    if (w->transparent_bg || w->click_through) {
-      glfwSetWindowAttrib(w->glfw_window, GLFW_FLOATING, GLFW_TRUE);
-    }
-    glfwSetWindowAttrib(w->glfw_window, GLFW_MOUSE_PASSTHROUGH,
-                        w->click_through ? GLFW_TRUE : GLFW_FALSE);
+    // Borderless controls GLFW_DECORATED on the GLFW window - on Windows
+    // that's now always hidden behind the layered companion window (see
+    // createControllerWindow()/createTransparentOverlay() in
+    // controller_window.cpp), so it has no visible effect there (see the
+    // Borderless checkbox's tooltip above), only on Linux/macOS. Always
+    // on Top controls GLFW_FLOATING. Transparent Background only affects
+    // bg_color's alpha (applied via the "bg_color" key below) - the
+    // companion window itself was already created unconditionally when
+    // createControllerWindow() ran earlier in this loop. Click-Through
+    // only affects click passthrough via setWindowClickThrough().
+    glfwSetWindowAttrib(w->glfw_window, GLFW_DECORATED, !w->borderless);
     setWindowClickThrough(w->glfw_window, w->click_through);
     int ww = tab.value("width", 640);
     int hh = tab.value("height", 480);
@@ -4101,6 +4967,10 @@ static void loadGlobalSettings() {
 
     w->swap_interval = tab.value("swap_interval", 1);
     w->frame_cap = tab.value("frame_cap", 60);
+#if defined(_WIN32)
+    w->overlay_update_interval =
+        tab.value("overlay_update_interval", 1.0 / 60.0);
+#endif
 
     auto bg =
         tab.value("bg_color", std::array<float, 4>{0.2f, 0.3f, 0.3f, 1.0f});

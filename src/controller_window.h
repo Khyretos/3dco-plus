@@ -17,9 +17,16 @@
 #include "model.h"
 #include <GLFW/glfw3.h>
 #include <SDL3/SDL.h>
+#include <array>
 #include <glad/glad.h>
+#include <map>
+#include <math.h>
+#include <memory>
+#include <set>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/spdlog.h>
+#include <string>
+#include <vector>
 
 // typedefs (unchanged)
 typedef struct direct_light_struct {
@@ -125,6 +132,19 @@ typedef struct controller_window_struct {
   bool always_on_top = false;
   bool borderless = false;
   bool drag_to_move = false;
+  // ---- Drag-to-move tracking state ----
+  // Screen-space (not window-relative) cursor position captured when the
+  // drag started, and the window position at that same moment - used to
+  // compute how far to move the window each frame without compounding
+  // rounding error. See controller_window_input() for why this needs to
+  // be screen-space: window-relative mouse coordinates change meaning
+  // the moment the window itself moves, since they're relative to a
+  // target that's no longer stationary.
+  bool drag_moving = false;
+  double drag_move_anchor_x = 0.0;
+  double drag_move_anchor_y = 0.0;
+  int drag_move_start_win_x = 0;
+  int drag_move_start_win_y = 0;
   bool scroll_to_resize = false;
   bool grid = false;
   int swap_interval = 1;
@@ -245,6 +265,158 @@ typedef struct controller_window_struct {
   bool transparency_supported = true;
   std::string window_title;
 
+#if defined(_WIN32)
+  // See createTransparentOverlay()'s comment in controller_window.cpp for
+  // the full explanation. Short version: GLFW's own window class uses
+  // CS_OWNDC, which Microsoft's docs say is incompatible with
+  // WS_EX_LAYERED - so real per-pixel window transparency is impossible
+  // on the GLFW window itself. When Transparent Background is on, this
+  // becomes a second, plain HWND (no CS_OWNDC) that's the visible,
+  // clickable window; the GLFW window keeps rendering normally but
+  // hidden, and every frame its pixels are copied into this window via
+  // UpdateLayeredWindow. Typed as void* rather than HWND so this
+  // cross-platform header doesn't need <windows.h>. Null when Transparent
+  // Background is off (the normal GLFW window is visible directly).
+  void *transparent_overlay_hwnd = nullptr;
+
+  // ---- Async readback state for updateTransparentOverlay() ----
+  // A plain glReadPixels() straight into client memory forces the driver
+  // to wait for every previously issued GPU command to finish before it
+  // returns - a full pipeline stall. Confirmed on NVIDIA: while a
+  // fullscreen/borderless game has the GPU's attention, the driver can
+  // deprioritize this hidden background context's command execution
+  // enough that the stall freezes the whole app, since gamepad polling
+  // shares the same single thread (see Input()/Draw() in main.cpp). AMD
+  // doesn't exhibit this. The fix is to read into a PBO (an
+  // asynchronous, non-blocking issue) and poll a fence with a zero
+  // timeout (guaranteed non-blocking by the GL spec) instead of waiting
+  // - see updateTransparentOverlay()'s definition for the full
+  // explanation. Two PBOs are used round-robin so one frame's read can
+  // still be in flight while the next frame's render proceeds.
+  GLuint overlay_pbo[2] = {0, 0};
+  GLsync overlay_fence[2] = {nullptr, nullptr};
+  bool overlay_pbo_pending[2] = {false, false};
+  int overlay_pbo_write_index = 0;
+  // The exact width/height each PBO slot's storage was allocated for
+  // when its read was issued (via glBufferData in the "issue" phase of
+  // updateTransparentOverlay()). Needed because the window can be
+  // resized between when a slot's read is issued and when it's later
+  // consumed (mapped) - using the CURRENT frame's width/height at map
+  // time instead of what that specific slot was actually sized for
+  // caused "glMapBufferRange failed" whenever a resize happened while a
+  // read was still in flight (requesting a map range larger than what
+  // was actually allocated fails GL's range validation).
+  int overlay_pbo_width[2] = {0, 0};
+  int overlay_pbo_height[2] = {0, 0};
+
+  // Set by minimizeControllerWindow()/restoreControllerWindow() only -
+  // updateTransparentOverlay() uses this instead of GLFW_ICONIFIED to
+  // decide whether to hide the companion window and skip rendering.
+  // Calling glfwIconifyWindow() together with glfwHideWindow() (which
+  // the companion mechanism needs to keep the real GLFW window hidden)
+  // turned out to corrupt GLFW's own internal iconified tracking - after
+  // that combination, GLFW_ICONIFIED stopped reliably reading true on
+  // later frames, so the companion never got hidden and stayed frozen
+  // showing its last frame. Tracking minimized state ourselves sidesteps
+  // needing to know how GLFW's internal state reacts to that unusual
+  // combination of calls at all.
+  bool overlay_minimized = false;
+#endif
+
+  int preferred_guid_index = -1; // ordinal among devices with same GUID
+  std::string preferred_guid;
+  std::string preferred_name;
+  std::string global_shader_name;
+  std::string preferred_serial;
+  std::string preferred_path;
+
+  // ---- Network settings (0 = sender, 1 = receiver) ----
+  bool network_enabled = false;
+  int network_mode = 0; // 0 = sender, 1 = receiver
+  std::string network_ip = "127.0.0.1";
+  int network_port = 5000;
+  int network_protocol = 0;   // 0 = UDP, 1 = TCP
+  int network_send_rate = 60; // Hz; 0 = max (every frame)
+  double network_last_send_time = 0.0;
+  double network_last_reconnect_time =
+      0.0; // for throttling TCP reconnect attempts
+
+  bool network_logging = false; // enable verbose network debug logging
+  std::string network_peer_ip =
+      "unknown";             // for TCP receiver: connected peer IP
+  int network_peer_port = 0; // for TCP receiver: connected peer port
+
+  // Network sockets (use int everywhere; cast on Windows if needed)
+  int network_socket = -1;        // for sending (UDP) / client (TCP)
+  int network_listen_socket = -1; // for TCP server (receiver)
+  bool network_tcp_connected = false;
+  // True from the moment a non-blocking TCP connect() is issued until
+  // its outcome is confirmed via select()/getsockopt(SO_ERROR) in
+  // sendNetworkState() - see initNetwork()'s TCP-sender branch in
+  // controller_window.cpp for why connect() must never be allowed to
+  // block here.
+  bool network_tcp_connecting = false;
+
+  std::string network_tcp_buffer; // for accumulating partial TCP messages
+
+  // ---- Network input state (sender collects, receiver applies) ----
+  bool net_gamepad_buttons[32] = {}; // button index -> pressed
+  float net_gamepad_axes[8] = {};    // axis index -> value (-1..1)
+  bool net_joystick_buttons[128] = {};
+  float net_joystick_axes[128] = {};
+  std::set<SDL_Scancode> net_keyboard_keys; // held keys
+  bool net_mouse_buttons[8] = {};
+  float net_mouse_dx = 0;
+  float net_mouse_dy = 0;
+
+  // Network status for UI indicator
+  int network_status =
+      0; // 0=off, 1=trying/connecting, 2=active/received, 3=error
+  double last_network_activity_time =
+      0.0;                        // last time a packet was sent/received
+  bool network_connected = false; // <-- ADD THIS LINE
+  // Distinct from last_network_activity_time (which only tracks when
+  // WE last sent something) - this tracks when we last actually heard
+  // FROM the peer (a state packet, handshake, or heartbeat ack). Used
+  // to detect a peer that's gone silent (crashed, network dropped,
+  // etc.) via timeout, on both the sender and receiver side. See
+  // sendNetworkState()/receiveNetworkState() in controller_window.cpp.
+  double last_network_receive_time = 0.0;
+  static constexpr double kNetworkTimeoutSeconds = 5.0;
+  // Tracks the previous frame's network_connected value, so the
+  // settings UI can detect the false->true transition and show a
+  // temporary "just connected" confirmation instead of only the small
+  // status circle. network_connected_toast_until is a glfwGetTime()
+  // deadline - the toast shows while glfwGetTime() is still before it.
+  bool network_was_connected = false;
+  double network_connected_toast_until = 0.0;
+
+  int preferred_index = -1;
+
+  // Last sent network state for diffing
+  bool last_sent_gamepad_buttons[32] = {};
+  float last_sent_gamepad_axes[8] = {};
+  bool last_sent_joystick_buttons[128] = {};
+  float last_sent_joystick_axes[128] = {};
+  std::set<SDL_Scancode> last_sent_keyboard_keys;
+  bool last_sent_mouse_buttons[8] = {};
+  float last_sent_mouse_dx = 0;
+  float last_sent_mouse_dy = 0;
+  float last_sent_gyro[3] = {0, 0, 0};
+  bool last_sent_touchpad_finger[4][2] = {};
+  float last_sent_touchpad_x[4][2] = {};
+  float last_sent_touchpad_y[4][2] = {};
+
+  float last_sent_gyro_matrix[16] = {0}; // for diffing gyro matrix
+  bool network_gyro_reset = false; // set when gyro reset button combo pressed
+
+  // Handshake flags
+  bool network_handshake_ack = false;
+  double network_last_handshake_sent = 0.0;
+
+  double last_overlay_update_time = 0.0;       // in seconds
+  double overlay_update_interval = 1.0 / 60.0; // 60 FPS
+
 } controller_window;
 
 // Function declarations (unchanged)
@@ -260,6 +432,12 @@ void controller_window_input();
 void controller_sdl_events(SDL_Event *event);
 void removeControllerWindow(unsigned ID);
 void destroyWindows();
+
+// Lowest frame_cap among currently open controller windows (defaulting
+// to 60 if none are open), used by MainLoop() in main.cpp for
+// sleep-based frame pacing. See that function's comment for why pacing
+// no longer relies on vsync/swap_interval at all.
+unsigned getFrameCapHz();
 void make_grid(controller_window &w);
 void drawControllerWindows();
 void controller_framebuffer_size_callback(GLFWwindow *window, int width,
@@ -271,4 +449,57 @@ void controller_window_iconify_callback(GLFWwindow *window, int iconified);
 void createTouchAreaRect(controller_window &w);
 void recreateControllerWindow(controller_window *w);
 void setWindowClickThrough(GLFWwindow *window, bool enable);
+
+#if defined(_WIN32)
+// Create/destroy/update the Win32 layered companion window used for real
+// per-pixel window transparency on Windows (see controller_window::
+// transparent_overlay_hwnd's declaration above, and
+// createTransparentOverlay()'s definition in controller_window.cpp, for
+// the full explanation of why this exists). createTransparentOverlay()
+// hides the GLFW window and shows the companion window in its place;
+// destroyTransparentOverlay() reverses that. updateTransparentOverlay()
+// must be called once per frame (from drawControllerWindows()) instead
+// of glfwSwapBuffers() while the companion window exists - it copies the
+// GLFW window's just-rendered frame into the companion window and keeps
+// the companion window's position/size/topmost state following it.
+void createTransparentOverlay(controller_window &w);
+void destroyTransparentOverlay(controller_window &w);
+void updateTransparentOverlay(controller_window &w);
+#endif
+
+// Wrappers for minimize/maximize/restore that behave correctly with the
+// Windows companion window (see controller_window::overlay_minimized's
+// declaration above for the minimize case, and the comment on
+// maximizeControllerWindow()'s definition for maximize/restore). On
+// platforms without the companion window these are equivalent to
+// calling glfwIconifyWindow/glfwMaximizeWindow/glfwRestoreWindow
+// directly. Settings UI should call these instead of the raw GLFW
+// functions for any window that might have an active companion overlay.
+void minimizeControllerWindow(controller_window &w);
+void maximizeControllerWindow(controller_window &w);
+void restoreControllerWindow(controller_window &w);
+
+// Translates the window's raw-joystick mesh bindings (Input Type =
+// Joystick, not Gamepad - see the comment on exportGamepadMapping()'s
+// definition for why) into a standard gamecontrollerdb.txt line and
+// appends it to the on-disk file, applying it immediately via
+// SDL_AddGamepadMapping() too. Returns false (with an explanatory
+// out_message) if there's nothing exportable - no joystick open, the
+// device is already a recognized Gamepad, or no raw bindings exist.
+bool exportGamepadMapping(controller_window &w, std::string &out_message);
+
+// Single source of truth for "is this window currently minimized",
+// covering both GLFW_ICONIFIED (used directly on Linux/macOS, and as a
+// fallback on Windows if the companion window failed to create) and
+// controller_window::overlay_minimized (the Windows companion-window
+// path - see its declaration above for why GLFW_ICONIFIED alone can't
+// be trusted there). drawControllerWindows()'s render gate and the
+// system tray's per-controller menu both need this exact same check.
+bool isControllerWindowMinimized(const controller_window &w);
+
+// Network functions
+void initNetwork(controller_window &w);
+void shutdownNetwork(controller_window &w);
+void sendNetworkState(controller_window &w);
+void receiveNetworkState(controller_window &w);
 #endif

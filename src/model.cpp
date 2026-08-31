@@ -1,9 +1,11 @@
 #include "model.h"
 #include "shader.h"
 #include "stb_image.h"
+#include <GLFW/glfw3.h>
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
+#include <filesystem> // Required for std::filesystem::exists, copy, etc.
 #include <fstream>
 #include <functional>
 #include <nlohmann/json.hpp>
@@ -13,6 +15,23 @@ using json = nlohmann::json;
 #include <iomanip> // for std::fixed, std::setprecision
 
 #include "strings.h"
+
+static GLuint g_whiteTexture = 0;
+
+GLuint getWhiteTexture() {
+  if (g_whiteTexture == 0) {
+    unsigned char data[4] = {255, 255, 255, 255};
+    glGenTextures(1, &g_whiteTexture);
+    glBindTexture(GL_TEXTURE_2D, g_whiteTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                 data);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  }
+  return g_whiteTexture;
+}
 
 static std::string escapeJson(const std::string &s) {
   std::string out;
@@ -116,6 +135,8 @@ void writeJson(Model &m, const std::string &path) {
          << ",\n";
     json << "      \"isPaddle\": " << (mesh.isPaddle ? "true" : "false")
          << ",\n";
+    json << "      \"shader_name\": \"" << escapeJson(mesh.shader_name)
+         << "\",\n";
     json << "      \"ambient\": " << mesh.material.ambient << ",\n";
     json << "      \"diffuse\": " << mesh.material.diffuse << ",\n";
     json << "      \"specular\": " << mesh.material.specular << ",\n";
@@ -163,7 +184,7 @@ void readInfoJson(Model &m, const std::string &path) {
   } catch (const std::exception &e) {
     spdlog::error("Failed to parse JSON {}: {}", path, e.what());
     m.meshes.clear();
-    return; // <-- exit early on failure
+    return;
   }
 
   if (!data.contains("parts") || !data["parts"].is_array())
@@ -171,6 +192,22 @@ void readInfoJson(Model &m, const std::string &path) {
   auto &parts = data["parts"];
   m.meshes.clear();
   m.meshes.reserve(parts.size());
+
+  // Helper to safely read a float[3] from a JSON array
+  auto getFloat3 = [&](const json &obj, const std::string &key, float dest[3]) {
+    if (obj.contains(key) && obj[key].is_array() && obj[key].size() >= 3) {
+      dest[0] = obj[key][0].get<float>();
+      dest[1] = obj[key][1].get<float>();
+      dest[2] = obj[key][2].get<float>();
+    } else {
+      if (obj.contains(key)) {
+        spdlog::warn(
+            "JSON key '{}' in {} has invalid array size – using zeros.", key,
+            path);
+      }
+      dest[0] = dest[1] = dest[2] = 0.0f;
+    }
+  };
 
   for (auto &p : parts) {
     Mesh mesh;
@@ -188,30 +225,19 @@ void readInfoJson(Model &m, const std::string &path) {
     }
 
     // Read properties
-    if (p.contains("position")) {
-      auto arr = p["position"].get<std::array<float, 3>>();
-      mesh.position[0] = arr[0];
-      mesh.position[1] = arr[1];
-      mesh.position[2] = arr[2];
-    }
-    if (p.contains("travel")) {
-      auto arr = p["travel"].get<std::array<float, 3>>();
-      mesh.travel[0] = arr[0];
-      mesh.travel[1] = arr[1];
-      mesh.travel[2] = arr[2];
-    }
-    if (p.contains("popup_offset")) {
-      auto arr = p["popup_offset"].get<std::array<float, 3>>();
-      mesh.popup_offset[0] = arr[0];
-      mesh.popup_offset[1] = arr[1];
-      mesh.popup_offset[2] = arr[2];
-    }
-    if (p.contains("popup_rotation")) {
-      auto arr = p["popup_rotation"].get<std::array<float, 3>>();
-      mesh.popup_rotation[0] = arr[0];
-      mesh.popup_rotation[1] = arr[1];
-      mesh.popup_rotation[2] = arr[2];
-    }
+    getFloat3(p, "position", mesh.position);
+    getFloat3(p, "travel", mesh.travel);
+    getFloat3(p, "popup_offset", mesh.popup_offset);
+    getFloat3(p, "popup_rotation", mesh.popup_rotation);
+    getFloat3(p, "touch_offset", mesh.touch_offset);
+    getFloat3(p, "touch_rotation", mesh.touch_rotation);
+    getFloat3(p, "pivot_offset", mesh.pivot_offset);
+    getFloat3(p, "rotation", mesh.rotation);
+    getFloat3(p, "travel_rotation", mesh.travel_rotation);
+    getFloat3(p, "highlight_color_positive", mesh.highlight_color_positive);
+    getFloat3(p, "highlight_color_negative", mesh.highlight_color_negative);
+
+    // Scalar floats
     if (p.contains("trigger_max"))
       mesh.trigger_max = p["trigger_max"].get<float>();
     if (p.contains("stick_max"))
@@ -220,40 +246,34 @@ void readInfoJson(Model &m, const std::string &path) {
       mesh.touch_width = p["touch_width"].get<float>();
     if (p.contains("touch_height"))
       mesh.touch_height = p["touch_height"].get<float>();
-    if (p.contains("touch_offset")) {
-      auto arr = p["touch_offset"].get<std::array<float, 3>>();
-      mesh.touch_offset[0] = arr[0];
-      mesh.touch_offset[1] = arr[1];
-      mesh.touch_offset[2] = arr[2];
+    if (p.contains("axis_deadzone"))
+      mesh.axis_deadzone = p["axis_deadzone"].get<float>();
+
+    // custom_highlight_color is a 4-element array, handle separately
+    if (p.contains("custom_highlight_color")) {
+      try {
+        auto arr = p["custom_highlight_color"].get<std::array<float, 4>>();
+        mesh.custom_highlight_color[0] = arr[0];
+        mesh.custom_highlight_color[1] = arr[1];
+        mesh.custom_highlight_color[2] = arr[2];
+        mesh.custom_highlight_color[3] = arr[3];
+      } catch (...) {
+        spdlog::warn(
+            "Invalid custom_highlight_color array in {} – using defaults.",
+            path);
+      }
     }
-    if (p.contains("touch_rotation")) {
-      auto arr = p["touch_rotation"].get<std::array<float, 3>>();
-      mesh.touch_rotation[0] = arr[0];
-      mesh.touch_rotation[1] = arr[1];
-      mesh.touch_rotation[2] = arr[2];
-    }
-    if (p.contains("pivot_offset")) {
-      auto arr = p["pivot_offset"].get<std::array<float, 3>>();
-      mesh.pivot_offset[0] = arr[0];
-      mesh.pivot_offset[1] = arr[1];
-      mesh.pivot_offset[2] = arr[2];
-    }
-    if (p.contains("rotation")) {
-      auto arr = p["rotation"].get<std::array<float, 3>>();
-      mesh.rotation[0] = arr[0];
-      mesh.rotation[1] = arr[1];
-      mesh.rotation[2] = arr[2];
-    }
+
+    // Integers / booleans
     if (p.contains("parent"))
       mesh.parentIndex = p["parent"].get<int>();
-    if (p.contains("input_type")) {
+    if (p.contains("input_type"))
       mesh.inputType = p["input_type"].get<int>();
-    } else if (p.contains("use_joystick")) {
-      // Legacy: map use_joystick to inputType
+    else if (p.contains("use_joystick")) {
       bool useRaw = p["use_joystick"].get<bool>();
       mesh.inputType = useRaw ? INPUT_TYPE_JOYSTICK : INPUT_TYPE_GAMEPAD;
     } else {
-      mesh.inputType = INPUT_TYPE_GAMEPAD; // default
+      mesh.inputType = INPUT_TYPE_GAMEPAD;
     }
     if (p.contains("input_binding"))
       mesh.inputBinding = p["input_binding"].get<std::string>();
@@ -262,7 +282,7 @@ void readInfoJson(Model &m, const std::string &path) {
     if (p.contains("isTouchpad"))
       mesh.isTouchpad = p["isTouchpad"].get<bool>();
     else
-      mesh.isTouchpad = false; // default
+      mesh.isTouchpad = false;
     if (p.contains("isTouchpoint"))
       mesh.isTouchpoint = p["isTouchpoint"].get<bool>();
     else
@@ -276,59 +296,49 @@ void readInfoJson(Model &m, const std::string &path) {
     if (p.contains("assigned_part"))
       mesh.assignedPart = p["assigned_part"].get<int>();
     mesh.name = p.value("name", filename);
+    mesh.shader_name = p.value("shader_name", "");
 
-    // Read material properties – top‑level (new format) with fallback to nested
-    // "material" (legacy)
+    // Material properties (top-level or nested under "material")
     auto getFloat = [&](const std::string &key, float &dest) {
       if (p.contains(key)) {
-        dest = p[key].get<float>();
+        try {
+          dest = p[key].get<float>();
+        } catch (...) {
+        }
       } else if (p.contains("material") && p["material"].contains(key)) {
-        dest = p["material"][key].get<float>();
+        try {
+          dest = p["material"][key].get<float>();
+        } catch (...) {
+        }
       }
     };
-    auto getColor = [&](const std::string &key, float dest[3]) {
-      if (p.contains(key)) {
-        auto arr = p[key].get<std::array<float, 3>>();
-        dest[0] = arr[0];
-        dest[1] = arr[1];
-        dest[2] = arr[2];
-      } else if (p.contains("material") && p["material"].contains(key)) {
-        auto arr = p["material"][key].get<std::array<float, 3>>();
-        dest[0] = arr[0];
-        dest[1] = arr[1];
-        dest[2] = arr[2];
+    auto getColor3 = [&](const std::string &key, float dest[3]) {
+      // Attempt to read a 3-element color, either top-level or under "material"
+      if (p.contains(key) && p[key].is_array() && p[key].size() >= 3) {
+        dest[0] = p[key][0].get<float>();
+        dest[1] = p[key][1].get<float>();
+        dest[2] = p[key][2].get<float>();
+      } else if (p.contains("material") && p["material"].contains(key) &&
+                 p["material"][key].is_array() &&
+                 p["material"][key].size() >= 3) {
+        dest[0] = p["material"][key][0].get<float>();
+        dest[1] = p["material"][key][1].get<float>();
+        dest[2] = p["material"][key][2].get<float>();
+      } else {
+        // Default to gray
+        dest[0] = dest[1] = dest[2] = 0.8f;
       }
     };
+
     getFloat("ambient", mesh.material.ambient);
     getFloat("diffuse", mesh.material.diffuse);
     getFloat("specular", mesh.material.specular);
     getFloat("shininess", mesh.material.shininess);
-    getColor("color", mesh.material.color);
+    getColor3("color", mesh.material.color);
     getFloat("alpha", mesh.material.alpha);
 
-    // per-mesh highlight override
-    if (p.contains("travel_rotation")) {
-      auto arr = p["travel_rotation"].get<std::array<float, 3>>();
-      mesh.travel_rotation[0] = arr[0];
-      mesh.travel_rotation[1] = arr[1];
-      mesh.travel_rotation[2] = arr[2];
-    }
+    // use_dual_highlight and highlight colors
     mesh.use_dual_highlight = p.value("use_dual_highlight", false);
-    if (p.contains("highlight_color_positive")) {
-      auto arr = p["highlight_color_positive"].get<std::array<float, 3>>();
-      mesh.highlight_color_positive[0] = arr[0];
-      mesh.highlight_color_positive[1] = arr[1];
-      mesh.highlight_color_positive[2] = arr[2];
-    }
-    if (p.contains("highlight_color_negative")) {
-      auto arr = p["highlight_color_negative"].get<std::array<float, 3>>();
-      mesh.highlight_color_negative[0] = arr[0];
-      mesh.highlight_color_negative[1] = arr[1];
-      mesh.highlight_color_negative[2] = arr[2];
-    }
-    if (p.contains("axis_deadzone")) {
-      mesh.axis_deadzone = p["axis_deadzone"].get<float>();
-    }
 
     // After setting mesh.material.color (possibly from JSON)
     mesh.original_color[0] = mesh.material.color[0];
@@ -342,32 +352,20 @@ void readInfoJson(Model &m, const std::string &path) {
   if (data.contains("source"))
     m.source = data["source"].get<std::string>();
 
-  // ---- Sanitize parentIndex ----
-  // parentIndex is read directly from the file above with no validation.
-  // It can be invalid for two reasons: (1) it was written by older code
-  // that stored a controller-part number instead of a real mesh-vector
-  // index, or (2) any earlier part in the file failed to load (missing/
-  // empty filename, bad OBJ) and was skipped via `continue` above, which
-  // shifts every subsequent mesh's real position in m.meshes relative to
-  // what was recorded when the file was written. Either way, an
-  // out-of-range or cyclic parentIndex will crash the first time something
-  // walks the parent chain (e.g. getTouchpadAncestor), so clamp it here
-  // instead of trusting the file.
+  // ---- Sanitize parentIndex (unchanged, but needed) ----
   for (size_t i = 0; i < m.meshes.size(); ++i) {
     int p = m.meshes[i].parentIndex;
     if (p == -1)
       continue;
     if (p < 0 || p >= (int)m.meshes.size() || p == (int)i) {
-      spdlog::warn("Mesh '{}' had an invalid parent index {} in {}; "
-                   "clearing it.",
-                   m.meshes[i].name, p, path);
+      spdlog::warn(
+          "Mesh '{}' had an invalid parent index {} in {}; clearing it.",
+          m.meshes[i].name, p, path);
       m.meshes[i].parentIndex = -1;
       continue;
     }
   }
-  // Second pass: break any cycles that are individually valid indices but
-  // form a loop (A parents to B, B parents to A, etc.) - walk each chain
-  // with a visited set and cut it at the point it would revisit a node.
+  // Cycle detection
   for (size_t i = 0; i < m.meshes.size(); ++i) {
     std::vector<bool> visited(m.meshes.size(), false);
     int current = (int)i;
@@ -375,9 +373,9 @@ void readInfoJson(Model &m, const std::string &path) {
     int next = m.meshes[current].parentIndex;
     while (next != -1) {
       if (next < 0 || next >= (int)m.meshes.size() || visited[next]) {
-        spdlog::warn("Mesh '{}' had a cyclic parent chain in {}; "
-                     "clearing its parent.",
-                     m.meshes[i].name, path);
+        spdlog::warn(
+            "Mesh '{}' had a cyclic parent chain in {}; clearing its parent.",
+            m.meshes[i].name, path);
         m.meshes[i].parentIndex = -1;
         break;
       }
@@ -776,60 +774,154 @@ void loadTexture(GLuint &id, std::string path) {
 
 void drawMesh(const Mesh &mesh, const glm::mat4 &modelMatrix, GLuint shader,
               const glm::vec4 &highlightColor,
-              const glm::vec3 *baseColorOverride) {
+              const glm::vec3 *baseColorOverride, const glm::mat4 &view,
+              const glm::mat4 &projection, const glm::vec3 &cameraPos,
+              const std::string &globalShaderName) {
   if (!mesh.vao || mesh.elements == 0)
     return;
 
-  glBindVertexArray(mesh.vao);
+  // Determine which shader to use: per-mesh override, else global
+  GLuint program = shader;
+  std::string effectiveShaderName = mesh.shader_name;
+  if (effectiveShaderName.empty())
+    effectiveShaderName = globalShaderName;
+  if (!effectiveShaderName.empty()) {
+    GLuint customProg = LoadShaderProgram(effectiveShaderName);
+    if (customProg != 0) {
+      program = customProg;
+    } else {
+      // Fallback to default
+      program = shader;
+    }
+  }
 
-  shaderUniformInt(shader, "num_textures", mesh.textures.size());
+  glUseProgram(program);
+
+  // ----- Set common uniforms that custom shaders might expect -----
+  // These are safe defaults; the actual camera/lighting is used by the
+  // default shader via the render loop. For custom shaders, we provide
+  // these so they don't default to zero (which can cause invisible meshes).
+  GLint loc;
+
+  // Light direction (e.g., from above)
+  loc = glGetUniformLocation(program, "lightDir");
+  if (loc != -1) {
+    // Light direction: from object toward light source (so -lightDir points
+    // toward camera)
+    glm::vec3 light = glm::normalize(glm::vec3(-0.4f, -0.3f, -0.8f));
+    glUniform3f(loc, light.x, light.y, light.z);
+  }
+
+  // Light color (white)
+  loc = glGetUniformLocation(program, "lightColor");
+  if (loc != -1)
+    glUniform3f(loc, 1.0f, 1.0f, 1.0f);
+
+  // Camera position
+  loc = glGetUniformLocation(program, "viewPos");
+  if (loc != -1)
+    glUniform3f(loc, cameraPos.x, cameraPos.y, cameraPos.z);
+
+  // Time
+  loc = glGetUniformLocation(program, "time");
+  if (loc != -1)
+    glUniform1f(loc, (float)glfwGetTime());
+
+  // ShaderToy standard uniforms
+  loc = glGetUniformLocation(program, "iTime");
+  if (loc != -1)
+    glUniform1f(loc, (float)glfwGetTime());
+
+  loc = glGetUniformLocation(program, "iResolution");
+  if (loc != -1) {
+    int vp[4];
+    glGetIntegerv(GL_VIEWPORT, vp);
+    glUniform3f(loc, (float)vp[2], (float)vp[3], 1.0f);
+  }
+
+  loc = glGetUniformLocation(program, "iMouse");
+  if (loc != -1)
+    glUniform4f(loc, 0.0f, 0.0f, 0.0f, 0.0f);
+
+  loc = glGetUniformLocation(program, "iTimeDelta");
+  if (loc != -1)
+    glUniform1f(loc, (float)(1.0f / 60.0f));
+
+  loc = glGetUniformLocation(program, "iFrame");
+  if (loc != -1)
+    glUniform1i(loc, (int)(glfwGetTime() * 60.0f));
+
+  loc = glGetUniformLocation(program, "iFrameRate");
+  if (loc != -1)
+    glUniform1f(loc, 60.0f);
+
+  loc = glGetUniformLocation(program, "_uiTime");
+  if (loc != -1)
+    glUniform1f(loc, (float)glfwGetTime());
+
+  loc = glGetUniformLocation(program, "_uiResolution");
+  if (loc != -1) {
+    int vp[4];
+    glGetIntegerv(GL_VIEWPORT, vp);
+    glUniform2f(loc, (float)vp[2], (float)vp[3]);
+  }
+
+  loc = glGetUniformLocation(program, "_uiMouse");
+  if (loc != -1)
+    glUniform4f(loc, 0.0f, 0.0f, 0.0f, 0.0f);
+
+  // View and projection matrices
+  loc = glGetUniformLocation(program, "view");
+  if (loc != -1)
+    glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(view));
+  loc = glGetUniformLocation(program, "projection");
+  if (loc != -1)
+    glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(projection));
+
+  // --- ALL material and highlight uniforms ---
+  shaderUniformInt(program, "num_textures", mesh.textures.size());
   for (size_t i = 0; i < mesh.textures.size(); i++) {
     std::string name = "textures[";
     name.append(std::to_string(i));
     name.append("]");
-    shaderUniformInt(shader, std::string(name).append(".id").c_str(), i);
-    shaderUniformInt(shader, std::string(name).append(".type").c_str(),
+    shaderUniformInt(program, std::string(name).append(".id").c_str(), i);
+    shaderUniformInt(program, std::string(name).append(".type").c_str(),
                      mesh.textures[i].type);
-    shaderUniformFloat(shader, std::string(name).append(".offsetX").c_str(),
+    shaderUniformFloat(program, std::string(name).append(".offsetX").c_str(),
                        mesh.textures[i].offsetX);
-    shaderUniformFloat(shader, std::string(name).append(".offsetY").c_str(),
+    shaderUniformFloat(program, std::string(name).append(".offsetY").c_str(),
                        mesh.textures[i].offsetY);
-    shaderUniformFloat(shader, std::string(name).append(".scaleX").c_str(),
+    shaderUniformFloat(program, std::string(name).append(".scaleX").c_str(),
                        mesh.textures[i].scaleX);
-    shaderUniformFloat(shader, std::string(name).append(".scaleY").c_str(),
+    shaderUniformFloat(program, std::string(name).append(".scaleY").c_str(),
                        mesh.textures[i].scaleY);
-    shaderUniformFloat(shader, std::string(name).append(".rotation").c_str(),
+    shaderUniformFloat(program, std::string(name).append(".rotation").c_str(),
                        mesh.textures[i].rotation);
     glActiveTexture(GL_TEXTURE0 + i);
     glBindTexture(GL_TEXTURE_2D, mesh.textures[i].id);
   }
 
-  shaderUniformFloat(shader, "material.ambient", mesh.material.ambient);
-  shaderUniformFloat(shader, "material.diffuse", mesh.material.diffuse);
-  shaderUniformFloat(shader, "material.specular", mesh.material.specular);
+  shaderUniformFloat(program, "material.ambient", mesh.material.ambient);
+  shaderUniformFloat(program, "material.diffuse", mesh.material.diffuse);
+  shaderUniformFloat(program, "material.specular", mesh.material.specular);
   glm::vec4 matColor;
   if (baseColorOverride) {
     matColor = glm::vec4(*baseColorOverride, 1.0f);
   } else {
     matColor = glm::vec4(mesh.material.color[0], mesh.material.color[1],
-                         mesh.material.color[2],
-                         1.0f); // <-- explicit alpha = 1.0
+                         mesh.material.color[2], 1.0f);
   }
-  shaderUniformVec4(shader, "material.color", matColor);
-  shaderUniformFloat(shader, "material.shininess", mesh.material.shininess);
-  shaderUniformFloat(shader, "material.alpha", mesh.material.alpha);
+  shaderUniformVec4(program, "material.color", matColor);
+  shaderUniformFloat(program, "material.shininess", mesh.material.shininess);
+  shaderUniformFloat(program, "material.alpha", mesh.material.alpha);
 
   // ---- Determine highlight color and value ----
   glm::vec4 effectiveHighlight = highlightColor;
   float effectiveHighlightValue = mesh.highlight_value;
-  float pressValForShader = mesh.press; // will be used for shader uniform
+  float pressValForShader = mesh.press;
 
-  // If dual highlight is enabled, we always suppress press for the shader,
-  // because we want the highlight to come solely from the axis value.
   if (mesh.use_dual_highlight) {
-    pressValForShader = 0.0f; // <-- UNCONDITIONAL suppression
-
-    // If we have a non‑zero axis value, compute the highlight colour and value.
+    pressValForShader = 0.0f;
     if (fabs(mesh.axis_highlight_value) > 0.001f) {
       float rawVal = fabs(mesh.axis_highlight_value);
       float deadzone = mesh.axis_deadzone;
@@ -853,30 +945,56 @@ void drawMesh(const Mesh &mesh, const glm::mat4 &modelMatrix, GLuint shader,
                                          mesh.highlight_color_negative[3]);
         }
       } else {
-        // Axis is within deadzone -> no highlight
         effectiveHighlight = highlightColor;
       }
     } else {
-      // Axis is neutral -> no highlight
       effectiveHighlightValue = 0.0f;
       effectiveHighlight = highlightColor;
     }
   }
 
-  // Use the computed highlight color and value
-  shaderUniformVec4(shader, "highlight_color", effectiveHighlight);
-  shaderUniformFloat(shader, "highlight_value", effectiveHighlightValue);
-  shaderUniformFloat(shader, "pressValue", pressValForShader);
+  shaderUniformVec4(program, "highlight_color", effectiveHighlight);
+  shaderUniformFloat(program, "highlight_value", effectiveHighlightValue);
+  shaderUniformFloat(program, "pressValue", pressValForShader);
 
-  shaderUniformMat4(shader, "model", modelMatrix);
+  shaderUniformMat4(program, "model", modelMatrix);
   glm::mat3 normal = glm::mat3(modelMatrix);
-  shaderUniformMat3(shader, "normal_model",
+  shaderUniformMat3(program, "normal_model",
                     glm::transpose(glm::inverse(normal)));
 
+  // ---- Outline passes for cartoon-style shaders ----
+  // ---- Outline passes for cartoon-style shaders ----
+  if (!effectiveShaderName.empty() &&
+      effectiveShaderName.find("cartoon") != std::string::npos) {
+    // Silhouette outline (inverted hull)
+    GLuint outlineProg = getOutlineProgram();
+    glUseProgram(outlineProg);
+    glUniformMatrix4fv(glGetUniformLocation(outlineProg, "view"), 1, GL_FALSE,
+                       glm::value_ptr(view));
+    glUniformMatrix4fv(glGetUniformLocation(outlineProg, "projection"), 1,
+                       GL_FALSE, glm::value_ptr(projection));
+    glUniformMatrix4fv(glGetUniformLocation(outlineProg, "model"), 1, GL_FALSE,
+                       glm::value_ptr(modelMatrix));
+
+    float outlineSize = 0.003f; // adjust as needed
+    glUniform1f(glGetUniformLocation(outlineProg, "outlineSize"), outlineSize);
+
+    // Draw only the back side (silhouette)
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_FRONT);
+    glBindVertexArray(mesh.vao);
+    glDrawElements(GL_TRIANGLES, mesh.elements, GL_UNSIGNED_INT, 0);
+    glCullFace(GL_BACK);
+    glUseProgram(program);
+  }
+
+  // ---- Main draw ----
+  glBindVertexArray(mesh.vao);
   if (mesh.visible) {
     glDrawElements(GL_TRIANGLES, mesh.elements, GL_UNSIGNED_INT, 0);
   }
 }
+
 int getTouchpadAncestor(const Model &m, int meshIndex) {
   if (meshIndex < 0 || meshIndex >= (int)m.meshes.size())
     return -1;
@@ -1055,7 +1173,9 @@ glm::mat4 getMeshFinalMatrix(const Model &m, int idx, const glm::mat4 &parent) {
 }
 
 void drawModel(Model &m, GLuint shader, int highlight_mesh_index,
-               const glm::vec4 &globalHighlightColor) {
+               const glm::vec4 &globalHighlightColor, const glm::mat4 &view,
+               const glm::mat4 &projection, const glm::vec3 &cameraPos,
+               const std::string &globalShaderName) {
   int num_meshes = (int)m.meshes.size();
   std::vector<glm::mat4> finalMatrices(num_meshes, glm::mat4(1.0f));
   std::vector<bool> computed(num_meshes, false);
@@ -1099,6 +1219,22 @@ void drawModel(Model &m, GLuint shader, int highlight_mesh_index,
       highlightCol = globalHighlightColor;
     }
 
+    // Determine which shader to use
+    // Determine which shader to use: per-mesh override, else global
+    GLuint program = shader;
+    std::string effectiveShaderName = mesh.shader_name;
+    if (effectiveShaderName.empty())
+      effectiveShaderName = globalShaderName;
+    if (!effectiveShaderName.empty()) {
+      GLuint customProg = LoadShaderProgram(effectiveShaderName);
+      if (customProg != 0) {
+        program = customProg;
+      } else {
+        // Fallback to default
+        program = shader;
+      }
+    }
+
     // ---- Draw the mesh ----
     // When this mesh is the selected one (highlight_mesh_index), force its
     // base color to green for the draw call only, via baseColorOverride,
@@ -1107,7 +1243,8 @@ void drawModel(Model &m, GLuint shader, int highlight_mesh_index,
     // overwrite disposable.
     const glm::vec3 *baseColorOverride =
         (i == highlight_mesh_index) ? &selectionColor : nullptr;
-    drawMesh(mesh, finalMatrices[i], shader, highlightCol, baseColorOverride);
+    drawMesh(mesh, finalMatrices[i], shader, highlightCol, baseColorOverride,
+             view, projection, cameraPos, globalShaderName);
   }
 }
 

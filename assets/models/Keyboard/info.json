@@ -25,6 +25,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -32,7 +33,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "0_text.obj",
@@ -59,6 +65,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -66,7 +73,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "1_button.obj",
@@ -93,6 +105,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -100,7 +113,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "1_text.obj",
@@ -127,6 +145,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -134,7 +153,12 @@
       "color": [0.784000, 0.784000, 0.784000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "2_button.obj",
@@ -161,6 +185,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -168,7 +193,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "2_text.obj",
@@ -195,6 +225,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -202,7 +233,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "3_button.obj",
@@ -229,6 +265,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -236,7 +273,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "3_text.obj",
@@ -263,6 +305,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -270,7 +313,12 @@
       "color": [0.784000, 0.784000, 0.784000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "4_button.obj",
@@ -297,6 +345,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -304,7 +353,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "4_text.obj",
@@ -331,6 +385,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -338,7 +393,12 @@
       "color": [0.784000, 0.784000, 0.784000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "5_button.obj",
@@ -365,6 +425,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -372,7 +433,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "5_text.obj",
@@ -399,6 +465,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -406,7 +473,12 @@
       "color": [0.784000, 0.784000, 0.784000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "6_buttton.obj",
@@ -433,6 +505,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -440,7 +513,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "6_text.obj",
@@ -467,6 +545,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -474,7 +553,12 @@
       "color": [0.784000, 0.784000, 0.784000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "7_button.obj",
@@ -501,6 +585,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -508,7 +593,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "7_text.obj",
@@ -535,6 +625,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -542,7 +633,12 @@
       "color": [0.784000, 0.784000, 0.784000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "8_button.obj",
@@ -569,6 +665,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -576,7 +673,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "8_text.obj",
@@ -603,6 +705,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -610,7 +713,12 @@
       "color": [0.784000, 0.784000, 0.784000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "9_button.obj",
@@ -637,6 +745,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -644,7 +753,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "9_text.obj",
@@ -671,6 +785,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -678,7 +793,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "ALT_left_button.obj",
@@ -705,6 +825,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -712,7 +833,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "ALT_left_text.obj",
@@ -739,6 +865,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -746,7 +873,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "ALT_right_button.obj",
@@ -773,6 +905,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -780,7 +913,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "ALT_right_text.obj",
@@ -807,6 +945,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -814,7 +953,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "ARROW_DOWN_button.obj",
@@ -841,6 +985,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -848,7 +993,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "ARROW_DOWN_text.obj",
@@ -875,6 +1025,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -882,7 +1033,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "ARROW_LEFT_button.obj",
@@ -909,6 +1065,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -916,7 +1073,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "ARROW_LEFT_text.obj",
@@ -943,6 +1105,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -950,7 +1113,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "ARROW_RIGHT_button.obj",
@@ -977,6 +1145,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -984,7 +1153,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "ARROW_RIGHT_text.obj",
@@ -1011,6 +1185,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1018,7 +1193,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "ARROW_UP_button.obj",
@@ -1045,6 +1225,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1052,7 +1233,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "ARROW_UP_text.obj",
@@ -1079,6 +1265,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1086,7 +1273,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "A_button.obj",
@@ -1113,6 +1305,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1120,7 +1313,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "A_text.obj",
@@ -1147,6 +1345,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1154,7 +1353,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "BACKSPACE_button.obj",
@@ -1181,6 +1385,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1188,7 +1393,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "BACKSPACE_text.obj",
@@ -1215,6 +1425,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1222,7 +1433,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "BRACKET_left_button.obj",
@@ -1249,6 +1465,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1256,7 +1473,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "BRACKET_left_text.obj",
@@ -1283,6 +1505,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1290,7 +1513,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "BRACKET_right_button.obj",
@@ -1317,6 +1545,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1324,7 +1553,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "BRACKET_right_text.obj",
@@ -1351,6 +1585,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1358,7 +1593,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "B_button.obj",
@@ -1385,6 +1625,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1392,7 +1633,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "B_text.obj",
@@ -1419,6 +1665,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1426,7 +1673,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "Base.obj",
@@ -1453,6 +1705,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1460,7 +1713,12 @@
       "color": [0.164706, 0.164706, 0.164706],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "CAPS_button.obj",
@@ -1487,6 +1745,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1494,7 +1753,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "CAPS_text.obj",
@@ -1521,6 +1785,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1528,7 +1793,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "COMMA_button.obj",
@@ -1555,6 +1825,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1562,7 +1833,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "COMMA_text.obj",
@@ -1589,6 +1865,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1596,7 +1873,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "CTRL_left_button.obj",
@@ -1623,6 +1905,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1630,7 +1913,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "CTRL_left_text.obj",
@@ -1657,6 +1945,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1664,7 +1953,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "CTRL_right_button.obj",
@@ -1691,6 +1985,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1698,7 +1993,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "CTRL_right_text.obj",
@@ -1725,6 +2025,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1732,7 +2033,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "C_button.obj",
@@ -1759,6 +2065,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1766,7 +2073,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "C_text.obj",
@@ -1793,6 +2105,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1800,7 +2113,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "D_button.obj",
@@ -1827,6 +2145,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1834,7 +2153,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "D_text.obj",
@@ -1861,6 +2185,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1868,7 +2193,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "END_button.obj",
@@ -1895,6 +2225,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1902,7 +2233,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "END_text.obj",
@@ -1929,6 +2265,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1936,7 +2273,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "ENTER_button.obj",
@@ -1963,6 +2305,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -1970,7 +2313,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "ENTER_text.obj",
@@ -1997,6 +2345,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2004,7 +2353,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "ESC_button.obj",
@@ -2031,6 +2385,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2038,7 +2393,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "ESC_text.obj",
@@ -2065,6 +2425,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2072,7 +2433,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "E_button.obj",
@@ -2099,6 +2465,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2106,7 +2473,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "E_text.obj",
@@ -2133,6 +2505,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2140,7 +2513,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "FN_Text.obj",
@@ -2167,6 +2545,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2174,7 +2553,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "FN_button.obj",
@@ -2201,6 +2585,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2208,7 +2593,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "F_button.obj",
@@ -2235,6 +2625,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2242,7 +2633,12 @@
       "color": [0.101961, 0.101961, 0.101961],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "F_text.obj",
@@ -2269,6 +2665,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2276,7 +2673,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "G_button.obj",
@@ -2303,6 +2705,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2310,7 +2713,12 @@
       "color": [0.101961, 0.101961, 0.101961],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "G_text.obj",
@@ -2337,6 +2745,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2344,7 +2753,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "HOME_button.obj",
@@ -2371,6 +2785,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2378,7 +2793,12 @@
       "color": [0.101961, 0.101961, 0.101961],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "HOME_text.obj",
@@ -2405,6 +2825,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2412,7 +2833,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "H_button.obj",
@@ -2439,6 +2865,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2446,7 +2873,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "H_text.obj",
@@ -2473,6 +2905,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2480,7 +2913,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "I_button.obj",
@@ -2507,6 +2945,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2514,7 +2953,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "I_text.obj",
@@ -2541,6 +2985,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2548,7 +2993,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "J_button.obj",
@@ -2575,6 +3025,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2582,7 +3033,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "J_text.obj",
@@ -2609,6 +3065,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2616,7 +3073,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "K_button.obj",
@@ -2643,6 +3105,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2650,7 +3113,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "K_text.obj",
@@ -2677,6 +3145,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2684,7 +3153,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "L_button.obj",
@@ -2711,6 +3185,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2718,7 +3193,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "L_text.obj",
@@ -2745,6 +3225,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2752,7 +3233,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "MENU_button.obj",
@@ -2779,6 +3265,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2786,7 +3273,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "MENU_text.obj",
@@ -2813,6 +3305,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2820,7 +3313,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "MINUS_button.obj",
@@ -2847,6 +3345,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2854,7 +3353,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "MINUS_text.obj",
@@ -2881,6 +3385,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2888,7 +3393,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "M_button.obj",
@@ -2915,6 +3425,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2922,7 +3433,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "M_text.obj",
@@ -2949,6 +3465,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2956,7 +3473,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "N_button.obj",
@@ -2983,6 +3505,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -2990,7 +3513,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "N_text.obj",
@@ -3017,6 +3545,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3024,7 +3553,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "O_button.obj",
@@ -3051,6 +3585,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3058,7 +3593,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "O_text.obj",
@@ -3085,6 +3625,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3092,7 +3633,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "PERIOD_button.obj",
@@ -3119,6 +3665,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3126,7 +3673,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "PERIOD_text.obj",
@@ -3153,6 +3705,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3160,7 +3713,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "PGDN_button.obj",
@@ -3187,6 +3745,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3194,7 +3753,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "PGDN_text.obj",
@@ -3221,6 +3785,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3228,7 +3793,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "PGUP_button.obj",
@@ -3255,6 +3825,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3262,7 +3833,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "PGUP_text.obj",
@@ -3289,6 +3865,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3296,7 +3873,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "PLUS_button.obj",
@@ -3323,6 +3905,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3330,7 +3913,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "PLUS_text.obj",
@@ -3357,6 +3945,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3364,7 +3953,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "P_button.obj",
@@ -3391,6 +3985,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3398,7 +3993,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "P_text.obj",
@@ -3425,6 +4025,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3432,7 +4033,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "QUOTE_button.obj",
@@ -3459,6 +4065,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3466,7 +4073,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "QUOTE_text.obj",
@@ -3493,6 +4105,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3500,7 +4113,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "Q_button.obj",
@@ -3527,6 +4145,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3534,7 +4153,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "Q_text.obj",
@@ -3561,6 +4185,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3568,7 +4193,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "R_button.obj",
@@ -3595,6 +4225,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3602,7 +4233,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "R_text.obj",
@@ -3629,6 +4265,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3636,7 +4273,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "SEMICOLON_button.obj",
@@ -3663,6 +4305,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3670,7 +4313,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "SEMICOLON_text.obj",
@@ -3697,6 +4345,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3704,7 +4353,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "SHIFT_left_button.obj",
@@ -3731,6 +4385,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3738,7 +4393,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "SHIFT_left_text.obj",
@@ -3765,6 +4425,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3772,7 +4433,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "SHIFT_right_button.obj",
@@ -3799,6 +4465,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3806,7 +4473,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "SHIFT_right_text.obj",
@@ -3833,6 +4505,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3840,7 +4513,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "SLASH_button.obj",
@@ -3867,6 +4545,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3874,7 +4553,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "SLASH_text.obj",
@@ -3901,6 +4585,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3908,7 +4593,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "SPACE_button.obj",
@@ -3935,6 +4625,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3942,7 +4633,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "SPACE_text.obj",
@@ -3969,6 +4665,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -3976,7 +4673,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "S_button.obj",
@@ -4003,6 +4705,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4010,7 +4713,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "S_text.obj",
@@ -4037,6 +4745,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4044,7 +4753,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "TAB_button.obj",
@@ -4071,6 +4785,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4078,7 +4793,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "TAB_text.obj",
@@ -4105,6 +4825,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4112,7 +4833,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "T_button.obj",
@@ -4139,6 +4865,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4146,7 +4873,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "T_text.obj",
@@ -4173,6 +4905,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4180,7 +4913,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "U_button.obj",
@@ -4207,6 +4945,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4214,7 +4953,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "U_text.obj",
@@ -4241,6 +4985,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4248,7 +4993,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "V_button.obj",
@@ -4275,6 +5025,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4282,7 +5033,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "V_text.obj",
@@ -4309,6 +5065,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4316,7 +5073,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "WINDOWS_button.obj",
@@ -4343,6 +5105,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4350,7 +5113,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "WINDOWS_text.obj",
@@ -4377,6 +5145,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4384,7 +5153,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "W_button.obj",
@@ -4411,6 +5185,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4418,7 +5193,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "W_text.obj",
@@ -4445,6 +5225,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4452,7 +5233,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "X_button.obj",
@@ -4479,6 +5265,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4486,7 +5273,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "X_text.obj",
@@ -4513,6 +5305,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4520,7 +5313,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "Y_button.obj",
@@ -4547,6 +5345,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4554,7 +5353,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "Y_text.obj",
@@ -4581,6 +5385,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4588,7 +5393,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "Z_Text.obj",
@@ -4608,13 +5418,14 @@
       "rotation": [0.000000, 0.000000, 0.000000],
       "parent": 136,
       "input_type": 2,
-      "input_binding": "keyboard:key_z",
+      "input_binding": "",
       "invert": false,
       "isTouchpad": false,
       "isTouchpoint": false,
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4622,7 +5433,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "Z_button.obj",
@@ -4642,13 +5458,14 @@
       "rotation": [0.000000, 0.000000, 0.000000],
       "parent": -1,
       "input_type": 2,
-      "input_binding": "keyboard:",
+      "input_binding": "keyboard:key_z",
       "invert": false,
       "isTouchpad": false,
       "isTouchpoint": false,
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4656,7 +5473,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "__button.obj",
@@ -4683,6 +5505,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4690,7 +5513,12 @@
       "color": [0.102000, 0.102000, 0.102000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     },
     {
       "filename": "__text.obj",
@@ -4717,6 +5545,7 @@
       "isBumper": false,
       "isTrigger": false,
       "isPaddle": false,
+      "shader_name": "",
       "ambient": 0.200000,
       "diffuse": 1.000000,
       "specular": 0.100000,
@@ -4724,7 +5553,12 @@
       "color": [0.784314, 0.784314, 0.784314],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000]
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "travel_rotation": [0.000000, 0.000000, 0.000000],
+      "use_dual_highlight": false,
+      "axis_deadzone": 0.100000,
+      "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
     }
   ],
   "source": "https://free3d.com/3d-model/low-profile-mechanical-keyboard-337074.html"

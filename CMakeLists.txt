@@ -62,6 +62,11 @@ set(IMGUI_SRC
 )
 list(APPEND SRC_FILES ${IMGUI_SRC})
 
+# Add ImGuiFileBrowser source if any
+if(IMGUI_FILE_BROWSER_SRC)
+    list(APPEND SRC_FILES ${IMGUI_FILE_BROWSER_SRC})
+endif()
+
 # Exclude any backup folders if present (from any location)
 list(FILTER SRC_FILES EXCLUDE REGEX ".*/backup/.*")
 
@@ -127,10 +132,54 @@ add_custom_command(
 
 set_source_files_properties(${ICON_HEADER} PROPERTIES GENERATED TRUE)
 
+# Generate shaders_data.h
+set(SHADER_SCRIPT "${CMAKE_SOURCE_DIR}/tools/generate_shaders_header.py")
+set(SHADER_HEADER "${CMAKE_SOURCE_DIR}/src/shaders_data.h")
+set(SHADER_SOURCE_DIR "${CMAKE_SOURCE_DIR}/assets/shaders")
+
+add_custom_command(
+    OUTPUT ${SHADER_HEADER}
+    COMMAND python3 ${SHADER_SCRIPT}
+    DEPENDS ${SHADER_SOURCE_DIR} ${SHADER_SCRIPT}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Generating shaders_data.h from assets/shaders"
+)
+set_source_files_properties(${SHADER_HEADER} PROPERTIES GENERATED TRUE)
+
+
+# ============================================================
+# ImGuiFileBrowser – locate the header locally
+# ============================================================
+set(IMGUI_FILE_BROWSER_INCLUDE_DIR "")
+set(IMGUI_FILE_BROWSER_SRC "")
+
+# Check both possible locations and casing variations
+foreach(IMGUI_FILE_BROWSER_PATH
+    "${CMAKE_SOURCE_DIR}/third_party/imgui"
+    "${CMAKE_SOURCE_DIR}/third_party/include"
+)
+    if(EXISTS "${IMGUI_FILE_BROWSER_PATH}/imfilebrowser.h" OR EXISTS "${IMGUI_FILE_BROWSER_PATH}/ImGuiFileBrowser.h")
+        set(IMGUI_FILE_BROWSER_INCLUDE_DIR "${IMGUI_FILE_BROWSER_PATH}")
+        break()
+    endif()
+endforeach()
+
+if(IMGUI_FILE_BROWSER_INCLUDE_DIR)
+    message(STATUS "Found ImGuiFileBrowser at: ${IMGUI_FILE_BROWSER_INCLUDE_DIR}")
+    # If a source file exists, add it
+    if(EXISTS "${IMGUI_FILE_BROWSER_INCLUDE_DIR}/imfilebrowser.cpp")
+        set(IMGUI_FILE_BROWSER_SRC "${IMGUI_FILE_BROWSER_INCLUDE_DIR}/imfilebrowser.cpp")
+    elseif(EXISTS "${IMGUI_FILE_BROWSER_INCLUDE_DIR}/ImGuiFileBrowser.cpp")
+        set(IMGUI_FILE_BROWSER_SRC "${IMGUI_FILE_BROWSER_INCLUDE_DIR}/ImGuiFileBrowser.cpp")
+    endif()
+else()
+    message(FATAL_ERROR "Could not find ImGuiFileBrowser.h in third_party/imgui or third_party/include. Please place it there manually.")
+endif()
+
 # ------------------------------------------------------------------
 # Executable – uses the collected sources + generated headers
 # ------------------------------------------------------------------
-add_executable(3dco+ ${SRC_FILES} ${GEN_HEADER} ${DB_HEADER} ${ICON_HEADER})
+add_executable(3dco+ ${SRC_FILES} ${GEN_HEADER} ${DB_HEADER} ${ICON_HEADER} ${SHADER_HEADER})
 
 # Include directories
 target_include_directories(3dco+ PRIVATE
@@ -138,6 +187,7 @@ target_include_directories(3dco+ PRIVATE
     "${CMAKE_SOURCE_DIR}/third_party/include"
     "${CMAKE_SOURCE_DIR}/third_party/imgui"          # for public headers
     "${CMAKE_SOURCE_DIR}/third_party/imgui/backends" # for backend headers (imgui_impl_glfw.h etc.)
+    "${IMGUI_FILE_BROWSER_INCLUDE_DIR}"
 )
 
 # ------------------------------------------------------------------
@@ -209,7 +259,6 @@ if(APPLE)
     )
 
     target_link_libraries(3dco+ PRIVATE
-        ${BASE_LIBS}
         "-framework OpenGL"
         "-framework Cocoa"
         "-framework IOKit"
@@ -237,14 +286,14 @@ if(APPLE)
     target_link_options(3dco+ PRIVATE -Wl,-force_load,${ZLIB_LIBRARY})
 else()
     target_link_libraries(3dco+ PRIVATE
-        ${BASE_LIBS}
         ${OPENGL_LIBRARIES}
         ZLIB::ZLIB
     )
 endif()
 
 if(WIN32)
-    target_link_libraries(3dco+ PRIVATE ws2_32 winmm user32 comctl32)
+    # shell32: Shell_NotifyIconW (system tray icon, see tray_icon.cpp)
+    target_link_libraries(3dco+ PRIVATE ws2_32 winmm user32 comctl32 shell32)
     
     if(NOT BUILD_STATIC)
         file(GLOB WINDOWS_REDIST "${CMAKE_SOURCE_DIR}/packaging/windows/redist/*.dll")
@@ -258,6 +307,27 @@ if(WIN32)
 
     # Embed Windows icon resource
     target_sources(3dco+ PRIVATE packaging/windows/3dco+.rc)
+endif()
+
+# ------------------------------------------------------------------
+# Linux system tray icon (StatusNotifierItem over D-Bus - see
+# tray_icon.cpp). Optional: if dbus-1 isn't found, the build still
+# succeeds and TrayIcon::isSupported() just returns false on this
+# platform, matching how it already behaves on macOS today.
+# ------------------------------------------------------------------
+if(UNIX AND NOT APPLE)
+    pkg_check_modules(DBUS dbus-1)
+    if(DBUS_FOUND)
+        message(STATUS "Found dbus-1 - Linux system tray icon enabled")
+        target_include_directories(3dco+ PRIVATE ${DBUS_INCLUDE_DIRS})
+        target_link_libraries(3dco+ PRIVATE ${DBUS_LIBRARIES})
+        target_compile_options(3dco+ PRIVATE ${DBUS_CFLAGS_OTHER})
+        target_compile_definitions(3dco+ PRIVATE HAVE_DBUS=1)
+    else()
+        message(WARNING "dbus-1 not found - Linux system tray icon will be "
+                        "unavailable (the app still builds and runs fine "
+                        "without it).")
+    endif()
 endif()
 
 # ------------------------------------------------------------------
