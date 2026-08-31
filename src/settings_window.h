@@ -53,5 +53,7 @@ std::string get_first_model();
 extern bool g_log_controller;
 extern bool g_log_keyboard;
 extern bool g_log_mouse;
+extern bool g_debug_mode_enabled;
+void setDebugModeEnabled(bool enabled);
 
 #endif

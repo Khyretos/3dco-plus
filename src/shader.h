@@ -51,4 +51,22 @@ GLuint getOutlineProgram();
 
 GLuint getWireframeProgram();
 
+// ShaderToy-style channel textures (iChannel0..3). See shader.cpp for
+// the file-vs-generated-noise fallback. outWidth/outHeight (optional)
+// receive the texture's dimensions, for iChannelResolution.
+GLuint getShaderChannelTexture(const std::string &shaderName,
+                               int channelIndex, int *outWidth = nullptr,
+                               int *outHeight = nullptr);
+
+// Directory a shader's own resource files (fragment.glsl, channelN.png,
+// etc.) live in, creating it if needed. Used by the settings UI's "Add
+// Resource" button to know where to copy a user-picked image.
+std::string getShaderResourceDirectory(const std::string &shaderName);
+
+// Clears the cached texture for one shader+channel (e.g. after the "Add
+// Resource" button copies in a new file), so the change takes effect on
+// the next frame instead of needing an app restart.
+void invalidateShaderChannelCache(const std::string &shaderName,
+                                  int channelIndex);
+
 #endif

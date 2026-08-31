@@ -1,5 +1,8 @@
 #include "tray_icon.h"
 
+#include "icon_data.h"
+#include "stb_image.h"
+
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
@@ -65,6 +68,90 @@ std::wstring toWide(const std::string &s) {
                       size);
   return result;
 }
+
+// ------------------------------------------------------------------
+// Builds a real HICON from the app's own embedded icon (icon_data.h),
+// for use in the tray/taskbar notification area. Previously this used
+// IDI_APPLICATION (a generic system icon) as a placeholder.
+//
+// The embedded PNG is decoded once via stb_image, then downsampled with
+// simple nearest-neighbor sampling to the requested size and repacked
+// into a 32-bit BGRA DIB section, since Windows icon bitmaps are
+// natively BGRA rather than RGBA and the notification area expects a
+// small icon (16-32px), not the embedded asset's native resolution.
+// Nearest-neighbor is plenty for an icon this small and avoids pulling
+// in an image-resizing library just for this one call site.
+// ------------------------------------------------------------------
+HICON createAppHIcon(int size) {
+  int w = 0, h = 0;
+  unsigned char *pixels = stbi_load_from_memory(
+      Embedded::icon_data, static_cast<int>(Embedded::icon_size), &w, &h,
+      nullptr, 4);
+  if (!pixels) {
+    spdlog::warn("TrayIcon: failed to decode embedded app icon.");
+    return nullptr;
+  }
+
+  std::vector<unsigned char> bgra(static_cast<size_t>(size) * size * 4);
+  for (int y = 0; y < size; ++y) {
+    int sy = (h > 0) ? (y * h / size) : 0;
+    for (int x = 0; x < size; ++x) {
+      int sx = (w > 0) ? (x * w / size) : 0;
+      const unsigned char *src =
+          pixels + (static_cast<size_t>(sy) * w + sx) * 4;
+      unsigned char *dst =
+          bgra.data() + (static_cast<size_t>(y) * size + x) * 4;
+      dst[0] = src[2]; // B
+      dst[1] = src[1]; // G
+      dst[2] = src[0]; // R
+      dst[3] = src[3]; // A
+    }
+  }
+  stbi_image_free(pixels);
+
+  BITMAPV5HEADER bi{};
+  bi.bV5Size = sizeof(BITMAPV5HEADER);
+  bi.bV5Width = size;
+  bi.bV5Height = -size; // negative = top-down DIB
+  bi.bV5Planes = 1;
+  bi.bV5BitCount = 32;
+  bi.bV5Compression = BI_RGB;
+
+  HDC screenDC = GetDC(nullptr);
+  void *bits = nullptr;
+  HBITMAP hbmColor = CreateDIBSection(screenDC, (BITMAPINFO *)&bi,
+                                      DIB_RGB_COLORS, &bits, nullptr, 0);
+  ReleaseDC(nullptr, screenDC);
+  if (!hbmColor || !bits) {
+    spdlog::warn("TrayIcon: CreateDIBSection failed for app icon.");
+    return nullptr;
+  }
+  memcpy(bits, bgra.data(), bgra.size());
+
+  HBITMAP hbmMask = CreateBitmap(size, size, 1, 1, nullptr);
+  if (!hbmMask) {
+    DeleteObject(hbmColor);
+    spdlog::warn("TrayIcon: CreateBitmap (mask) failed for app icon.");
+    return nullptr;
+  }
+
+  ICONINFO ii{};
+  ii.fIcon = TRUE;
+  ii.hbmMask = hbmMask;
+  ii.hbmColor = hbmColor;
+  HICON icon = CreateIconIndirect(&ii);
+
+  // CreateIconIndirect makes its own internal copies - these are safe to
+  // free regardless of whether it succeeded.
+  DeleteObject(hbmColor);
+  DeleteObject(hbmMask);
+
+  if (!icon)
+    spdlog::warn("TrayIcon: CreateIconIndirect failed for app icon.");
+  return icon;
+}
+
+HICON g_app_hicon = nullptr; // GetSystemMetrics(SM_CXSMICON)-sized, cached
 
 void showContextMenu(HWND hwnd) {
   HMENU menu = CreatePopupMenu();
@@ -204,15 +291,12 @@ bool enable() {
   g_nid.uID = 1;
   g_nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
   g_nid.uCallbackMessage = kTrayCallbackMessage;
-  // TODO: swap this for the app's own icon (see icon_data.h) once wired
-  // up here - IDI_APPLICATION is a generic system icon used as a safe,
-  // always-available placeholder in the meantime. Note: IDI_APPLICATION
-  // expands to the ANSI (LPSTR) macro form here since this project
-  // doesn't define UNICODE/_UNICODE, but LoadIconW needs a wide string
-  // - MAKEINTRESOURCEW(32512) is IDI_APPLICATION's actual resource ID,
-  // used directly to sidestep the ANSI/wide macro ambiguity (same fix
-  // as IDC_ARROW's earlier in this project).
-  g_nid.hIcon = LoadIconW(nullptr, MAKEINTRESOURCEW(32512));
+  // Real app icon (see createAppHIcon() above), sized to whatever the
+  // system's small-icon metric is so it isn't blurry in the tray.
+  if (!g_app_hicon)
+    g_app_hicon = createAppHIcon(GetSystemMetrics(SM_CXSMICON));
+  g_nid.hIcon =
+      g_app_hicon ? g_app_hicon : LoadIconW(nullptr, MAKEINTRESOURCEW(32512));
   const std::wstring tip = L"3D Controller Overlay";
   size_t n = std::min(tip.size(), (sizeof(g_nid.szTip) / sizeof(wchar_t)) - 1);
   wmemcpy(g_nid.szTip, tip.c_str(), n);
@@ -317,7 +401,8 @@ constexpr int kIdControllersRoot = 3;
 constexpr int kIdControllerBase = 100; // 100..199
 constexpr int kIdNetworkRoot = 4;
 constexpr int kIdNetworkStatusLine = 200;
-constexpr int kIdConnectionBase = 201; // 201..299
+constexpr int kIdNetworkSeparator = 250; // between status line and connections
+constexpr int kIdConnectionBase = 201;   // 201..299
 constexpr int kIdQuit = 6;
 
 // ---- Simple in-memory menu tree, rebuilt fresh on every GetLayout
@@ -341,6 +426,8 @@ MenuNode buildMenuTree() {
   root.children.push_back(show_window);
 
   MenuNode sep1;
+  sep1.id =
+      2; // reserved gap between kIdShowWindow(1) and kIdControllersRoot(3)
   sep1.is_separator = true;
   root.children.push_back(sep1);
 
@@ -386,6 +473,7 @@ MenuNode buildMenuTree() {
   network.children.push_back(status_line);
   if (!g_connections.empty()) {
     MenuNode sep_net;
+    sep_net.id = kIdNetworkSeparator;
     sep_net.is_separator = true;
     network.children.push_back(sep_net);
     int count = std::min((int)g_connections.size(), 99);
@@ -400,6 +488,7 @@ MenuNode buildMenuTree() {
   root.children.push_back(network);
 
   MenuNode sep2;
+  sep2.id = 5; // reserved gap between kIdNetworkRoot(4) and kIdQuit(6)
   sep2.is_separator = true;
   root.children.push_back(sep2);
 
@@ -420,6 +509,42 @@ const MenuNode *findNodeById(const MenuNode &node, int id) {
       return found;
   }
   return nullptr;
+}
+
+// Real app icon (see icon_data.h) as ARGB32 bytes, per the
+// StatusNotifierItem spec's IconPixmap format: each pixel is a
+// big-endian 32-bit value structured as A<<24 | R<<16 | G<<8 | B, i.e.
+// stored byte-for-byte as A, R, G, B. Nearest-neighbor downsampled from
+// the embedded PNG's native resolution to `size`, same approach as the
+// Windows HICON builder above - plenty for an icon this small, no extra
+// resize dependency needed.
+std::vector<unsigned char> buildIconArgb32(int size) {
+  std::vector<unsigned char> out;
+  int w = 0, h = 0;
+  unsigned char *pixels = stbi_load_from_memory(
+      Embedded::icon_data, static_cast<int>(Embedded::icon_size), &w, &h,
+      nullptr, 4);
+  if (!pixels) {
+    spdlog::warn("TrayIcon: failed to decode embedded app icon.");
+    return out;
+  }
+
+  out.resize(static_cast<size_t>(size) * size * 4);
+  for (int y = 0; y < size; ++y) {
+    int sy = (h > 0) ? (y * h / size) : 0;
+    for (int x = 0; x < size; ++x) {
+      int sx = (w > 0) ? (x * w / size) : 0;
+      const unsigned char *src =
+          pixels + (static_cast<size_t>(sy) * w + sx) * 4;
+      unsigned char *dst = out.data() + (static_cast<size_t>(y) * size + x) * 4;
+      dst[0] = src[3]; // A
+      dst[1] = src[0]; // R
+      dst[2] = src[1]; // G
+      dst[3] = src[2]; // B
+    }
+  }
+  stbi_image_free(pixels);
+  return out;
 }
 
 void appendStrPropTo(DBusMessageIter *dict_iter, const char *name,
@@ -485,7 +610,7 @@ void appendToolTipProp(DBusMessageIter *dict_iter, const std::string &title) {
   dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "(sa(iiay)ss)",
                                    &var);
   dbus_message_iter_open_container(&var, DBUS_TYPE_STRUCT, nullptr, &str);
-  const char *icon_name = "input-gaming-symbolic";
+  const char *icon_name = "";
   dbus_message_iter_append_basic(&str, DBUS_TYPE_STRING, &icon_name);
   DBusMessageIter pixmap_array;
   dbus_message_iter_open_container(&str, DBUS_TYPE_ARRAY, "(iiay)",
@@ -500,17 +625,49 @@ void appendToolTipProp(DBusMessageIter *dict_iter, const std::string &title) {
   dbus_message_iter_close_container(dict_iter, &entry);
 }
 
+// IconPixmap's D-Bus type is "a(iiay)": an array of (width, height, raw
+// ARGB32 bytes) structs. Real-world hosts generally only look at the
+// first entry, but the type is an array regardless.
+void appendIconPixmapProp(DBusMessageIter *dict_iter, const char *name,
+                          int size, const std::vector<unsigned char> &argb) {
+  DBusMessageIter entry, var, arr;
+  dbus_message_iter_open_container(dict_iter, DBUS_TYPE_DICT_ENTRY, nullptr,
+                                   &entry);
+  dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &name);
+  dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "a(iiay)", &var);
+  dbus_message_iter_open_container(&var, DBUS_TYPE_ARRAY, "(iiay)", &arr);
+  if (!argb.empty()) {
+    DBusMessageIter strct, bytes;
+    dbus_message_iter_open_container(&arr, DBUS_TYPE_STRUCT, nullptr, &strct);
+    dbus_int32_t w = size, h = size;
+    dbus_message_iter_append_basic(&strct, DBUS_TYPE_INT32, &w);
+    dbus_message_iter_append_basic(&strct, DBUS_TYPE_INT32, &h);
+    dbus_message_iter_open_container(&strct, DBUS_TYPE_ARRAY, "y", &bytes);
+    dbus_message_iter_append_fixed_array(&bytes, DBUS_TYPE_BYTE, argb.data(),
+                                         static_cast<int>(argb.size()));
+    dbus_message_iter_close_container(&strct, &bytes);
+    dbus_message_iter_close_container(&arr, &strct);
+  }
+  dbus_message_iter_close_container(&var, &arr);
+  dbus_message_iter_close_container(&entry, &var);
+  dbus_message_iter_close_container(dict_iter, &entry);
+}
+
 void appendStatusNotifierItemProperties(DBusMessageIter *array_iter) {
   appendStrPropTo(array_iter, "Category", "ApplicationStatus");
   appendStrPropTo(array_iter, "Id", "3dcoplus");
   appendStrPropTo(array_iter, "Title", "3D Controller Overlay");
   appendStrPropTo(array_iter, "Status", "Active");
   appendUint32PropTo(array_iter, "WindowId", 0);
-  // TODO: swap for the app's own icon (see icon_data.h) once wired up
-  // here - this is a generic, widely-available XDG icon theme name
-  // used as a placeholder in the meantime, the same way IDI_APPLICATION
-  // is a placeholder on the Windows side.
-  appendStrPropTo(array_iter, "IconName", "input-gaming-symbolic");
+  // Real app icon as raw pixels - most StatusNotifierItem hosts (KDE
+  // Plasma, most others via snixembed/appindicator) prefer IconPixmap
+  // over IconName when both are present. IconName is kept as a themed
+  // fallback for hosts that only support named icons or that fail to
+  // parse IconPixmap for some reason, rather than left blank.
+  static const std::vector<unsigned char> icon_argb = buildIconArgb32(48);
+  appendIconPixmapProp(array_iter, "IconPixmap", 48, icon_argb);
+  appendStrPropTo(array_iter, "IconName",
+                  icon_argb.empty() ? "input-gaming-symbolic" : "");
   appendStrPropTo(array_iter, "OverlayIconName", "");
   appendStrPropTo(array_iter, "AttentionIconName", "");
   appendStrPropTo(array_iter, "IconThemePath", "");

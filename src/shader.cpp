@@ -1,15 +1,130 @@
 #include "shader.h"
 #include "settings.h"     // for config_base_path
 #include "shaders_data.h" // will be generated
+#include "stb_image.h"
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 #include <unordered_map>
+#include <vector>
 
 namespace {
 std::unordered_map<std::string, GLuint> g_shader_cache;
 std::unordered_map<std::string, std::string> g_embedded_shaders;
+
+// ---- ShaderToy channel textures (iChannel0..3) ----
+// Cached per "<shaderName>#<channelIndex>" key. Each entry is either a
+// texture loaded from an image file the user (or the shader's own
+// unpacked embedded folder) placed in the shader's directory, or - if no
+// such file exists - a procedurally generated tileable noise texture.
+// This is what actually fixes ShaderToy shaders that sample a noise/
+// gradient channel: previously iChannel0-3 were declared as uniforms in
+// adaptShaderToy()'s wrapper but nothing ever bound a texture to them,
+// so they sampled whatever (or nothing) happened to be left in that
+// texture unit.
+struct ChannelTexture {
+  GLuint id = 0;
+  int width = 0;
+  int height = 0;
+};
+std::unordered_map<std::string, ChannelTexture> g_channel_cache;
+
+std::string channelCacheKey(const std::string &shaderName, int channelIndex) {
+  return shaderName + "#" + std::to_string(channelIndex);
+}
+
+// A small, fast, deterministic hash - not cryptographic, just needs to
+// look like noise and be stable across runs so the same shader always
+// gets the same generated texture rather than a new random one every
+// launch.
+unsigned int noiseHash(unsigned int x) {
+  x ^= x >> 16;
+  x *= 0x7feb352dU;
+  x ^= x >> 15;
+  x *= 0x846ca68bU;
+  x ^= x >> 16;
+  return x;
+}
+
+GLuint uploadChannelTexture(const unsigned char *pixels, int w, int h) {
+  GLuint tex = 0;
+  glGenTextures(1, &tex);
+  glBindTexture(GL_TEXTURE_2D, tex);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+              pixels);
+  glGenerateMipmap(GL_TEXTURE_2D);
+  // Repeat wrapping matches ShaderToy's default channel sampler settings
+  // (most noise/gradient channels are authored expecting to tile).
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+                  GL_LINEAR_MIPMAP_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glBindTexture(GL_TEXTURE_2D, 0);
+  return tex;
+}
+
+// Generates a tileable RGBA8 white-noise texture. This is the "or
+// noises" half of making channel loading smart/friendly - a shader that
+// expects a noise channel just works out of the box with a plausible
+// noise texture instead of failing to render, and the user can still
+// drop in their own channel0.png/etc (see getShaderDirectory() callers)
+// to override it with real Shadertoy channel art.
+ChannelTexture generateNoiseChannelTexture(const std::string &shaderName,
+                                           int channelIndex) {
+  constexpr int size = 256;
+  std::vector<unsigned char> pixels(static_cast<size_t>(size) * size * 4);
+  unsigned int seed =
+      std::hash<std::string>{}(shaderName) * 2654435761u + channelIndex * 97u;
+  for (int y = 0; y < size; ++y) {
+    for (int x = 0; x < size; ++x) {
+      unsigned int base = seed + static_cast<unsigned int>(y * size + x);
+      unsigned char *px = &pixels[(static_cast<size_t>(y) * size + x) * 4];
+      px[0] = static_cast<unsigned char>(noiseHash(base * 4u + 0u) & 0xFF);
+      px[1] = static_cast<unsigned char>(noiseHash(base * 4u + 1u) & 0xFF);
+      px[2] = static_cast<unsigned char>(noiseHash(base * 4u + 2u) & 0xFF);
+      px[3] = static_cast<unsigned char>(noiseHash(base * 4u + 3u) & 0xFF);
+    }
+  }
+  ChannelTexture ct;
+  ct.id = uploadChannelTexture(pixels.data(), size, size);
+  ct.width = size;
+  ct.height = size;
+  return ct;
+}
+
+// Tries to load an actual image file for this channel from the shader's
+// own directory - channel0.png/.jpg/.jpeg, channel1.*, etc. - so a
+// shader author (or a user who dropped in art via the "Add Resource"
+// button next to the shader list, see settings_window.cpp) gets their
+// real texture instead of generated noise.
+bool tryLoadChannelImageFile(const std::string &shaderName, int channelIndex,
+                             ChannelTexture &out) {
+  std::string dir = config_base_path + "/shaders/" + shaderName;
+  for (const char *ext : {".png", ".jpg", ".jpeg"}) {
+    std::string path =
+        dir + "/channel" + std::to_string(channelIndex) + ext;
+    if (!std::filesystem::exists(path))
+      continue;
+    int w = 0, h = 0, channels = 0;
+    unsigned char *pixels =
+        stbi_load(path.c_str(), &w, &h, &channels, 4);
+    if (!pixels) {
+      spdlog::warn("Failed to decode channel image '{}' for shader '{}'",
+                   path, shaderName);
+      continue;
+    }
+    out.id = uploadChannelTexture(pixels, w, h);
+    out.width = w;
+    out.height = h;
+    stbi_image_free(pixels);
+    return true;
+  }
+  return false;
+}
+
 
 // Load embedded shaders from the generated header
 void loadEmbeddedShaders() {
@@ -142,6 +257,56 @@ std::string buildCustomFragmentShader(const std::string &customEffect) {
   return customEffect;
 }
 } // namespace
+
+// ------------------------------------------------------------------
+// Returns (loading/generating and caching as needed) the GL texture to
+// bind for iChannel<channelIndex> of the given shader. See the
+// ChannelTexture-related helpers above for the file-vs-noise fallback
+// logic. Safe to call every frame - actual work only happens once per
+// shader+channel combination.
+// ------------------------------------------------------------------
+GLuint getShaderChannelTexture(const std::string &shaderName,
+                               int channelIndex, int *outWidth,
+                               int *outHeight) {
+  std::string key = channelCacheKey(shaderName, channelIndex);
+  auto it = g_channel_cache.find(key);
+  if (it == g_channel_cache.end()) {
+    ChannelTexture ct;
+    if (!tryLoadChannelImageFile(shaderName, channelIndex, ct))
+      ct = generateNoiseChannelTexture(shaderName, channelIndex);
+    it = g_channel_cache.emplace(key, ct).first;
+  }
+  if (outWidth)
+    *outWidth = it->second.width;
+  if (outHeight)
+    *outHeight = it->second.height;
+  return it->second.id;
+}
+
+// Directory a shader's own resource files (fragment.glsl, channelN.png,
+// etc.) live in, creating it if necessary. Used by the "Add Resource" button
+// in the settings UI to know where to copy a user-picked image to.
+std::string getShaderResourceDirectory(const std::string &shaderName) {
+  std::string dir = config_base_path + "/shaders/" + shaderName;
+  std::filesystem::create_directories(dir);
+  return dir;
+}
+
+// Drops a shader+channel's cached texture (deleting the GL object) so
+// the next getShaderChannelTexture() call picks up a freshly-added or
+// replaced channel image file immediately, rather than needing an app
+// restart. Called by the "Add Resource" button's handler once it's
+// copied a new file into place.
+void invalidateShaderChannelCache(const std::string &shaderName,
+                                  int channelIndex) {
+  std::string key = channelCacheKey(shaderName, channelIndex);
+  auto it = g_channel_cache.find(key);
+  if (it != g_channel_cache.end()) {
+    if (it->second.id)
+      glDeleteTextures(1, &it->second.id);
+    g_channel_cache.erase(it);
+  }
+}
 
 // ------------------------------------------------------------------
 // Inverted-hull outline shader (silhouette only)

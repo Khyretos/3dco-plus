@@ -11,7 +11,19 @@ This is a **fork, not a replacement**. It exists as an homage to the original to
 
 The **`+`** in the name means exactly that: **improvements and extra features** layered on top of the original — more controllers, more rendering features, more input paths, more build tooling — while keeping the same "point it at your input device and it just works" spirit. It's also a personal passion project: a way for me to see what I'm actually capable of building and maintaining with AI as a collaborator rather than a crutch.
 
-## What’s new in 1.0.0
+## What's new in 1.1.0
+
+- **Network functionality** – send a window's live mesh state (button/axis/touch data) over UDP or TCP to another instance of the app on the same machine or over the network, so you can render the overlay on a second PC (e.g. a dedicated streaming/capture box) instead of the one you're playing on.
+- **Fixed transparent background compositing on AMD and NVIDIA.** The "Transparent Background" option now actually produces a transparent framebuffer on drivers/compositors where it previously silently failed.
+- **Overlay performance fixes.** Resolved input lag and stuttering that showed up specifically when running with click-through enabled while something else (e.g. a game) had foreground focus.
+- **Custom shader effects.** Built-in pixel-art and cel-shaded/toon looks (both rewritten this release for a genuinely blocky/anime look rather than a subtle color tweak), plus ShaderToy-compatible shader import — including channel textures (`iChannel0`-`iChannel3`): drop in your own image via the new **Add Resource** button, or leave it unset and a channel that a shader expects (e.g. a noise texture) is generated automatically instead of rendering black.
+- **New Steam Controller 2026 model** with a significantly smaller file size (same look, far less geometry/texture data).
+- **Log window is now a real always-on-top window.** Previously it lived inside the settings window and got sent behind it the moment you clicked elsewhere in Settings; now it's its own window that stays on top regardless, and log lines are copyable (click-drag to select, Ctrl+C, or the new **Copy All** button).
+- **Taskbar/tray icon now shows the app's own icon** instead of a generic system placeholder, on both Windows and Linux.
+- **New "Enable Debug Mode" setting**, next to "Enable Taskbar Icon". Verbose diagnostic logging (e.g. a line per mesh loaded) is now off by default, fixing a small but noticeable delay when loading models with many parts — turn it on before opening the log window if you need to report a bug.
+- **Per-mesh visibility is now saved with the model** instead of resetting to visible every time you reopen it.
+
+## What's new in 1.0.0
 
 - **Custom model import** via Assimp (FBX, glTF, OBJ, etc.)
 - **Pivot‑point editing** by dragging in the 3D viewport
@@ -33,18 +45,19 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 
 - [What stayed the same](#what-stayed-the-same)
 - [What's new in the `+`](#whats-new-in-the-)
-- [How it works](#how-it-works)
-- [Supported platforms](#supported-platforms)
-- [What’s new in 1.0.0](#whats-new-in-100)
+- [What's new in 1.1.0](#whats-new-in-110)
+- [What's new in 1.0.0](#whats-new-in-100)
 - [How it works](#how-it-works)
 - [Supported platforms](#supported-platforms)
 - [Platform showcase](#platform-showcase)
 - [Where your data lives](#where-your-data-lives)
 - [Supported input](#supported-input)
+- [Network functionality](#network-functionality)
+- [Shader effects](#shader-effects)
 - [Manual mapping](#manual-mapping-for-unrecognized-devices)
 - [Controller showcase](#controller-showcase)
-- [Work in progress](#work-in-progress--known-bugs)
 - [Work in progress / known bugs](#work-in-progress--known-bugs)
+- [Known issues (tracked)](#known-issues-tracked)
 - [Building](#building)
 - [Contributing](#contributing)
 - [Credits](#credits)
@@ -72,6 +85,12 @@ The goal of the `+` fork isn't "more lines of code" — it's closing gaps the or
 - **Global and per-button "press" highlight colors**, with original-color tracking so highlighted parts revert correctly.
 - **Touch-area visualization**: a drawable wireframe/fill overlay showing the real hit-area of touchpads, useful when lining up custom pads.
 - **Multi-touchpad support**: up to 4 touchpads × 2 fingers each, versus the original's single pad.
+- **Custom shader effects**, including built-in pixel-art and cel-shaded/toon looks and ShaderToy-compatible import with automatic channel-texture handling — see [Shader effects](#shader-effects).
+- **Per-mesh visibility persists with the model** instead of resetting to visible on every reload.
+
+### Networking
+
+- **Send or receive a window's live state over the network** (UDP or TCP), so the 3D overlay can render on a different machine than the one generating the input — see [Network functionality](#network-functionality).
 
 ### Input
 
@@ -83,14 +102,15 @@ The goal of the `+` fork isn't "more lines of code" — it's closing gaps the or
 
 ### Engineering / tooling
 
-- **Structured logging via spdlog**, including rotating log files — the original had no structured logging at all.
+- **Structured logging via spdlog**, including rotating log files — the original had no structured logging at all. The in-app log window is now its own always-on-top OS window with copyable log lines, and a new **Enable Debug Mode** setting keeps the more verbose diagnostic logging (e.g. per-mesh load lines) off by default so it doesn't cost load-time performance unless you actually need it.
+- **Taskbar/tray icon** using the app's own icon (Windows and Linux; not yet implemented on macOS).
 - **CMake-based build system** replacing the original's platform-specific shell/batch scripts, plus convenience scripts (`build-all.sh`, `build-appimage.sh`, `build-macos.sh`, `build-windows.sh`) and Docker-based cross-build files for reproducible packaging.
 - **AppImage & `.desktop` integration** on Linux for proper application-menu installation.
 - **Embedded model library**: the bundled `.obj` model set is packed into the binary at build time and extracted on first run, so there's no separate assets folder to lose track of.
 - **Updated to the latest Dear ImGui version** for improved UI/UX and bug fixes.
 - **Updated to SDL3** for better performance, new features, and improved controller support.
 
-New dependencies to support the above: **Assimp** (model import), **spdlog/fmt** (logging), and **nlohmann_json** (settings/model metadata), alongside the original GLFW/SDL3/GLM/stb stack.
+New dependencies to support the above: **Assimp** (model import), **spdlog/fmt** (logging), and **nlohmann_json** (settings/model metadata), alongside the original GLFW/SDL3/GLM/stb stack. Linux builds additionally link against **libdbus-1** for the StatusNotifierItem tray icon.
 
 ## How it works
 
@@ -154,6 +174,46 @@ Gamepad button/axis layouts are resolved through SDL3's community-maintained [`g
 
 **Note on Steam Controller support:** With the upgrade to SDL3, the Steam Controller is now detected and works directly on all supported platforms (Windows and Linux) without requiring any special workarounds. This is a significant improvement over the SDL2 version, where manual intervention was often needed. I am still looking into how to make it work in macOS.
 
+## Network functionality
+
+![Network functionality demo placeholder](images/placeholder-network-demo.webp)
+*(Video coming soon)*
+
+Each controller window can send its live mesh state (button presses, axis values, touch positions) over the network to another running instance of the app, instead of only rendering it locally. This is aimed at setups where the machine generating input isn't the one you want doing the capture/overlay compositing — for example, rendering the overlay on a dedicated streaming PC while the game runs on a separate gaming PC.
+
+Open a controller window's **Window** section to find the network controls:
+
+| Setting        | What it does                                                                                                                                             |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Mode**       | `Sender` reads local input and transmits it. `Receiver` listens on a port and drives the mesh from received data instead of local input.                            |
+| **Protocol**   | `UDP` — fast, connectionless, supports broadcast (e.g. `255.255.255.255`). `TCP` — reliable, one-to-one (a receiver accepts a single sender).                       |
+| **IP Address** | Destination address in Sender mode (the receiving machine's IP, or a broadcast address for UDP).                                                                    |
+| **Port**       | Port to send to (Sender) or listen on (Receiver). Must match on both ends.                                                                                          |
+| **Send Rate**  | How often a Sender pushes an update: `Max`, `60 Hz`, `30 Hz`, `15 Hz`, or `10 Hz`.                                                                                    |
+| **Enable Network** | Turns the above on/off for this window. Connection status (connected/listening/disconnected) is shown live once enabled.                                       |
+
+A quick two-PC setup looks like:
+
+1. On the **gaming PC**: open the controller window you want to share, set **Mode** to `Sender`, enter the streaming PC's IP address and a port, pick a protocol, then check **Enable Network**.
+2. On the **streaming/capture PC**: open the same model, set **Mode** to `Receiver`, use the same port and protocol, then check **Enable Network**.
+
+Local controller input is ignored on a window that's in Receiver mode — everything it displays comes from the network instead.
+
+## Shader effects
+
+Each mesh (or a whole window, via the global shader setting) can use a custom fragment shader instead of the default lit material — accessible from a mesh's **Shader Effect** section in Settings. A handful of looks ship built in, including:
+
+- **Pixel Art** – genuinely blocky, posterized shading (screen-space "pixels", not just a color tweak).
+- **Cel-shaded / Toon** – flat anime-style color bands, a hard-edged specular highlight, and outlines detected from three combined signals (surface creases, silhouette grazing angle, and depth discontinuities) so the outline actually shows up reliably instead of only on sharp corners.
+- Several fully animated effects (aurora, rainbow, lava/"infernal", a Shadertoy-ported black hole/voronoi effect) as examples of what's possible.
+
+**Importing your own ShaderToy shader:** paste (or point the app at) a standard ShaderToy `mainImage()` shader and it's automatically wrapped with the right uniforms (`iTime`, `iResolution`, `iMouse`, `iFrame`, etc.). If the shader samples a channel texture (`iChannel0`-`iChannel3`) — very common for shaders that use a noise or gradient texture — you no longer need to track that texture down and wire it up by hand:
+
+- Click **Add Resource...** next to the shader dropdown to pick an image file; it's copied into that shader's own folder and bound to the next free channel automatically.
+- Any channel a shader references that you *haven't* supplied an image for gets a generated tileable noise texture instead of rendering black — so most ShaderToy shaders that expect "some noise" just work the moment you paste them in, and you only need **Add Resource** for shaders that need a *specific* image (a gradient ramp, a logo, etc.).
+
+Shader files live under `shaders/<name>/` in your [data directory](#where-your-data-lives) — `fragment.glsl` plus any `channel0`–`channel3` image files — so you can also edit or drop resources in by hand if you'd rather not use the file picker.
+
 ## Manual mapping for unrecognized devices
 
 If your controller or input device isn't automatically detected, you can manually map its buttons and axes using the **Mapping** panel in the settings window. Here's how:
@@ -204,6 +264,7 @@ Live demo clips for every controller in the built-in model library. (The `+` bad
 | macOS Accessibility permission required for keyboard/mouse | By design           | See README for instructions.                                 |
 | Gyro reset combo not working on certain controllers        | Under investigation | Use manual reset button as workaround.                       |
 | Imported model preview sometimes crashes on large files    | Rare                | Reduce polygon count or use simpler format.                  |
+| Taskbar/tray icon not available on macOS                    | Known limitation    | Windows and Linux only for now; needs an Objective-C++ implementation. |
 
 ---
 
@@ -251,7 +312,7 @@ If you skip this, the app still launches fine — gamepad/joystick input is unaf
 ```bash
 # Inside an MSYS2 MinGW64 shell
 pacman -S --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake \
-  mingw-w64-x86_64-pkgconf mingw-w64-x86_64-glfw mingw-w64-x86_64-SDL2 \
+  mingw-w64-x86_64-pkgconf mingw-w64-x86_64-glfw mingw-w64-x86_64-SDL3 \
   mingw-w64-x86_64-assimp mingw-w64-x86_64-spdlog mingw-w64-x86_64-fmt \
   mingw-w64-x86_64-nlohmann-json
 rm -rf build && mkdir build && cd build
@@ -273,6 +334,6 @@ Bug reports and pull requests are welcome. Please open an issue first to discuss
 
 - **Original creator & engine**: [Larf](https://github.com/larfingshnew) — [3D Controller Overlay](https://github.com/larfingshnew/3d-controller-overlay). Please go star/support the original.
 - **This fork**: designed, built, and maintained by me as a homage/continuation and a personal test of what I can build with AI-assisted coding — all architecture, debugging, and feature decisions are mine.
-- Third-party libraries: GLFW, glad, SDL2, GLM, Dear ImGui, stb_image, Assimp, spdlog/fmt, nlohmann_json, miniz.
+- Third-party libraries: GLFW, glad, SDL3, GLM, Dear ImGui, stb_image, Assimp, spdlog/fmt, nlohmann_json, miniz, libdbus (Linux tray icon).
 
 **Enjoy!** If you find this useful, please star the repository and consider supporting the original project.

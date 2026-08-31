@@ -41,7 +41,44 @@
 #include <sys/stat.h>
 
 static void DraggableTooltip(const char *text) {
-  ImGui::SetTooltip("%s", text);
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    // Colored first line (teal/green) – indicates draggable
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.9f, 0.8f, 1.0f));
+    ImGui::Text("Drag to change or click to type.");
+    ImGui::PopStyleColor();
+    // Second line – normal white (default color)
+    ImGui::TextUnformatted(text);
+    ImGui::EndTooltip();
+  }
+}
+
+// Unified drag-float helper for every angle-related slider in this
+// file. Two different storage conventions exist across the codebase:
+// some angle fields store radians (the shader/math code consumes them
+// directly as radians - e.g. texture rotation, mesh pivot rotation),
+// others already store degrees natively (camera yaw/pitch/roll,
+// spotlight yaw/pitch/cutoff/outer_cutoff). is_radians selects which,
+// so every angle control goes through one consistent helper instead of
+// each call site hand-rolling its own DragFloat with its own
+// speed/format/range - and, for radian fields specifically, instead of
+// risking exactly the bug this replaces: the old texture Rotation
+// slider labeled itself "deg" with a -180..180 range but never
+// actually converted, so what the shader consumed as radians was
+// edited directly as if it were already degrees.
+static bool draggableFloatAngle(const char *label, float *value,
+                                bool is_radians, float speed = 0.5f,
+                                float min_deg = -360.0f, float max_deg = 360.0f,
+                                const char *format = "%.1f\xC2\xB0") {
+  if (is_radians) {
+    float degrees = glm::degrees(*value);
+    if (ImGui::DragFloat(label, &degrees, speed, min_deg, max_deg, format)) {
+      *value = glm::radians(degrees);
+      return true;
+    }
+    return false;
+  }
+  return ImGui::DragFloat(label, value, speed, min_deg, max_deg, format);
 }
 
 static std::string g_last_glfw_error;
@@ -273,6 +310,22 @@ bool g_log_controller = false;
 bool g_log_keyboard = false;
 bool g_log_mouse = false;
 bool g_tray_enabled = false;
+// Gates verbose per-item diagnostic logging (e.g. "Loading mesh: X" for
+// every mesh in a model) that is only useful when actively debugging,
+// but was previously always emitted at spdlog::info - see
+// setDebugModeEnabled() below for what this actually does at runtime.
+bool g_debug_mode_enabled = false;
+
+void setDebugModeEnabled(bool enabled) {
+  g_debug_mode_enabled = enabled;
+  // spdlog checks the active level before formatting a message at all,
+  // so raising/lowering it here is what actually removes the per-mesh /
+  // per-item logging overhead when debug mode is off, rather than just
+  // hiding already-formatted lines after the fact. Anything logged at
+  // spdlog::debug (see model.cpp's mesh loader, for instance) is a
+  // no-op below this line's cost when disabled.
+  spdlog::set_level(enabled ? spdlog::level::debug : spdlog::level::info);
+}
 
 // Export Mapping button's transient result banner (see the button's
 // handler further down) - not per-window, just reused for whichever
@@ -426,10 +479,23 @@ unsigned texture_mesh = 0;
 GLFWwindow *glfw_settings_window;
 GLFWmonitor *primary_monitor;
 const GLFWvidmode *vid_mode;
+// The log window (see log_window.cpp) now owns its own GLFW window and
+// ImGui context so it can stay always-on-top independently of this
+// window. Since ImGui's "current context" is global, drawSettingsWindow()
+// explicitly restores this one on entry rather than assuming it's still
+// current - the log window borrows and restores the previous context
+// around its own rendering, but being explicit here too means the two
+// can never silently step on each other regardless of call order.
+ImGuiContext *g_settings_imgui_ctx = nullptr;
 
 ImGui::FileBrowser texture_dialog;
 ImGui::FileBrowser model_dialog;
 ImGui::FileBrowser import_model_dialog;
+ImGui::FileBrowser shader_resource_dialog;
+// Which shader the next shader_resource_dialog selection should be
+// copied into as a channelN.* file - set when the "Add Resource" button
+// opens the dialog, consumed once a file is picked.
+std::string g_shader_resource_target;
 
 std::vector<window_tab> tabs;
 std::vector<Texture> textures;
@@ -531,7 +597,7 @@ void createSettingsWindow() {
   }
 
   IMGUI_CHECKVERSION();
-  ImGui::CreateContext();
+  g_settings_imgui_ctx = ImGui::CreateContext();
   io = &ImGui::GetIO();
   (void)io;
 
@@ -586,6 +652,10 @@ void createSettingsWindow() {
   import_model_dialog.SetTitle("Import 3D Model");
   import_model_dialog.SetTypeFilters(
       {".obj", ".fbx", ".gltf", ".glb", ".blend", ".dae", ".stl"});
+
+  shader_resource_dialog.SetWindowSize(400, 300);
+  shader_resource_dialog.SetTitle("Add Shader Resource (Channel Texture)");
+  shader_resource_dialog.SetTypeFilters({".png", ".jpg", ".jpeg"});
 }
 
 GLFWwindow *getSettingsWindow() { return glfw_settings_window; }
@@ -650,6 +720,7 @@ void writeOBJ(const std::string &path, const ImportedMesh &mesh);
 
 void drawSettingsWindow() {
   glfwMakeContextCurrent(glfw_settings_window);
+  ImGui::SetCurrentContext(g_settings_imgui_ctx);
   glfwSwapInterval(1);
 
   // Refresh the tray icon's menu data every frame, unconditionally
@@ -839,8 +910,24 @@ void drawSettingsWindow() {
               "Adds a system tray icon. Click it to minimize/restore the "
               "main window; right-click for a menu with per-controller "
               "minimize/restore, network status, and Quit.");
-        ImGui::NewLine();
+        ImGui::SameLine();
       }
+      // Debug Mode is intentionally not nested inside the
+      // TrayIcon::isSupported() check above - it's a logging setting
+      // with nothing to do with the tray, and needs to be reachable on
+      // every platform (including ones like macOS where the tray icon
+      // isn't implemented yet and that whole block is hidden).
+      if (ImGui::Checkbox("Enable Debug Mode", &g_debug_mode_enabled)) {
+        setDebugModeEnabled(g_debug_mode_enabled);
+      }
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip(
+            "Enables verbose diagnostic logging (e.g. every mesh loaded "
+            "per model). Off by default since it adds a small but "
+            "noticeable delay when loading models with many meshes - "
+            "turn this on before opening the log window if you need to "
+            "report a bug.");
+      ImGui::NewLine();
 
 #if defined(_WIN32)
       // Minimize/Maximize/Restore buttons - only needed on Windows,
@@ -1036,8 +1123,7 @@ void drawSettingsWindow() {
         glfwSetWindowSize(current_window->glfw_window, w, h);
       }
       if (ImGui::IsItemHovered())
-        ImGui::SetTooltip(
-            "Drag the number or click to type. Window width in pixels.");
+        DraggableTooltip("Window width in pixels.");
 
       if (ImGui::DragInt("Height", &h, 1.0f, 10, vid_mode->height, "%d px")) {
         if (h < 10)
@@ -1047,8 +1133,7 @@ void drawSettingsWindow() {
         glfwSetWindowSize(current_window->glfw_window, w, h);
       }
       if (ImGui::IsItemHovered())
-        ImGui::SetTooltip(
-            "Drag the number or click to type. Window height in pixels.");
+        DraggableTooltip("Window height in pixels.");
 
       ImGui::NewLine();
       // With vsync permanently off for controller windows on every
@@ -1095,7 +1180,7 @@ void drawSettingsWindow() {
         current_window->overlay_update_interval = 1.0 / (double)overlay_hz;
       }
       if (ImGui::IsItemHovered())
-        ImGui::SetTooltip(
+        DraggableTooltip(
             "Windows only: how often the rendered model is actually "
             "pushed to the visible overlay window, independent of Frame "
             "Cap above. Lower values reduce CPU/GDI usage further, at "
@@ -1125,7 +1210,7 @@ void drawSettingsWindow() {
       ImGui::NewLine();
       ImGui::ColorEdit4("Background Color", current_window->bg_color);
       if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Background colour and opacity.");
+        DraggableTooltip("Background colour and opacity.");
     }
 
     // ============================================================
@@ -1135,30 +1220,24 @@ void drawSettingsWindow() {
       ImGui::DragFloat("Distance", &current_window->camera_distance, 0.1f, 1,
                        10);
       if (ImGui::IsItemHovered())
-        ImGui::SetTooltip(
-            "Drag to change or click to type. Camera distance from the model.");
-      ImGui::DragFloat("Yaw", &current_window->camera_yaw, 0.5f, -360, 360);
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip(
-            "Drag to change or click to type. Horizontal camera orbit.");
-      ImGui::DragFloat("Pitch", &current_window->camera_pitch, 0.5f, -180, 180);
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip(
-            "Drag to change or click to type. Vertical camera orbit.");
-      ImGui::DragFloat("Roll", &current_window->camera_roll, 0.5f, -180, 180);
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip(
-            "Drag to change or click to type. Camera roll (tilt).");
+        DraggableTooltip("Camera distance from the model.");
+      draggableFloatAngle("Yaw", &current_window->camera_yaw, false, 0.5f, -360,
+                          360);
+      DraggableTooltip("Horizontal camera orbit.");
+      draggableFloatAngle("Pitch", &current_window->camera_pitch, false, 0.5f,
+                          -180, 180);
+      DraggableTooltip("Vertical camera orbit.");
+      draggableFloatAngle("Roll", &current_window->camera_roll, false, 0.5f,
+                          -180, 180);
+      DraggableTooltip("Camera roll (tilt).");
       ImGui::DragFloat("Pan X", &current_window->camera_offset_x, 0.01f, -5.0f,
                        5.0f, "%.2f");
       if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Drag to change or click to type. Translate camera "
-                          "horizontally.");
+        DraggableTooltip("Translate camera horizontally.");
       ImGui::DragFloat("Pan Y", &current_window->camera_offset_y, 0.01f, -5.0f,
                        5.0f, "%.2f");
       if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Drag to change or click to type. Translate camera "
-                          "vertically.");
+        DraggableTooltip("Translate camera vertically.");
       if (ImGui::Button("Reset")) {
         current_window->camera_distance = 3.3f;
         current_window->camera_yaw = 0.0f;
@@ -1349,113 +1428,117 @@ void drawSettingsWindow() {
       }
       if (receiverMode)
         ImGui::EndDisabled();
+
+      if (ImGui::TreeNode("Settings")) {
+        // Apply a dark purple background for the tree node
+        BeginShadedGroup();
+        ImGui::Checkbox("Popup Bumpers", &current_window->model.popup_bumpers);
+        if (ImGui::IsItemHovered())
+          ImGui::SetTooltip("Animate bumpers when pressed.");
+        ImGui::SameLine();
+        ImGui::Checkbox("Popup Triggers",
+                        &current_window->model.popup_triggers);
+        if (ImGui::IsItemHovered())
+          ImGui::SetTooltip("Animate triggers when pressed.");
+        ImGui::SameLine();
+        ImGui::Checkbox("Popup Paddles", &current_window->model.popup_paddles);
+        if (ImGui::IsItemHovered())
+          ImGui::SetTooltip("Animate paddles when pressed.");
+        ImGui::NewLine();
+        if (current_window->model.meshes.size() > 7) {
+          ImGui::SliderInt(
+              "L-Stick Highlight Deadzone",
+              &current_window->model.meshes[7].ring_highlight_deadzone, 0, 100);
+        }
+        if (ImGui::IsItemHovered())
+          ImGui::SetTooltip("Deadzone for left stick highlight ring.");
+        if (current_window->model.meshes.size() > 8) {
+          ImGui::SliderInt(
+              "R-Stick Highlight Deadzone",
+              &current_window->model.meshes[8].ring_highlight_deadzone, 0, 100);
+        }
+        if (ImGui::IsItemHovered())
+          ImGui::SetTooltip("Deadzone for right stick highlight ring.");
+        ImGui::ColorEdit4("Highlight Color (Global)",
+                          current_window->highlight_color);
+        if (ImGui::IsItemHovered())
+          DraggableTooltip("Default highlight color for all meshes. Can be "
+                           "overridden per mesh.");
+        EndShadedGroup(ShadeColor(0.42f, 0.28f, 0.62f),
+                       ShadeBorder(0.42f, 0.28f, 0.62f));
+
+        // Inside the Controller CollapsingHeader, after highlight color:
+        ImGui::NewLine();
+        ImGui::Text("Global Shader Effect");
+        std::vector<std::string> shaderNames = GetShaderNames();
+        int currentGlobalShaderIdx = 0;
+        if (!current_window->global_shader_name.empty()) {
+          for (int i = 1; i < (int)shaderNames.size(); ++i) {
+            if (shaderNames[i] == current_window->global_shader_name) {
+              currentGlobalShaderIdx = i;
+              break;
+            }
+          }
+        }
+        std::vector<const char *> shaderNamesCStr;
+        for (auto &s : shaderNames)
+          shaderNamesCStr.push_back(s.c_str());
+        if (ImGui::Combo("Global Shader", &currentGlobalShaderIdx,
+                         shaderNamesCStr.data(), (int)shaderNamesCStr.size())) {
+          if (currentGlobalShaderIdx == 0)
+            current_window->global_shader_name = "";
+          else
+            current_window->global_shader_name =
+                shaderNames[currentGlobalShaderIdx];
+        }
+        if (ImGui::IsItemHovered())
+          ImGui::SetTooltip("Applies to all meshes unless a mesh has its own "
+                            "shader override.");
+
+        // ---- Logging toggle ----
+        ImGui::NewLine();
+        ImGui::Checkbox("Log Controller/Joystick", &g_log_controller);
+        ImGui::SameLine();
+        ImGui::Checkbox("Log Keyboard", &g_log_keyboard);
+        ImGui::SameLine();
+        ImGui::Checkbox("Log Mouse", &g_log_mouse);
+        if (ImGui::IsItemHovered())
+          ImGui::SetTooltip("Toggle logging for each device type.");
+        ImGui::NewLine();
+
+        // ---- Input responsiveness / idle CPU trade-off ----
+        // Global (app-wide), not per-window, same as the logging toggles
+        // above - see setPollIntervalMs()'s declaration in
+        // keyboard_input.h for the full explanation. Windows only: on
+        // Linux/macOS the global keyboard/mouse backends are already
+        // blocking/event-driven with no equivalent poll loop, so this
+        // would have nothing to affect there - hidden entirely rather
+        // than shown as a control that silently does nothing.
+#if defined(_WIN32)
+        static int poll_ms = GlobalKeyboard::getPollIntervalMs();
+        if (ImGui::SliderInt("Input Responsiveness", &poll_ms, 1, 16,
+                             "%d ms")) {
+          GlobalKeyboard::setPollIntervalMs(poll_ms);
+        }
+        if (ImGui::IsItemHovered())
+          ImGui::SetTooltip(
+              "How often the background keyboard/mouse listener wakes up "
+              "to check for input, even when nothing is being pressed. "
+              "Lower values (toward 1ms) notice a key/click sooner after "
+              "it happens, but cost a small amount of CPU every single "
+              "wake-up - at 1ms that's up to 1000 wake-ups per second, "
+              "all the time, even sitting completely idle. Higher values "
+              "cut that idle CPU cost, at the expense of adding up to "
+              "that same amount of extra delay before a real input is "
+              "noticed. Takes effect immediately.");
+#endif
+
+        ImGui::TreePop();
+
+      } // end Controller
     }
     if (ImGui::IsItemHovered())
       ImGui::SetTooltip("Select a gamepad or joystick.");
-
-    if (ImGui::TreeNode("Settings")) {
-      // Apply a dark purple background for the tree node
-      BeginShadedGroup();
-      ImGui::Checkbox("Popup Bumpers", &current_window->model.popup_bumpers);
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Animate bumpers when pressed.");
-      ImGui::SameLine();
-      ImGui::Checkbox("Popup Triggers", &current_window->model.popup_triggers);
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Animate triggers when pressed.");
-      ImGui::SameLine();
-      ImGui::Checkbox("Popup Paddles", &current_window->model.popup_paddles);
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Animate paddles when pressed.");
-      ImGui::NewLine();
-      if (current_window->model.meshes.size() > 7) {
-        ImGui::SliderInt(
-            "L-Stick Highlight Deadzone",
-            &current_window->model.meshes[7].ring_highlight_deadzone, 0, 100);
-      }
-      if (current_window->model.meshes.size() > 8) {
-        ImGui::SliderInt(
-            "R-Stick Highlight Deadzone",
-            &current_window->model.meshes[8].ring_highlight_deadzone, 0, 100);
-      }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Deadzone for right stick highlight ring.");
-      ImGui::ColorEdit4("Highlight Color (Global)",
-                        current_window->highlight_color);
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Default highlight color for all meshes. Can be "
-                          "overridden per mesh.");
-      EndShadedGroup(ShadeColor(0.42f, 0.28f, 0.62f),
-                     ShadeBorder(0.42f, 0.28f, 0.62f));
-
-      // Inside the Controller CollapsingHeader, after highlight color:
-      ImGui::NewLine();
-      ImGui::Text("Global Shader Effect");
-      std::vector<std::string> shaderNames = GetShaderNames();
-      int currentGlobalShaderIdx = 0;
-      if (!current_window->global_shader_name.empty()) {
-        for (int i = 1; i < (int)shaderNames.size(); ++i) {
-          if (shaderNames[i] == current_window->global_shader_name) {
-            currentGlobalShaderIdx = i;
-            break;
-          }
-        }
-      }
-      std::vector<const char *> shaderNamesCStr;
-      for (auto &s : shaderNames)
-        shaderNamesCStr.push_back(s.c_str());
-      if (ImGui::Combo("Global Shader", &currentGlobalShaderIdx,
-                       shaderNamesCStr.data(), (int)shaderNamesCStr.size())) {
-        if (currentGlobalShaderIdx == 0)
-          current_window->global_shader_name = "";
-        else
-          current_window->global_shader_name =
-              shaderNames[currentGlobalShaderIdx];
-      }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Applies to all meshes unless a mesh has its own "
-                          "shader override.");
-
-      // ---- Logging toggle ----
-      ImGui::NewLine();
-      ImGui::Checkbox("Log Controller/Joystick", &g_log_controller);
-      ImGui::SameLine();
-      ImGui::Checkbox("Log Keyboard", &g_log_keyboard);
-      ImGui::SameLine();
-      ImGui::Checkbox("Log Mouse", &g_log_mouse);
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Toggle logging for each device type.");
-      ImGui::NewLine();
-
-      // ---- Input responsiveness / idle CPU trade-off ----
-      // Global (app-wide), not per-window, same as the logging toggles
-      // above - see setPollIntervalMs()'s declaration in
-      // keyboard_input.h for the full explanation. Windows only: on
-      // Linux/macOS the global keyboard/mouse backends are already
-      // blocking/event-driven with no equivalent poll loop, so this
-      // would have nothing to affect there - hidden entirely rather
-      // than shown as a control that silently does nothing.
-#if defined(_WIN32)
-      static int poll_ms = GlobalKeyboard::getPollIntervalMs();
-      if (ImGui::SliderInt("Input Responsiveness", &poll_ms, 1, 16, "%d ms")) {
-        GlobalKeyboard::setPollIntervalMs(poll_ms);
-      }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip(
-            "How often the background keyboard/mouse listener wakes up "
-            "to check for input, even when nothing is being pressed. "
-            "Lower values (toward 1ms) notice a key/click sooner after "
-            "it happens, but cost a small amount of CPU every single "
-            "wake-up - at 1ms that's up to 1000 wake-ups per second, "
-            "all the time, even sitting completely idle. Higher values "
-            "cut that idle CPU cost, at the expense of adding up to "
-            "that same amount of extra delay before a real input is "
-            "noticed. Takes effect immediately.");
-#endif
-
-      ImGui::TreePop();
-
-    } // end Controller
 
     // ============================================================
     // MODEL
@@ -1663,26 +1746,22 @@ void drawSettingsWindow() {
           ImGui::NewLine();
           ImGui::DragFloat("Ambient", &matMesh.material.ambient, 0.01f, 0, 1);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip(
-                "Drag to change or click to type. Ambient light reflection.");
+            DraggableTooltip("Ambient light reflection.");
 
           ImGui::DragFloat("Diffuse", &matMesh.material.diffuse, 0.01f, 0, 1);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip(
-                "Drag to change or click to type. Diffuse light reflection.");
+            DraggableTooltip("Diffuse light reflection.");
           ImGui::DragFloat("Specular", &matMesh.material.specular, 0.01f, 0, 1);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Drag to change or click to type. Specular "
-                              "(shininess) intensity.");
+            DraggableTooltip("Specular (shininess) intensity.");
           ImGui::DragFloat("Shininess", &matMesh.material.shininess, 0.5f, 1,
                            256);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Drag to change or click to type. Specular "
-                              "exponent (higher = sharper highlights).");
+            DraggableTooltip(
+                "Specular exponent (higher = sharper highlights).");
           ImGui::ColorEdit3("Color", matMesh.material.color);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip(
-                "Drag to change or click to type. Base colour of the mesh.");
+            DraggableTooltip("Base colour of the mesh.");
           matMesh.original_color[0] = matMesh.material.color[0];
           matMesh.original_color[1] = matMesh.material.color[1];
           matMesh.original_color[2] = matMesh.material.color[2];
@@ -1893,10 +1972,9 @@ void drawSettingsWindow() {
             ImGui::InputFloat("Scale Y", &t->scaleY, 0.01f, 1.0f, "%.3f");
             if (ImGui::IsItemHovered())
               ImGui::SetTooltip("Vertical texture scale.");
-            ImGui::DragFloat("Rotation", &t->rotation, 0.1f, -180.0f, 180.0f,
-                             "%.1f deg");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Texture rotation angle.");
+            draggableFloatAngle("Rotation", &t->rotation, /*is_radians=*/true,
+                                0.1f, -180.0f, 180.0f);
+            DraggableTooltip("Texture rotation angle.");
           }
           EndShadedGroup(ShadeColor(0.22f, 0.38f, 0.58f),
                          ShadeBorder(0.22f, 0.38f, 0.58f));
@@ -1980,10 +2058,10 @@ void drawSettingsWindow() {
       ImGui::NewLine();
       ImGui::DragFloat("Mouse Sensitivity", &current_window->mouse_sensitivity,
                        0.01f, 0.01f, 2.0f, "%.2f");
+
       if (ImGui::IsItemHovered())
-        ImGui::SetTooltip(
-            "Drag to change or click to type. Scale factor for mouse movement "
-            "-> touchpoint displacement. "
+        DraggableTooltip(
+            "Scale factor for mouse movement -> touchpoint displacement. "
             "Lower = slower, higher = faster. Default (0.5) gives a moderate "
             "speed.");
       ImGui::NewLine();
@@ -2718,30 +2796,35 @@ void drawSettingsWindow() {
                                 "'Popup Paddles' is enabled.");
             ImGui::InputFloat("Popup Offset X", &selectedMesh.popup_offset[0],
                               0.01f, 1.0f, "%.3f");
+            if (ImGui::IsItemHovered())
+              ImGui::SetTooltip("Vertical offset when the part 'pops up'.");
             ImGui::InputFloat("Popup Offset Y", &selectedMesh.popup_offset[1],
                               0.01f, 1.0f, "%.3f");
+            if (ImGui::IsItemHovered())
+              ImGui::SetTooltip("Depth offset when the part 'pops up'.");
             ImGui::InputFloat("Popup Offset Z", &selectedMesh.popup_offset[2],
                               0.01f, 1.0f, "%.3f");
-            ImGui::DragFloat("Popup Yaw", &selectedMesh.popup_rotation[1], 0.1f,
-                             -180.0f, 180.0f, "%.1f deg");
-            ImGui::DragFloat("Popup Pitch", &selectedMesh.popup_rotation[0],
-                             0.1f, -180.0f, 180.0f, "%.1f deg");
-            ImGui::DragFloat("Popup Roll", &selectedMesh.popup_rotation[2],
-                             0.1f, -180.0f, 180.0f, "%.1f deg");
             if (ImGui::IsItemHovered())
-              ImGui::SetTooltip(
-                  "Offset and rotation when the part 'pops up' (e.g. bumper).");
+              ImGui::SetTooltip("Horizontal offset when the part 'pops up'.");
+            draggableFloatAngle("Popup Yaw", &selectedMesh.popup_rotation[1],
+                                /*is_radians=*/true, 0.1f, -180.0f, 180.0f);
+            DraggableTooltip("Yaw rotation when the part 'pops up' (e.g. a "
+                             "bumper tilting outward).");
+            draggableFloatAngle("Popup Pitch", &selectedMesh.popup_rotation[0],
+                                /*is_radians=*/true, 0.1f, -180.0f, 180.0f);
+            DraggableTooltip("Pitch rotation when the part 'pops up'.");
+            draggableFloatAngle("Popup Roll", &selectedMesh.popup_rotation[2],
+                                /*is_radians=*/true, 0.1f, -180.0f, 180.0f);
+            DraggableTooltip("Roll rotation when the part 'pops up'.");
             ImGui::Separator();
             ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.8f, 1.0f),
                                "Stick / Trigger Limits");
-            ImGui::DragFloat("Stick Max Angle", &selectedMesh.stick_max, 0.1f,
-                             0.0f, 45.0f, "%.1f deg");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Maximum deflection angle for sticks.");
-            ImGui::DragFloat("Trigger Max Angle", &selectedMesh.trigger_max,
-                             0.1f, 0.0f, 90.0f, "%.1f deg");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Maximum pull angle for triggers.");
+            draggableFloatAngle("Stick Max Angle", &selectedMesh.stick_max,
+                                /*is_radians=*/true, 0.1f, 0.0f, 45.0f);
+            DraggableTooltip("Maximum tilt angle for analog sticks.");
+            draggableFloatAngle("Trigger Max Angle", &selectedMesh.trigger_max,
+                                /*is_radians=*/true, 0.1f, 0.0f, 90.0f);
+            DraggableTooltip("Maximum pull angle for triggers.");
             EndShadedGroup(ShadeColor(0.16f, 0.48f, 0.52f),
                            ShadeBorder(0.16f, 0.48f, 0.52f));
             ImGui::TreePop();
@@ -2767,6 +2850,8 @@ void drawSettingsWindow() {
             if (selectedMesh.use_custom_highlight) {
               ImGui::ColorEdit4("Custom Highlight Color",
                                 selectedMesh.custom_highlight_color);
+              if (ImGui::IsItemHovered())
+                DraggableTooltip("Custom Highlight Color");
             }
 
             // ---- Dual highlight for axes ----
@@ -2777,10 +2862,17 @@ void drawSettingsWindow() {
             if (selectedMesh.use_dual_highlight) {
               ImGui::ColorEdit4("Positive Color",
                                 selectedMesh.highlight_color_positive);
+              if (ImGui::IsItemHovered())
+                DraggableTooltip("Positive Color");
               ImGui::ColorEdit4("Negative Color",
                                 selectedMesh.highlight_color_negative);
+              if (ImGui::IsItemHovered())
+                DraggableTooltip("Negative Color");
               ImGui::DragFloat("Axis Deadzone", &selectedMesh.axis_deadzone,
                                0.001f, 0.0f, 0.5f, "%.3f");
+              if (ImGui::IsItemHovered())
+                DraggableTooltip(
+                    "Deadzone to start showing the Custom Highlight Color");
               ImGui::TextWrapped("The highlight will be off when the axis "
                                  "value is within this deadzone. It ramps from "
                                  "0 to full between the deadzone and 1.");
@@ -2838,6 +2930,30 @@ void drawSettingsWindow() {
                 selectedMesh.shader_name = shaderNames[current_shader_idx];
             }
 
+            // ---- Add Resource (channel texture) ----
+            // Only relevant once an actual shader is selected. This
+            // covers the "shadertoy shaders with a noise channel don't
+            // load correctly" case: rather than requiring the user to
+            // manually find the shader's folder on disk and drop a
+            // correctly-named channel0.png in by hand, they can pick an
+            // image here and it's copied into the right place (and the
+            // shader's cached channel texture is invalidated so it
+            // takes effect immediately - see shader.cpp).
+            if (current_shader_idx != 0) {
+              if (ImGui::Button("Add Resource...")) {
+                g_shader_resource_target = shaderNames[current_shader_idx];
+                shader_resource_dialog.Open();
+              }
+              if (ImGui::IsItemHovered())
+                ImGui::SetTooltip(
+                    "Add an image as a channel texture (iChannel0-3) for "
+                    "this shader - useful for ShaderToy-style shaders "
+                    "that expect a noise or gradient texture. Filled "
+                    "into the next free channel slot automatically; if "
+                    "no image is provided, unused channels fall back to "
+                    "generated noise.");
+            }
+
             EndShadedGroup(ShadeColor(0.2f, 0.5f, 0.3f),
                            ShadeBorder(0.2f, 0.5f, 0.3f));
             ImGui::TreePop();
@@ -2872,6 +2988,8 @@ void drawSettingsWindow() {
                           &current_window->highlight_enabled);
           ImGui::SameLine();
           ImGui::ColorEdit3("Temp Color", current_window->highlight_color);
+          if (ImGui::IsItemHovered())
+            DraggableTooltip("Temporary Highlight Color");
 
           if (current_window->highlight_enabled) {
             if (current_window->original_colors.find(selected_mesh) ==
@@ -2982,11 +3100,14 @@ void drawSettingsWindow() {
           if (selectedMesh.isTouchpad) {
             ImGui::DragFloat("Touch Area Width", &selectedMesh.touch_width,
                              0.01f, 0.01f, 5.0f, "%.2f");
+            if (ImGui::IsItemHovered())
+              DraggableTooltip("Width of the touch-sensitive area "
+                               "in world units.");
             ImGui::DragFloat("Touch Area Height", &selectedMesh.touch_height,
                              0.01f, 0.01f, 5.0f, "%.2f");
             if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Width and height of the touch-sensitive area "
-                                "in world units.");
+              DraggableTooltip("Height of the touch-sensitive area "
+                               "in world units.");
 
             ImGui::Checkbox("Show Touch Area",
                             &current_window->show_touch_area);
@@ -3001,26 +3122,34 @@ void drawSettingsWindow() {
               ImGui::TableNextRow();
               ImGui::TableSetColumnIndex(0);
               ImGui::Text("Offset (world units)");
-              ImGui::SliderFloat("X", &selectedMesh.touch_offset[0], -2.0f,
-                                 2.0f, "%.2f");
-              ImGui::SliderFloat("Y", &selectedMesh.touch_offset[1], -2.0f,
-                                 2.0f, "%.2f");
-              ImGui::SliderFloat("Z", &selectedMesh.touch_offset[2], -2.0f,
-                                 2.0f, "%.2f");
+              ImGui::DragFloat("X", &selectedMesh.touch_offset[0], 0.01f, -2.0f,
+                               2.0f, "%.2f");
+              if (ImGui::IsItemHovered())
+                DraggableTooltip("Touchpoint horizontal offset.");
+              ImGui::DragFloat("Y", &selectedMesh.touch_offset[1], 0.01f, -2.0f,
+                               2.0f, "%.2f");
+              if (ImGui::IsItemHovered())
+                DraggableTooltip("Touchpoint vertical offset.");
+              ImGui::DragFloat("Z", &selectedMesh.touch_offset[2], 0.01f, -2.0f,
+                               2.0f, "%.2f");
+              if (ImGui::IsItemHovered())
+                DraggableTooltip("Touchpoint depth offset.");
               ImGui::TableSetColumnIndex(1);
               ImGui::Text("Rotation (degrees)");
-              ImGui::SliderFloat("Yaw", &selectedMesh.touch_rotation[1],
-                                 -360.0f, 360.0f, "%.1f deg");
-              ImGui::SliderFloat("Pitch", &selectedMesh.touch_rotation[0],
-                                 -360.0f, 360.0f, "%.1f deg");
-              ImGui::SliderFloat("Roll", &selectedMesh.touch_rotation[2],
-                                 -360.0f, 360.0f, "%.1f deg");
+              draggableFloatAngle("Yaw", &selectedMesh.touch_rotation[1],
+                                  /*is_radians=*/true, 0.5f, -360.0f, 360.0f);
+              if (ImGui::IsItemHovered())
+                DraggableTooltip("Touchpoint yaw rotation.");
+              draggableFloatAngle("Pitch", &selectedMesh.touch_rotation[0],
+                                  /*is_radians=*/true, 0.5f, -360.0f, 360.0f);
+              if (ImGui::IsItemHovered())
+                DraggableTooltip("Touchpoint pitch rotation.");
+              draggableFloatAngle("Roll", &selectedMesh.touch_rotation[2],
+                                  /*is_radians=*/true, 0.5f, -360.0f, 360.0f);
+              if (ImGui::IsItemHovered())
+                DraggableTooltip("Touchpoint roll rotation.");
               ImGui::EndTable();
             }
-
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip(
-                  "Draws a magenta rectangle showing the touch area.");
 
             ImGui::TextColored(
                 ImVec4(0.7f, 0.7f, 0.2f, 1.0f),
@@ -3383,19 +3512,16 @@ void drawSettingsWindow() {
             ImGui::SetTooltip("Rename the light.");
           ImGui::DragFloat("X Direction", &d->direction.x, 0.01f, -1, 1);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip(
-                "Drag to change or click to type. Light direction X.");
+            DraggableTooltip("Light direction X.");
           ImGui::DragFloat("Y Direction", &d->direction.y, 0.01f, -1, 1);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip(
-                "Drag to change or click to type. Light direction Y.");
+            DraggableTooltip("Light direction Y.");
           ImGui::DragFloat("Z Direction", &d->direction.z, 0.01f, -1, 1);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip(
-                "Drag to change or click to type. Light direction Z.");
+            DraggableTooltip("Light direction Z.");
           ImGui::ColorEdit3("Color", d->color);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Light colour.");
+            DraggableTooltip("Light color.");
         }
         EndShadedGroup(ShadeColor(0.58f, 0.46f, 0.10f),
                        ShadeBorder(0.58f, 0.46f, 0.10f));
@@ -3497,16 +3623,16 @@ void drawSettingsWindow() {
             ImGui::SetTooltip("Hide the light bulb visual.");
           ImGui::DragFloat("X Position", &p->position.x, 0.1f, -10, 10);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Light position X.");
+            DraggableTooltip("Light position X.");
           ImGui::DragFloat("Y Position", &p->position.y, 0.1f, -10, 10);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Light position Y.");
+            DraggableTooltip("Light position Y.");
           ImGui::DragFloat("Z Position", &p->position.z, 0.1f, -10, 10);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Light position Z.");
+            DraggableTooltip("Light position Z.");
           ImGui::DragFloat("Brightness", &p->intensity, 0.01f, 0, 1);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Light intensity.");
+            DraggableTooltip("Light intensity.");
           if (ImGui::ColorEdit3("Color", p->color)) {
             p->ambient.r = p->color[0] * 0.05f;
             p->ambient.g = p->color[1] * 0.05f;
@@ -3519,7 +3645,7 @@ void drawSettingsWindow() {
             p->specular.b = p->color[2];
           }
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Light colour.");
+            DraggableTooltip("Light color.");
         }
         EndShadedGroup(ShadeColor(0.58f, 0.20f, 0.36f),
                        ShadeBorder(0.58f, 0.20f, 0.36f));
@@ -3621,16 +3747,16 @@ void drawSettingsWindow() {
             ImGui::SetTooltip("Hide the light bulb visual.");
           ImGui::DragFloat("X Position", &s->position.x, 0.1f, -10, 10);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Light position X.");
+            DraggableTooltip("Light position X.");
           ImGui::DragFloat("Y Position", &s->position.y, 0.1f, -10, 10);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Light position Y.");
+            DraggableTooltip("Light position Y.");
           ImGui::DragFloat("Z Position", &s->position.z, 0.1f, -10, 10);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Light position Z.");
+            DraggableTooltip("Light position Z.");
           ImGui::DragFloat("Brightness", &s->intensity, 0.01f, 0, 1);
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Light intensity.");
+            DraggableTooltip("Light intensity.");
           if (ImGui::ColorEdit3("Color", s->color)) {
             s->ambient.r = s->color[0] * 0.05f;
             s->ambient.g = s->color[1] * 0.05f;
@@ -3643,31 +3769,28 @@ void drawSettingsWindow() {
             s->specular.b = s->color[2];
           }
           if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Light colour.");
-          if (ImGui::DragFloat("Yaw", &s->yaw, 0.5f, -180, 180)) {
+            DraggableTooltip("Light color.");
+          if (draggableFloatAngle("Yaw", &s->yaw, false, 0.5f, -180, 180)) {
             s->direction.x =
                 cos(glm::radians(s->pitch)) * sin(glm::radians(s->yaw + 180));
             s->direction.y = sin(glm::radians(s->pitch));
             s->direction.z =
                 cos(glm::radians(s->pitch)) * cos(glm::radians(s->yaw + 180));
           }
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Horizontal direction.");
-          if (ImGui::DragFloat("Pitch", &s->pitch, 0.5f, -90, 90)) {
+          DraggableTooltip("Horizontal direction.");
+          if (draggableFloatAngle("Pitch", &s->pitch, false, 0.5f, -90, 90)) {
             s->direction.x =
                 cos(glm::radians(s->pitch)) * sin(glm::radians(s->yaw + 180));
             s->direction.y = sin(glm::radians(s->pitch));
             s->direction.z =
                 cos(glm::radians(s->pitch)) * cos(glm::radians(s->yaw + 180));
           }
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Vertical direction.");
-          ImGui::DragFloat("Beam Angle", &s->cutoff, 0.5f, 0, 90);
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Inner cone angle.");
-          ImGui::DragFloat("Edge Blur", &s->outer_cutoff, 0.5f, 0, 100);
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Softness of the cone edge.");
+          DraggableTooltip("Vertical direction.");
+          draggableFloatAngle("Beam Angle", &s->cutoff, false, 0.5f, 0, 90);
+          DraggableTooltip("Inner cone angle.");
+          draggableFloatAngle("Edge Blur", &s->outer_cutoff, false, 0.5f, 0,
+                              100);
+          DraggableTooltip("Softness of the cone edge.");
         }
         EndShadedGroup(ShadeColor(0.16f, 0.42f, 0.56f),
                        ShadeBorder(0.16f, 0.42f, 0.56f));
@@ -3788,6 +3911,58 @@ void drawSettingsWindow() {
 
   texture_dialog.Display();
   model_dialog.Display();
+  shader_resource_dialog.Display();
+
+  if (shader_resource_dialog.HasSelected()) {
+    std::string destDir = getShaderResourceDirectory(g_shader_resource_target);
+
+    // Find the first channel slot (0-3) not already occupied by an
+    // image file, so multiple "Add Resource" clicks fill iChannel0,
+    // then iChannel1, etc. rather than all overwriting the same slot.
+    int slot = -1;
+    for (int i = 0; i < 4 && slot == -1; ++i) {
+      bool exists = false;
+      for (const char *ext : {".png", ".jpg", ".jpeg"}) {
+        if (std::filesystem::exists(destDir + "/channel" +
+                                    std::to_string(i) + ext)) {
+          exists = true;
+          break;
+        }
+      }
+      if (!exists)
+        slot = i;
+    }
+    if (slot == -1) {
+      slot = 0; // all four channel slots already used - overwrite the first
+      spdlog::warn("Shader '{}' already has 4 channel resources; "
+                   "overwriting channel0.",
+                   g_shader_resource_target);
+    }
+
+    std::string srcPath = shader_resource_dialog.GetSelected().string();
+    std::string ext = std::filesystem::path(srcPath).extension().string();
+    std::string destPath = destDir + "/channel" + std::to_string(slot) + ext;
+    try {
+      // Clear out any other-extension file for this slot first, so
+      // re-adding a resource as a different format doesn't leave two
+      // files that both match "channelN.*" for the same slot.
+      for (const char *oldExt : {".png", ".jpg", ".jpeg"}) {
+        std::string oldPath =
+            destDir + "/channel" + std::to_string(slot) + oldExt;
+        if (oldPath != destPath && std::filesystem::exists(oldPath))
+          std::filesystem::remove(oldPath);
+      }
+      std::filesystem::copy_file(
+          srcPath, destPath, std::filesystem::copy_options::overwrite_existing);
+      spdlog::info("Added shader resource '{}' as channel{} for shader '{}'",
+                   srcPath, slot, g_shader_resource_target);
+      invalidateShaderChannelCache(g_shader_resource_target, slot);
+    } catch (const std::exception &e) {
+      spdlog::error("Failed to copy shader resource '{}': {}", srcPath,
+                    e.what());
+    }
+    shader_resource_dialog.ClearSelected();
+  }
 
   if (texture_dialog.HasSelected()) {
     controller_window *ctrl = getControllerWindow(tabs[selected_tab].ID);
@@ -3887,11 +4062,6 @@ void drawSettingsWindow() {
       import_model_dialog.ClearSelected();
     }
   }
-
-  // Renders in the same ImGui frame/context as the rest of the settings
-  // window; internally a no-op unless the user has toggled it open via the
-  // "Open Log Window" button below.
-  drawLogWindow();
 
   ImGui::Render();
   glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
@@ -3996,7 +4166,7 @@ void DrawImportPreviewControls(controller_window &w) {
           w.model.meshes[assign.assigned_part].stick_max = 0.0f;
           w.model.meshes[assign.assigned_part].trigger_max = 0.0f;
         }
-        spdlog::info("Assigned mesh '{}' to part {} ({})", assign.mesh_name,
+        spdlog::debug("Assigned mesh '{}' to part {} ({})", assign.mesh_name,
                      assign.assigned_part,
                      assign.assigned_part >= 0
                          ? mesh_names[assign.assigned_part]
@@ -4072,8 +4242,8 @@ void DrawImportPreviewControls(controller_window &w) {
           }
         }
         if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Touch area width (world units). Adjust to match "
-                            "your physical controller.");
+          DraggableTooltip("Touch area width (world units). Adjust to match "
+                           "your physical controller.");
         ImGui::PopID();
       } else {
         ImGui::TextDisabled("N/A");
@@ -4290,7 +4460,7 @@ void SaveImportedModel(controller_window &w) {
     mesh.material.alpha = 1.0f;
 
     w.model.meshes.push_back(std::move(mesh));
-    spdlog::info("Added mesh '{}' with {} vertices.", assign.mesh_name,
+    spdlog::debug("Added mesh '{}' with {} vertices.", assign.mesh_name,
                  mesh.elements);
   }
 
@@ -4587,6 +4757,7 @@ static void saveGlobalSettings() {
   app_settings["log_mouse"] = g_log_mouse;
   app_settings["input_poll_interval_ms"] = GlobalKeyboard::getPollIntervalMs();
   app_settings["tray_enabled"] = g_tray_enabled;
+  app_settings["debug_mode_enabled"] = g_debug_mode_enabled;
   root[kAppSettingsKey] = app_settings;
 
   std::ofstream f(getSettingsFilePath());
@@ -4602,6 +4773,13 @@ static void saveGlobalSettings() {
 // loadGlobalSettings()
 // ------------------------------------------------------------------
 static void loadGlobalSettings() {
+  // Debug Mode defaults to off, which also means the log level defaults
+  // to info rather than whatever main.cpp set it to at startup - applied
+  // unconditionally up front so a first run with no settings.json yet
+  // still gets the quieter default rather than staying at startup's more
+  // verbose level until the user opens Settings and saves once.
+  setDebugModeEnabled(false);
+
   std::ifstream f(getSettingsFilePath());
   if (!f) {
     spdlog::info("No settings.json found – will create on first save.");
@@ -4636,6 +4814,7 @@ static void loadGlobalSettings() {
     } else if (!TrayIcon::isSupported()) {
       g_tray_enabled = false; // never true on a platform that can't show it
     }
+    setDebugModeEnabled(app_settings.value("debug_mode_enabled", false));
   }
 
   // We'll create tabs in the order they appear in the JSON

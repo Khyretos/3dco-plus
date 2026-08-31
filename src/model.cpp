@@ -166,7 +166,9 @@ void writeJson(Model &m, const std::string &path) {
          << mesh.highlight_color_negative[0] << ", "
          << mesh.highlight_color_negative[1] << ", "
          << mesh.highlight_color_negative[2] << ", "
-         << mesh.highlight_color_negative[3] << "]\n";
+         << mesh.highlight_color_negative[3] << "],\n";
+    json << "      \"visible\": " << (mesh.visible ? "true" : "false")
+         << "\n";
     json << "    }" << (i < m.meshes.size() - 1 ? "," : "") << "\n";
   }
   json << "  ],\n";
@@ -213,7 +215,14 @@ void readInfoJson(Model &m, const std::string &path) {
     Mesh mesh;
     // Load OBJ file
     std::string filename = p.value("filename", "");
-    spdlog::info("Loading mesh: {}", filename);
+    // spdlog::debug rather than ::info - this fires once per mesh in the
+    // model (often 30+ times per model, and again per model on startup),
+    // and was previously the main source of noticeable load-time lag
+    // since it was always emitted. Gated behind Enable Debug Mode via
+    // the runtime log level (see setDebugModeEnabled() in
+    // settings_window.cpp) rather than removed outright, since it's
+    // still useful when actually diagnosing a model-loading issue.
+    spdlog::debug("Loading mesh: {}", filename);
     mesh.filename = filename;
     if (filename.empty())
       continue;
@@ -339,6 +348,12 @@ void readInfoJson(Model &m, const std::string &path) {
 
     // use_dual_highlight and highlight colors
     mesh.use_dual_highlight = p.value("use_dual_highlight", false);
+    // Per-mesh visibility, persisted so a mesh the user hides in the
+    // mesh table (see the "Visible" column in settings_window.cpp)
+    // stays hidden the next time the model loads instead of resetting
+    // to visible every time. Defaults to true for older info.json files
+    // written before this field existed.
+    mesh.visible = p.value("visible", true);
 
     // After setting mesh.material.color (possibly from JSON)
     mesh.original_color[0] = mesh.material.color[0];
@@ -855,6 +870,45 @@ void drawMesh(const Mesh &mesh, const glm::mat4 &modelMatrix, GLuint shader,
   if (loc != -1)
     glUniform1f(loc, 60.0f);
 
+  // ShaderToy channel textures (iChannel0..3). Only bound when the
+  // linked program actually references a given channel (glGetUniformLocation
+  // returns -1 for samplers the compiler optimized out because they're
+  // unused), so ordinary custom shaders that never mention iChannelN pay
+  // no extra cost here. See getShaderChannelTexture() for the
+  // file-vs-generated-noise logic - this is what makes a ShaderToy
+  // shader that samples a noise/gradient channel actually render
+  // correctly instead of sampling an unbound texture unit.
+  if (!effectiveShaderName.empty()) {
+    for (int ch = 0; ch < 4; ++ch) {
+      std::string chName = "iChannel" + std::to_string(ch);
+      GLint chLoc = glGetUniformLocation(program, chName.c_str());
+      if (chLoc == -1)
+        continue;
+      int texW = 0, texH = 0;
+      GLuint texId =
+          getShaderChannelTexture(effectiveShaderName, ch, &texW, &texH);
+      // Units 8-11: clear of the 0..mesh.textures.size()-1 range used by
+      // the material texture loop above, well within the 16 units every
+      // GL 3.3-core fragment shader is guaranteed to have.
+      int unit = 8 + ch;
+      glActiveTexture(GL_TEXTURE0 + unit);
+      glBindTexture(GL_TEXTURE_2D, texId);
+      glUniform1i(chLoc, unit);
+
+      GLint resLoc = glGetUniformLocation(
+          program, ("iChannelResolution[" + std::to_string(ch) + "]").c_str());
+      if (resLoc != -1)
+        glUniform3f(resLoc, (float)texW, (float)texH, 1.0f);
+
+      GLint timeLoc = glGetUniformLocation(
+          program, ("iChannelTime[" + std::to_string(ch) + "]").c_str());
+      if (timeLoc != -1)
+        glUniform1f(timeLoc, (float)glfwGetTime());
+    }
+    glActiveTexture(GL_TEXTURE0); // leave the unit selector where the
+                                  // rest of this function expects it
+  }
+
   loc = glGetUniformLocation(program, "_uiTime");
   if (loc != -1)
     glUniform1f(loc, (float)glfwGetTime());
@@ -1360,8 +1414,8 @@ void applyMeshMapping(Model &m) {
     glBindVertexArray(0);
 
     // Preserve existing material and motion data (they are kept as-is)
-    spdlog::info("Assigned mesh '{}' to part '{}'", imported.name,
-                 mesh_names[imported.assigned_part]);
+    spdlog::debug("Assigned mesh '{}' to part '{}'", imported.name,
+                  mesh_names[imported.assigned_part]);
   }
 
   // Clear imported list to indicate mapping applied

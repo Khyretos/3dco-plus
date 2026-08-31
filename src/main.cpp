@@ -257,6 +257,11 @@ void Input() {
 void Draw() {
   drawSettingsWindow();
   drawControllerWindows();
+  // Its own real OS window with its own ImGui context (see log_window.cpp)
+  // - drawn last so it always ends up on top of this frame's other
+  // windows, though GLFW_FLOATING is what actually keeps it there across
+  // frames/clicks, not draw order.
+  drawLogWindow();
 }
 
 void MainLoop() {

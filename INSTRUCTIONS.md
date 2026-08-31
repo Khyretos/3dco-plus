@@ -2,18 +2,38 @@
 
 ## Table of Contents
 
-1. [First Launch](#first-launch)
-2. [Opening a Controller Window](#opening-a-controller-window)
-3. [Mapping Inputs](#mapping-inputs)
-4. [Gyro Support](#gyro-support)
-5. [Touchpads](#touchpads)
-6. [Highlighting & Press Feedback](#highlighting--press-feedback)
-7. [Importing a Custom Model](#importing-a-custom-model)
-8. [Lighting](#lighting)
-9. [Window & Camera Settings](#window--camera-settings)
-10. [The Log Window](#the-log-window)
-11. [Data Directory & Backups](#data-directory--backups)
-12. [Troubleshooting](#troubleshooting)
+1. [What's New in 1.1.0](#whats-new-in-110)
+2. [First Launch](#first-launch)
+3. [Opening a Controller Window](#opening-a-controller-window)
+4. [Mapping Inputs](#mapping-inputs)
+5. [Gyro Support](#gyro-support)
+6. [Touchpads](#touchpads)
+7. [Highlighting & Press Feedback](#highlighting--press-feedback)
+8. [Importing a Custom Model](#importing-a-custom-model)
+9. [Lighting](#lighting)
+10. [Window & Camera Settings](#window--camera-settings)
+11. [Network Functionality](#network-functionality)
+12. [Shader Effects](#shader-effects)
+13. [The Log Window](#the-log-window)
+14. [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode)
+15. [Data Directory & Backups](#data-directory--backups)
+16. [Troubleshooting](#troubleshooting)
+
+---
+
+## What's New in 1.1.0
+
+![New features walkthrough placeholder](images/placeholder-1.1.0-walkthrough.webp)
+*(Video coming soon)*
+
+Quick tour of what's new this release — see the linked section for each for the full how-to:
+
+- [Network Functionality](#network-functionality) – send a window's live state to another instance of the app over UDP/TCP.
+- [Shader Effects](#shader-effects) – rewritten Pixel Art and Toon looks, plus ShaderToy shader import with automatic channel-texture handling and a new **Add Resource** picker.
+- [The Log Window](#the-log-window) – now a real always-on-top window, with copyable log lines.
+- [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode) – the tray icon now shows the app's own icon, and verbose logging is now opt-in via a new checkbox.
+- Per-mesh **Visible** checkboxes (Mesh List) now save and reload with the model instead of resetting every time.
+- A new, much smaller **Steam Controller 2026** model, and fixes for transparent-background compositing on AMD/NVIDIA and overlay performance under click-through.
 
 ---
 
@@ -142,12 +162,55 @@ Each window supports **directional**, **point**, and **spot** lights. Adjust amb
 
 ---
 
+## Network Functionality
+
+![Network settings placeholder](images/placeholder-network-settings.webp)
+
+Send a controller window's live state to another running instance of the app instead of only rendering it locally — useful for a two-PC setup where you want the overlay/capture happening on a machine other than the one generating input.
+
+In a controller window's **Window** section:
+
+1. Set **Mode** to `Sender` on the machine generating input, or `Receiver` on the machine that should display it.
+2. Pick a **Protocol** — `UDP` for fast/connectionless (supports broadcast addresses), or `TCP` for a reliable one-to-one connection.
+3. Enter a matching **IP Address** and **Port** on both ends (on the Sender, the IP is the Receiver's address).
+4. Optionally lower **Send Rate** if you don't need the default rate.
+5. Check **Enable Network** on both ends. A green status line confirms the connection.
+
+A window in Receiver mode ignores local controller input entirely — everything it shows comes from the network.
+
+---
+
+## Shader Effects
+
+![Shader effect picker placeholder](images/placeholder-shader-effects.webp)
+
+Each mesh has a **Shader Effect** dropdown (and there's a global one per window) offering built-in looks like **Pixel Art**, **Cartoon** (cel-shaded/toon), animated effects (aurora, rainbow, lava), and a Shadertoy-ported example.
+
+**Bringing in your own ShaderToy shader:** most ShaderToy shaders (anything using `mainImage()`) work as-is — the app wraps them with the standard uniforms automatically. If a shader samples a channel texture (`iChannel0`-`iChannel3`):
+
+- Click **Add Resource...** next to the shader dropdown to pick an image and assign it to the next free channel.
+- Don't have a specific image in mind? Leave it — a channel with nothing assigned gets a generated noise texture instead of rendering black, which is enough for most shaders that just want "some noise" (very common for procedural effects).
+
+Shader files live in your [data directory](#data-directory--backups), under `shaders/<name>/` — `fragment.glsl` plus any `channel0`–`channel3` image files, if you'd rather manage them by hand.
+
+---
+
 ## The Log Window
 
 ![Log window](images/logging.webp)
 
-**Settings → Open Log Window** shows a live, colour‑coded log inside the app.  
-The same log is also written to `logs/` in your data directory (rotated at 5 MB, 3 files kept).
+**Settings → Open Log Window** opens the log in its own always-on-top window (previously it lived inside the Settings window and could get sent behind it — that's fixed). The same log is also written to `logs/` in your data directory (rotated at 5 MB, 3 files kept).
+
+Log lines are copyable: click-drag to select text like any other text field, use Ctrl+C, or just click **Copy All** to grab everything currently shown.
+
+---
+
+## Taskbar/Tray Icon & Debug Mode
+
+Next to each other in a controller window's **Window** section:
+
+- **Enable Taskbar Icon** – adds a system tray icon (Windows and Linux) showing the app's own icon. Click it to minimize/restore the main window; right-click for a menu with per-controller minimize/restore, network status, and Quit. Not yet available on macOS.
+- **Enable Debug Mode** – turns on more verbose diagnostic logging (e.g. a line per mesh loaded). Off by default, since it adds a small delay when loading models with a lot of parts — turn it on before opening the Log Window if you're reporting a bug.
 
 ---
 
