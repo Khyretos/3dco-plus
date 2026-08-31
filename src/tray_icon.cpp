@@ -643,8 +643,11 @@ void appendIconPixmapProp(DBusMessageIter *dict_iter, const char *name,
     dbus_message_iter_append_basic(&strct, DBUS_TYPE_INT32, &w);
     dbus_message_iter_append_basic(&strct, DBUS_TYPE_INT32, &h);
     dbus_message_iter_open_container(&strct, DBUS_TYPE_ARRAY, "y", &bytes);
-    dbus_message_iter_append_fixed_array(&bytes, DBUS_TYPE_BYTE, argb.data(),
+
+    const unsigned char *pixels_ptr = argb.data();
+    dbus_message_iter_append_fixed_array(&bytes, DBUS_TYPE_BYTE, &pixels_ptr,
                                          static_cast<int>(argb.size()));
+
     dbus_message_iter_close_container(&strct, &bytes);
     dbus_message_iter_close_container(&arr, &strct);
   }
@@ -802,9 +805,12 @@ DBusHandlerResult messageFilter(DBusConnection *, DBusMessage *msg, void *) {
   bool is_item_path = path && std::string(path) == kItemPath;
   bool is_menu_path = path && std::string(path) == kMenuPath;
 
-  // ---- org.freedesktop.DBus.Properties (routed by object path,
-  // since /StatusNotifierItem and /MenuBar each expose a different
-  // interface's properties) ----
+  // Let D-Bus handle messages destined for other paths (or root)
+  if (!is_item_path && !is_menu_path) {
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+  }
+
+  // ---- org.freedesktop.DBus.Properties ----
   if (dbus_message_is_method_call(msg, kPropsIface, "GetAll")) {
     DBusMessage *reply = dbus_message_new_method_return(msg);
     DBusMessageIter iter, array;
@@ -819,24 +825,29 @@ DBusHandlerResult messageFilter(DBusConnection *, DBusMessage *msg, void *) {
     dbus_message_unref(reply);
     return DBUS_HANDLER_RESULT_HANDLED;
   }
+
   if (dbus_message_is_method_call(msg, kPropsIface, "Get")) {
-    // Known simplification: returns the full property set rather than
-    // isolating the single requested one. GetAll (used by every host
-    // I could find documented for both interfaces here) is handled
-    // correctly above; this exists mainly so a Get call doesn't just
-    // go unanswered.
-    DBusMessage *reply = dbus_message_new_method_return(msg);
-    DBusMessageIter iter, dict_iter;
-    dbus_message_iter_init_append(reply, &iter);
-    dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, "{sv}",
-                                     &dict_iter);
-    if (is_menu_path)
-      appendDbusMenuProperties(&dict_iter);
-    else
-      appendStatusNotifierItemProperties(&dict_iter);
-    dbus_message_iter_close_container(&iter, &dict_iter);
-    dbus_connection_send(g_conn, reply, nullptr);
-    dbus_message_unref(reply);
+    DBusError err;
+    dbus_error_init(&err);
+    const char *iface = nullptr;
+    const char *prop = nullptr;
+
+    if (!dbus_message_get_args(msg, &err, DBUS_TYPE_STRING, &iface,
+                               DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID)) {
+      DBusMessage *err_reply =
+          dbus_message_new_error(msg, err.name, err.message);
+      dbus_connection_send(g_conn, err_reply, nullptr);
+      dbus_message_unref(err_reply);
+      dbus_error_free(&err);
+      return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    DBusMessage *err_reply = dbus_message_new_error(
+        msg, "org.freedesktop.DBus.Error.UnknownProperty",
+        "Individual property Get is not implemented; use GetAll instead.");
+
+    dbus_connection_send(g_conn, err_reply, nullptr);
+    dbus_message_unref(err_reply);
     return DBUS_HANDLER_RESULT_HANDLED;
   }
 
@@ -872,11 +883,13 @@ DBusHandlerResult messageFilter(DBusConnection *, DBusMessage *msg, void *) {
     dbus_int32_t parentId = 0, recursionDepth = -1;
     DBusMessageIter args;
     if (dbus_message_iter_init(msg, &args)) {
-      dbus_message_iter_get_basic(&args, &parentId);
-      dbus_message_iter_next(&args);
-      dbus_message_iter_get_basic(&args, &recursionDepth);
-      // (propertyNames arg intentionally ignored - we always return
-      // the full property set for each node rather than filtering.)
+      if (dbus_message_iter_get_arg_type(&args) == DBUS_TYPE_INT32) {
+        dbus_message_iter_get_basic(&args, &parentId);
+        dbus_message_iter_next(&args);
+        if (dbus_message_iter_get_arg_type(&args) == DBUS_TYPE_INT32) {
+          dbus_message_iter_get_basic(&args, &recursionDepth);
+        }
+      }
     }
     MenuNode root = buildMenuTree();
     const MenuNode *target = findNodeById(root, parentId);
@@ -937,14 +950,18 @@ DBusHandlerResult messageFilter(DBusConnection *, DBusMessage *msg, void *) {
     DBusMessageIter args;
     if (dbus_message_iter_init(msg, &args)) {
       dbus_int32_t id = 0;
-      dbus_message_iter_get_basic(&args, &id);
-      dbus_message_iter_next(&args);
-      const char *eventId = nullptr;
-      if (dbus_message_iter_get_arg_type(&args) == DBUS_TYPE_STRING) {
-        dbus_message_iter_get_basic(&args, &eventId);
-      }
-      if (eventId && std::string(eventId) == "clicked") {
-        handleMenuActivation(id);
+      if (dbus_message_iter_get_arg_type(&args) == DBUS_TYPE_INT32) {
+        dbus_message_iter_get_basic(&args, &id);
+        dbus_message_iter_next(&args);
+
+        const char *eventId = nullptr;
+        if (dbus_message_iter_get_arg_type(&args) == DBUS_TYPE_STRING) {
+          dbus_message_iter_get_basic(&args, &eventId);
+
+          if (eventId && std::string(eventId) == "clicked") {
+            handleMenuActivation(id);
+          }
+        }
       }
     }
     sendEmptyReply(msg);
