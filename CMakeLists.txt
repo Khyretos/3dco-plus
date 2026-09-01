@@ -178,8 +178,18 @@ endif()
 
 # ------------------------------------------------------------------
 # Executable – uses the collected sources + generated headers
+#
+# WIN32 here means "build as a GUI-subsystem app" (no console window)
+# on Windows specifically - CMake ignores this keyword entirely on
+# Linux/macOS, so it's safe to leave unconditional rather than
+# wrapping it in if(WIN32). Previously the Windows build always
+# opened a console window alongside the app (the default for a plain
+# `int main()` executable), which duplicated the in-app log window/
+# log file for no real benefit and just added visual clutter -
+# CMake still generates the right WinMain-calling-main() entry point
+# shim automatically, so no code changes were needed for this.
 # ------------------------------------------------------------------
-add_executable(3dco+ ${SRC_FILES} ${GEN_HEADER} ${DB_HEADER} ${ICON_HEADER} ${SHADER_HEADER})
+add_executable(3dco+ WIN32 ${SRC_FILES} ${GEN_HEADER} ${DB_HEADER} ${ICON_HEADER} ${SHADER_HEADER})
 
 # Include directories
 target_include_directories(3dco+ PRIVATE
@@ -288,6 +298,19 @@ else()
     target_link_libraries(3dco+ PRIVATE
         ${OPENGL_LIBRARIES}
         ZLIB::ZLIB
+    )
+endif()
+
+# ------------------------------------------------------------------
+# macOS system tray icon (NSStatusItem via Cocoa - see tray_icon.cpp).
+# tray_icon.cpp is a single file shared across all three platforms
+# (differentiated internally via #if), so rather than maintaining a
+# separate .mm file it's just compiled as Objective-C++ on this one
+# platform. The Cocoa framework link above already covers the rest.
+# ------------------------------------------------------------------
+if(APPLE)
+    set_source_files_properties(src/tray_icon.cpp PROPERTIES
+        COMPILE_FLAGS "-x objective-c++"
     )
 endif()
 

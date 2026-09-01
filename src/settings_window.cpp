@@ -1495,6 +1495,28 @@ void drawSettingsWindow() {
           ImGui::SetTooltip("Applies to all meshes unless a mesh has its own "
                             "shader override.");
 
+        // ---- Add Resource (channel texture) ----
+        // Same "Add Resource" button as the per-mesh Shader Effect
+        // section (see the mesh-level one further down) - it was
+        // previously only reachable once a mesh had its own shader
+        // override, so a shader applied only at the window/global
+        // level had no way to get a channel image assigned to it
+        // without digging into the data directory by hand.
+        if (currentGlobalShaderIdx != 0) {
+          if (ImGui::Button("Add Resource...##global_shader")) {
+            g_shader_resource_target = shaderNames[currentGlobalShaderIdx];
+            shader_resource_dialog.Open();
+          }
+          if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Add an image as a channel texture (iChannel0-3) for "
+                "this shader - useful for ShaderToy-style shaders "
+                "that expect a noise or gradient texture. Filled "
+                "into the next free channel slot automatically; if "
+                "no image is provided, unused channels fall back to "
+                "generated noise.");
+        }
+
         // ---- Logging toggle ----
         ImGui::NewLine();
         ImGui::Checkbox("Log Controller/Joystick", &g_log_controller);

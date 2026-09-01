@@ -29,7 +29,7 @@
 Quick tour of what's new this release — see the linked section for each for the full how-to:
 
 - [Network Functionality](#network-functionality) – send a window's live state to another instance of the app over UDP/TCP.
-- [Shader Effects](#shader-effects) – rewritten Pixel Art and Toon looks, plus ShaderToy shader import with automatic channel-texture handling and a new **Add Resource** picker.
+- [Shader Effects](#shader-effects) – rewritten Pixel Art, Toon, Aurora, Infernal, and Rainbow looks, a new Galaxy shader, a fully-replaced Black Hole effect, plus ShaderToy shader import with automatic channel-texture handling and a new **Add Resource** picker.
 - [The Log Window](#the-log-window) – now a real always-on-top window, with copyable log lines.
 - [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode) – the tray icon now shows the app's own icon, and verbose logging is now opt-in via a new checkbox.
 - Per-mesh **Visible** checkboxes (Mesh List) now save and reload with the model instead of resetting every time.
@@ -157,6 +157,7 @@ Each window supports **directional**, **point**, and **spot** lights. Adjust amb
 ![Window settings](images/window_settings.webp)
 
 - **Always on top**, **borderless**, **drag to move**, **scroll to resize** – useful for clean overlays.
+- **On Windows especially**: these windows have no title bar to drag by design, so if you need to reposition one, turn on **Drag to Move** first - otherwise dragging on the model does whatever its normal input binding does instead.
 - **Camera**: distance, yaw, pitch, roll, and a **freelook** mode (WASD + mouse‑look).
 - **Swap interval** (V‑Sync: off/on/adaptive) and background colour/opacity.
 
@@ -184,7 +185,7 @@ A window in Receiver mode ignores local controller input entirely — everything
 
 ![Shader effect picker placeholder](images/placeholder-shader-effects.webp)
 
-Each mesh has a **Shader Effect** dropdown (and there's a global one per window) offering built-in looks like **Pixel Art**, **Cartoon** (cel-shaded/toon), animated effects (aurora, rainbow, lava), and a Shadertoy-ported example.
+Each mesh has a **Shader Effect** dropdown (and there's a global one per window) offering built-in looks: **Pixel Art**, **Cartoon** (cel-shaded/toon), **Aurora**, **Galaxy**, **Infernal**, **Rainbow**, and **Black Hole** (a swirling accretion disk, not a literal simulation) — plus support for pasting in your own ShaderToy-style shader.
 
 **Bringing in your own ShaderToy shader:** most ShaderToy shaders (anything using `mainImage()`) work as-is — the app wraps them with the standard uniforms automatically. If a shader samples a channel texture (`iChannel0`-`iChannel3`):
 

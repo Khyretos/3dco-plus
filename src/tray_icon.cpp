@@ -24,6 +24,8 @@
 #include <dbus/dbus.h>
 #include <functional>
 #include <unistd.h> // getpid()
+#elif defined(__APPLE__)
+#import <Cocoa/Cocoa.h>
 #endif
 
 namespace TrayIcon {
@@ -1144,15 +1146,316 @@ void setOnShowMainWindow(VoidCallback cb) { g_onShowMainWindow = cb; }
 void setOnQuit(VoidCallback cb) { g_onQuit = cb; }
 void setOnToggleController(ControllerCallback cb) { g_onToggleController = cb; }
 
-#else // macOS / other - no real implementation yet
+#elif defined(__APPLE__)
 
 // ------------------------------------------------------------------
-// No real implementation yet on this platform - see the comment at
-// the top of tray_icon.h for why (macOS needs Objective-C for
-// NSStatusItem; on Linux this also lands here if libdbus-1 wasn't
-// found at build time - see CMakeLists.txt). Every function here is a
-// safe no-op so callers in main.cpp and settings_window.cpp never need
-// to special-case the platform themselves.
+// macOS: NSStatusItem (the "menu bar item") via Cocoa/AppKit.
+//
+// This file is compiled as Objective-C++ on Apple platforms only (see
+// CMakeLists.txt - `-x objective-c++` is applied to this one source
+// file when APPLE, everywhere else it's plain C++), so the rest of
+// this translation unit for Windows/Linux is completely unaffected.
+//
+// One thing worth calling out since it's easy to get wrong here:
+// NSStatusItem normally auto-shows a menu on ANY click (left or right)
+// the moment you assign one via `-setMenu:`, and never calls your own
+// action at all once you've done that - which is exactly the "left
+// and right click do the same thing" behavior some Linux
+// StatusNotifierItem hosts also exhibit (that one really is a host
+// limitation we can't fix from here; see the Linux block above). On
+// macOS we *can* fix it, because we're the client instead of being at
+// the mercy of a host: never call `-setMenu:` on the status item.
+// Instead, keep the menu in g_menu and only show it explicitly
+// (`-popUpMenuPositioningItem:...`) when the click was a right-click,
+// and call the left-click callback otherwise - see
+// onStatusItemClicked: below.
+// ------------------------------------------------------------------
+
+namespace {
+
+bool g_enabled = false;
+NSStatusItem *g_statusItem = nil;
+NSMenu *g_menu = nil; // never assigned via -setMenu: - see comment above
+
+std::vector<ControllerEntry> g_controllers;
+NetworkStatus g_networkStatus = NetworkStatus::Disabled;
+std::vector<ConnectionEntry> g_connections;
+
+VoidCallback g_onLeftClick = nullptr;
+VoidCallback g_onShowMainWindow = nullptr;
+VoidCallback g_onQuit = nullptr;
+ControllerCallback g_onToggleController = nullptr;
+
+void rebuildMenu();
+
+} // namespace
+
+} // namespace TrayIcon
+// ------------------------------------------------------------------
+// Objective-C @interface/@implementation blocks are only legal at
+// global scope - Clang rejects them inside a C++ namespace ("Objective-C
+// declarations may only appear in global scope"), which is exactly the
+// namespace this whole file lives in (see the `namespace TrayIcon {`
+// opened above the #if/#elif chain, closed at the very end of the
+// file). So the namespace gets closed here and reopened just below,
+// purely to give these two declarations global scope - everything they
+// reference from the anonymous namespace above (g_onLeftClick,
+// g_menu, rebuildMenu(), etc.) is still reachable via the qualified
+// TrayIcon:: name, since qualified lookup into a namespace also finds
+// that namespace's anonymous-namespace members from within the same
+// translation unit.
+// ------------------------------------------------------------------
+
+// Bridges Objective-C's target-action pattern to the plain C function
+// pointers the rest of this module uses, matching how the Windows
+// WndProc and Linux D-Bus message filter both do the same job of
+// turning a native event into a call to g_onLeftClick/g_onQuit/etc.
+@interface TrayActionDelegate : NSObject
+- (void)onShowWindow:(id)sender;
+- (void)onQuit:(id)sender;
+- (void)onToggleController:(id)sender;
+- (void)onStatusItemClicked:(id)sender;
+@end
+
+@implementation TrayActionDelegate
+- (void)onShowWindow:(id)sender {
+  if (TrayIcon::g_onShowMainWindow)
+    TrayIcon::g_onShowMainWindow();
+}
+- (void)onQuit:(id)sender {
+  if (TrayIcon::g_onQuit)
+    TrayIcon::g_onQuit();
+}
+- (void)onToggleController:(id)sender {
+  NSInteger tag = [sender tag];
+  if (TrayIcon::g_onToggleController)
+    TrayIcon::g_onToggleController(static_cast<unsigned>(tag));
+}
+- (void)onStatusItemClicked:(id)sender {
+  NSEvent *event = [NSApp currentEvent];
+  NSEventType type = [event type];
+  // Control-click is the traditional secondary-click gesture on
+  // one-button input devices, and is worth honoring alongside an
+  // actual right-click for the same reason the Windows/Linux paths
+  // both just check "which button" - a control-clicking user expects
+  // the context menu, not a window toggle.
+  bool is_secondary = (type == NSEventTypeRightMouseUp) ||
+                      (type == NSEventTypeLeftMouseUp &&
+                       ([event modifierFlags] & NSEventModifierFlagControl));
+  if (is_secondary) {
+    TrayIcon::rebuildMenu(); // refresh right before showing so it's never stale
+    if (TrayIcon::g_menu && TrayIcon::g_statusItem)
+      [TrayIcon::g_menu popUpMenuPositioningItem:nil
+                                       atLocation:NSZeroPoint
+                                           inView:[TrayIcon::g_statusItem button]];
+  } else if (type == NSEventTypeLeftMouseUp) {
+    if (TrayIcon::g_onLeftClick)
+      TrayIcon::g_onLeftClick();
+  }
+}
+@end
+
+namespace TrayIcon {
+
+namespace {
+
+TrayActionDelegate *g_delegate = nil;
+
+// Decodes the same embedded PNG the Windows/Linux tray icons use (see
+// icon_data.h) into an NSImage sized for the menu bar. Cocoa's
+// NSImage already knows how to decode PNG data via ImageIO, so unlike
+// the Windows/Linux paths this doesn't need stb_image at all.
+NSImage *loadAppNSImage() {
+  NSData *data = [NSData dataWithBytes:Embedded::icon_data
+                                 length:Embedded::icon_size];
+  NSImage *img = [[NSImage alloc] initWithData:data];
+  if (!img) {
+    spdlog::warn("TrayIcon: failed to decode embedded app icon.");
+    return nil;
+  }
+  // Standard macOS menu bar icon size; the source PNG is much larger
+  // (see icon_data.h) so this always downsamples rather than up.
+  [img setSize:NSMakeSize(18, 18)];
+  // Keep the icon's own colors rather than having AppKit recolor it
+  // as a monochrome template image - matches how the Windows/Linux
+  // tray icons show the real, full-color app icon.
+  [img setTemplate:NO];
+  return img;
+}
+
+void rebuildMenu() {
+  NSMenu *menu = [[NSMenu alloc] init];
+  [menu setAutoenablesItems:NO];
+
+  NSMenuItem *showItem =
+      [[NSMenuItem alloc] initWithTitle:@"Show Window"
+                                  action:@selector(onShowWindow:)
+                           keyEquivalent:@""];
+  [showItem setTarget:g_delegate];
+  [menu addItem:showItem];
+  [menu addItem:[NSMenuItem separatorItem]];
+
+  NSMenuItem *controllersParent =
+      [[NSMenuItem alloc] initWithTitle:@"Controllers"
+                                  action:nil
+                           keyEquivalent:@""];
+  NSMenu *controllersMenu = [[NSMenu alloc] init];
+  if (g_controllers.empty()) {
+    NSMenuItem *noneItem = [[NSMenuItem alloc] initWithTitle:@"(none open)"
+                                                       action:nil
+                                                keyEquivalent:@""];
+    [noneItem setEnabled:NO];
+    [controllersMenu addItem:noneItem];
+  } else {
+    for (const auto &c : g_controllers) {
+      std::string label =
+          c.title + (c.minimized ? "  (Restore)" : "  (Minimize)");
+      NSMenuItem *item =
+          [[NSMenuItem alloc] initWithTitle:[NSString stringWithUTF8String:
+                                                          label.c_str()]
+                                      action:@selector(onToggleController:)
+                               keyEquivalent:@""];
+      [item setTarget:g_delegate];
+      [item setTag:static_cast<NSInteger>(c.id)];
+      [controllersMenu addItem:item];
+    }
+  }
+  [controllersParent setSubmenu:controllersMenu];
+  [menu addItem:controllersParent];
+
+  NSMenuItem *networkParent = [[NSMenuItem alloc] initWithTitle:@"Network"
+                                                          action:nil
+                                                   keyEquivalent:@""];
+  NSMenu *networkMenu = [[NSMenu alloc] init];
+
+  std::string statusStr = "Status: ";
+  if (g_networkStatus == NetworkStatus::Connecting)
+    statusStr += "Connecting...";
+  else if (g_networkStatus == NetworkStatus::Connected)
+    statusStr += "Connected";
+  else
+    statusStr += "Disabled";
+
+  NSMenuItem *statusItem =
+      [[NSMenuItem alloc] initWithTitle:[NSString stringWithUTF8String:
+                                                      statusStr.c_str()]
+                                  action:nil
+                           keyEquivalent:@""];
+  [statusItem setEnabled:NO];
+  [networkMenu addItem:statusItem];
+
+  if (!g_connections.empty()) {
+    [networkMenu addItem:[NSMenuItem separatorItem]];
+    for (const auto &conn : g_connections) {
+      NSMenuItem *connItem =
+          [[NSMenuItem alloc] initWithTitle:[NSString stringWithUTF8String:
+                                                          conn.label.c_str()]
+                                      action:nil
+                               keyEquivalent:@""];
+      [connItem setEnabled:NO];
+      [networkMenu addItem:connItem];
+    }
+  }
+  [networkParent setSubmenu:networkMenu];
+  [menu addItem:networkParent];
+
+  [menu addItem:[NSMenuItem separatorItem]];
+
+  NSMenuItem *quitItem = [[NSMenuItem alloc] initWithTitle:@"Quit"
+                                                     action:@selector(onQuit:)
+                                              keyEquivalent:@""];
+  [quitItem setTarget:g_delegate];
+  [menu addItem:quitItem];
+
+  // Deliberately not assigned to g_statusItem via -setMenu: - see the
+  // big comment at the top of this #elif block for why.
+  g_menu = menu;
+}
+
+} // namespace
+
+bool isSupported() { return true; }
+
+bool enable() {
+  if (g_enabled)
+    return true;
+
+  if (!g_delegate)
+    g_delegate = [[TrayActionDelegate alloc] init];
+
+  g_statusItem =
+      [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
+  if (!g_statusItem) {
+    spdlog::warn("TrayIcon: failed to create NSStatusItem.");
+    return false;
+  }
+
+  NSStatusBarButton *button = [g_statusItem button];
+  if (button) {
+    NSImage *icon = loadAppNSImage();
+    if (icon)
+      [button setImage:icon];
+    else
+      [button setTitle:@"3D"]; // fallback if the icon somehow failed to decode
+    [button setAction:@selector(onStatusItemClicked:)];
+    [button setTarget:g_delegate];
+    // NSStatusBarButton is documented to invoke its action for a
+    // right-click as well as a left-click already, but this is
+    // explicit belt-and-suspenders so the behavior doesn't depend on
+    // that being true on every macOS version.
+    [button sendActionOn:(NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp)];
+  }
+
+  rebuildMenu();
+  g_enabled = true;
+  spdlog::info("Tray icon enabled (macOS NSStatusItem)");
+  return true;
+}
+
+void disable() {
+  if (!g_enabled)
+    return;
+  if (g_statusItem) {
+    [[NSStatusBar systemStatusBar] removeStatusItem:g_statusItem];
+    g_statusItem = nil;
+  }
+  g_menu = nil;
+  g_enabled = false;
+}
+
+bool isEnabled() { return g_enabled; }
+
+// Cocoa dispatches button clicks and menu selections through the
+// normal AppKit run loop (which GLFW's macOS backend already pumps as
+// part of glfwPollEvents()), so unlike the Windows path there's
+// nothing this needs to do per-frame - matching how the Linux path's
+// update() only needs to dispatch the D-Bus connection, and neither
+// platform needs it for basic click handling.
+void update() {}
+
+void setControllerList(const std::vector<ControllerEntry> &entries) {
+  g_controllers = entries;
+}
+
+void setNetworkStatus(NetworkStatus status,
+                      const std::vector<ConnectionEntry> &connections) {
+  g_networkStatus = status;
+  g_connections = connections;
+}
+
+void setOnLeftClick(VoidCallback cb) { g_onLeftClick = cb; }
+void setOnShowMainWindow(VoidCallback cb) { g_onShowMainWindow = cb; }
+void setOnQuit(VoidCallback cb) { g_onQuit = cb; }
+void setOnToggleController(ControllerCallback cb) { g_onToggleController = cb; }
+
+#else // Linux without libdbus-1 at build time, or any other unhandled
+      // platform - no real implementation.
+
+// ------------------------------------------------------------------
+// No real implementation here - see the comment at the top of
+// tray_icon.h. Every function here is a safe no-op so callers in
+// main.cpp and settings_window.cpp never need to special-case the
+// platform themselves.
 // ------------------------------------------------------------------
 
 bool isSupported() { return false; }

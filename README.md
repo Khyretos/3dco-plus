@@ -16,12 +16,16 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 - **Network functionality** – send a window's live mesh state (button/axis/touch data) over UDP or TCP to another instance of the app on the same machine or over the network, so you can render the overlay on a second PC (e.g. a dedicated streaming/capture box) instead of the one you're playing on.
 - **Fixed transparent background compositing on AMD and NVIDIA.** The "Transparent Background" option now actually produces a transparent framebuffer on drivers/compositors where it previously silently failed.
 - **Overlay performance fixes.** Resolved input lag and stuttering that showed up specifically when running with click-through enabled while something else (e.g. a game) had foreground focus.
-- **Custom shader effects.** Built-in pixel-art and cel-shaded/toon looks (both rewritten this release for a genuinely blocky/anime look rather than a subtle color tweak), plus ShaderToy-compatible shader import — including channel textures (`iChannel0`-`iChannel3`): drop in your own image via the new **Add Resource** button, or leave it unset and a channel that a shader expects (e.g. a noise texture) is generated automatically instead of rendering black.
+- **Custom shader effects.** Pixel-art and cel-shaded/toon looks rewritten for genuine depth (hue-graded bands, view-angle form shading) instead of a subtle color tweak; Aurora, Infernal, and Rainbow reworked for a much more convincing look; a new **Galaxy** shader; and a fully-replaced **Black Hole** effect (previously a generic ported ShaderToy pattern, now an actual swirling accretion disk). Plus ShaderToy-compatible shader import — including channel textures (`iChannel0`-`iChannel3`): drop in your own image via the new **Add Resource** button, or leave it unset and a channel that a shader expects (e.g. a noise texture) is generated automatically instead of rendering black.
 - **New Steam Controller 2026 model** with a significantly smaller file size (same look, far less geometry/texture data).
 - **Log window is now a real always-on-top window.** Previously it lived inside the settings window and got sent behind it the moment you clicked elsewhere in Settings; now it's its own window that stays on top regardless, and log lines are copyable (click-drag to select, Ctrl+C, or the new **Copy All** button).
-- **Taskbar/tray icon now shows the app's own icon** instead of a generic system placeholder, on both Windows and Linux.
+- **Taskbar/tray icon now shows the app's own icon** instead of a generic system placeholder, and is now supported on **all three platforms** — Windows, Linux (StatusNotifierItem/D-Bus), and macOS (NSStatusItem), the last of which had no tray icon at all before.
 - **New "Enable Debug Mode" setting**, next to "Enable Taskbar Icon". Verbose diagnostic logging (e.g. a line per mesh loaded) is now off by default, fixing a small but noticeable delay when loading models with many parts — turn it on before opening the log window if you need to report a bug.
-- **Per-mesh visibility is now saved with the model** instead of resetting to visible every time you reopen it.
+
+### Upgrading from 1.0.0
+
+- **Back up your custom models and `settings.json`** (see [Where your data lives](#where-your-data-lives)) before upgrading, as a general precaution with any major version bump - not because this release is known to eat your data, but because "known limitation" and "undiscovered bug" look identical from the outside, and a backup costs nothing.
+- Existing `settings.json`/`info.json` files from 1.0.0 are expected to keep working - missing fields fall back to sensible defaults rather than failing to load. If you do hit a crash tied specifically to old settings, please open an issue with your `settings.json` attached; that's what let us track down and fix an actual crash of this kind during 1.1.0's development (a bug in the new Linux tray icon code, triggered by tray icon being enabled in an existing settings file - already fixed above).
 
 ## What's new in 1.0.0
 
@@ -103,7 +107,7 @@ The goal of the `+` fork isn't "more lines of code" — it's closing gaps the or
 ### Engineering / tooling
 
 - **Structured logging via spdlog**, including rotating log files — the original had no structured logging at all. The in-app log window is now its own always-on-top OS window with copyable log lines, and a new **Enable Debug Mode** setting keeps the more verbose diagnostic logging (e.g. per-mesh load lines) off by default so it doesn't cost load-time performance unless you actually need it.
-- **Taskbar/tray icon** using the app's own icon (Windows and Linux; not yet implemented on macOS).
+- **Taskbar/tray icon** using the app's own icon, on Windows, Linux, and macOS.
 - **CMake-based build system** replacing the original's platform-specific shell/batch scripts, plus convenience scripts (`build-all.sh`, `build-appimage.sh`, `build-macos.sh`, `build-windows.sh`) and Docker-based cross-build files for reproducible packaging.
 - **AppImage & `.desktop` integration** on Linux for proper application-menu installation.
 - **Embedded model library**: the bundled `.obj` model set is packed into the binary at build time and extracted on first run, so there's no separate assets folder to lose track of.
@@ -158,17 +162,17 @@ You can jump straight there from inside the app via **Settings → Open Data Dir
 
 ## Supported input
 
-| Input type                                                                         | Status                                                                       |
-| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Standard gamepads (Xbox, DualShock/DualSense, Switch Pro, Joy-Con, GameCube, etc.) | ✅ Supported (via SDL3 GameController)                                       |
-| Unmapped/generic joysticks                                                         | ✅ Supported (via raw SDL3 Joystick fallback)                                |
-| Steam Controller                                                                   | ✅ Supported (detected natively with SDL3),Limited on macOS (see note below) |
-| Keyboard overlay                                                                   | ✅ Supported (system-wide, works without window focus)                       |
-| Mouse overlay                                                                      | ✅ Supported (position, buttons, scroll — system-wide)                       |
-| Gyro / accelerometer                                                               | ✅ Supported, with sensitivity/correction tuning                             |
-| Touchpads (DualShock/DualSense)                                                    | ✅ Supported, multi-touch, multiple pads                                     |
-| flightstick / throttles                                                            | ✅ Supported, Manual mapping required since i only own 1 model               |
-| Racing wheel                                                                       | 🚧 Work in progress                                                          |
+| Input type                                                                         | Status                                                                                                                |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Standard gamepads (Xbox, DualShock/DualSense, Switch Pro, Joy-Con, GameCube, etc.) | ✅ Supported (via SDL3 GameController)                                                                                |
+| Unmapped/generic joysticks                                                         | ✅ Supported (via raw SDL3 Joystick fallback)                                                                         |
+| Steam Controller                                                                   | ✅ Supported (detected natively with SDL3),Limited on macOS (see note below)                                          |
+| Keyboard overlay                                                                   | ✅ Supported (system-wide, works without window focus)                                                                |
+| Mouse overlay                                                                      | ✅ Supported (position, buttons, scroll — system-wide)                                                                |
+| Gyro / accelerometer                                                               | ✅ Supported, with sensitivity/correction tuning                                                                      |
+| Touchpads (DualShock/DualSense)                                                    | ✅ Supported, multi-touch, multiple pads                                                                              |
+| flightstick / throttles                                                            | ✅ Supported, Manual mapping required since i only own 1 model                                                        |
+| Racing wheel                                                                       | 🚧 Work in progress (I currently do not posses a racing whe eel or pedal but i assume that it can be mapped manually) |
 
 Gamepad button/axis layouts are resolved through SDL3's community-maintained [`gamecontrollerdb.txt`](https://github.com/mdqinc/SDL_GameControllerDB) database (embedded in the app, covering most Xbox/PlayStation/Switch Pro/Steam Controller/third-party pads). If your controller shows up as a raw, unlabeled joystick instead of a named gamepad, it isn't in that database yet — you can either add an entry to `gamecontrollerdb.txt` in your [data directory](#where-your-data-lives) (e.g. using [SDL3 Gamepad Tool](https://generalarcade.com/gamepadtool/)) and restart, or just map it manually using raw joystick bindings in the Mapping panel, which works regardless of whether SDL3 recognizes the controller. If you do get a new controller working, consider [contributing the mapping upstream](https://github.com/mdqinc/SDL_GameControllerDB) so other SDL3-based apps benefit too.
 
@@ -176,21 +180,22 @@ Gamepad button/axis layouts are resolved through SDL3's community-maintained [`g
 
 ## Network functionality
 
-![Network functionality demo placeholder](images/placeholder-network-demo.webp)
-*(Video coming soon)*
+![Network functionality demo placeholder](images/network_demo.webp)
 
-Each controller window can send its live mesh state (button presses, axis values, touch positions) over the network to another running instance of the app, instead of only rendering it locally. This is aimed at setups where the machine generating input isn't the one you want doing the capture/overlay compositing — for example, rendering the overlay on a dedicated streaming PC while the game runs on a separate gaming PC.
+Note the example im showing is a steamdeck running the software and sending it to the other pcs which are a Windows, Mac and Linux machine. The app is downloaded directly from the repository and i added it as a "Non Steam Game". Start the network as a "Sender" and just start a game. Just note that you need to open a port in your pc to make it connect. It is not meant to be used with encryption or security this feature was made for a simple and direct purpose (to connect to another device in your netowrk).
+
+Each controller window can send its live mesh state (button presses, axis values, touch positions) over the network to another running instance of the app, instead of only rendering it locally. This is aimed at setups where the machine generating input isn't the one you want doing the capture/overlay compositing — for example, rendering the overlay on a dedicated streaming PC while the game runs on a separate gaming PC. Or running the software on a steamdeck and sending the input to another PC, your world your rules!
 
 Open a controller window's **Window** section to find the network controls:
 
-| Setting        | What it does                                                                                                                                             |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Mode**       | `Sender` reads local input and transmits it. `Receiver` listens on a port and drives the mesh from received data instead of local input.                            |
-| **Protocol**   | `UDP` — fast, connectionless, supports broadcast (e.g. `255.255.255.255`). `TCP` — reliable, one-to-one (a receiver accepts a single sender).                       |
-| **IP Address** | Destination address in Sender mode (the receiving machine's IP, or a broadcast address for UDP).                                                                    |
-| **Port**       | Port to send to (Sender) or listen on (Receiver). Must match on both ends.                                                                                          |
-| **Send Rate**  | How often a Sender pushes an update: `Max`, `60 Hz`, `30 Hz`, `15 Hz`, or `10 Hz`.                                                                                    |
-| **Enable Network** | Turns the above on/off for this window. Connection status (connected/listening/disconnected) is shown live once enabled.                                       |
+| Setting            | What it does                                                                                                                                  |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Mode**           | `Sender` reads local input and transmits it. `Receiver` listens on a port and drives the mesh from received data instead of local input.      |
+| **Protocol**       | `UDP` — fast, connectionless, supports broadcast (e.g. `255.255.255.255`). `TCP` — reliable, one-to-one (a receiver accepts a single sender). |
+| **IP Address**     | Destination address in Sender mode (the receiving machine's IP, or a broadcast address for UDP).                                              |
+| **Port**           | Port to send to (Sender) or listen on (Receiver). Must match on both ends.                                                                    |
+| **Send Rate**      | How often a Sender pushes an update: `Max`, `60 Hz`, `30 Hz`, `15 Hz`, or `10 Hz`.                                                            |
+| **Enable Network** | Turns the above on/off for this window. Connection status (connected/listening/disconnected) is shown live once enabled.                      |
 
 A quick two-PC setup looks like:
 
@@ -201,16 +206,32 @@ Local controller input is ignored on a window that's in Receiver mode — everyt
 
 ## Shader effects
 
+![Shader effect functionality demo placeholder](images/placeholder-shaders-demo.webp)
+_(Video coming soon)_
+
 Each mesh (or a whole window, via the global shader setting) can use a custom fragment shader instead of the default lit material — accessible from a mesh's **Shader Effect** section in Settings. A handful of looks ship built in, including:
 
-- **Pixel Art** – genuinely blocky, posterized shading (screen-space "pixels", not just a color tweak).
-- **Cel-shaded / Toon** – flat anime-style color bands, a hard-edged specular highlight, and outlines detected from three combined signals (surface creases, silhouette grazing angle, and depth discontinuities) so the outline actually shows up reliably instead of only on sharp corners.
-- Several fully animated effects (aurora, rainbow, lava/"infernal", a Shadertoy-ported black hole/voronoi effect) as examples of what's possible.
+- **Pixel Art** – genuinely blocky, posterized shading (screen-space "pixels", not just a color tweak), with hue-graded shadow/highlight bands and view-angle form shading so dark/gray controllers still read with depth instead of turning into a flat gray-and-black blur.
+- **Cel-shaded / Toon** – flat anime-style color bands, a hard-edged specular highlight, outlines detected from three combined signals (surface creases, silhouette grazing angle, and depth discontinuities) so the outline actually shows up reliably instead of only on sharp corners, and a view-angle form-shading term so curved parts (thumbstick domes, concave buttons) keep their shape from any viewing angle, not just ones where the key light happens to help.
+- **Aurora** – drifting, domain-warped curtains in a green→cyan→violet gradient, rather than a static interference pattern.
+- **Galaxy** – a swirling spiral nebula with a bright core and a twinkling starfield, in the "Fortnite skin" style.
+- **Infernal** – dark, rough rock split by glowing, pulsing red-orange cracks, going for a "cartoon hell" look rather than bright cartoon dirt.
+- **Rainbow** – a domain-warped, marbled hue field with random sparkle, instead of a clean predictable color sweep.
+- **Black Hole** – a swirling accretion disk being pulled into a genuinely dark event horizon with a bright photon ring at its edge, closer to how cartoons/anime draw a black hole than a literal simulation.
+
+A note on results: these shaders were tuned against a handful of controllers, not every model — how well one looks depends a lot on the shape and base color of the specific controller you're applying it to. Some combinations will look great immediately; others may look flat, too dark, or too busy. If a shader doesn't look right on your controller, try adjusting the mesh's base color or brightness settings first — most looks improve a lot with a little manual fine-tuning rather than being a fixed, one-size-fits-all effect.
+
+|                                                                           |                                                                          |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| **Pixel Art**<br>![Pixel Art](images/placeholder-shader-pixelart.webp)    | **Cel-shaded / Toon**<br>![Toon](images/placeholder-shader-cartoon.webp) |
+| **Aurora**<br>![Aurora](images/placeholder-shader-aurora.webp)            | **Galaxy**<br>![Galaxy](images/placeholder-shader-galaxy.webp)           |
+| **Infernal**<br>![Infernal](images/placeholder-shader-infernal.webp)      | **Rainbow**<br>![Rainbow](images/placeholder-shader-rainbow.webp)        |
+| **Black Hole**<br>![Black Hole](images/placeholder-shader-blackhole.webp) |                                                                          |
 
 **Importing your own ShaderToy shader:** paste (or point the app at) a standard ShaderToy `mainImage()` shader and it's automatically wrapped with the right uniforms (`iTime`, `iResolution`, `iMouse`, `iFrame`, etc.). If the shader samples a channel texture (`iChannel0`-`iChannel3`) — very common for shaders that use a noise or gradient texture — you no longer need to track that texture down and wire it up by hand:
 
 - Click **Add Resource...** next to the shader dropdown to pick an image file; it's copied into that shader's own folder and bound to the next free channel automatically.
-- Any channel a shader references that you *haven't* supplied an image for gets a generated tileable noise texture instead of rendering black — so most ShaderToy shaders that expect "some noise" just work the moment you paste them in, and you only need **Add Resource** for shaders that need a *specific* image (a gradient ramp, a logo, etc.).
+- Any channel a shader references that you _haven't_ supplied an image for gets a generated tileable noise texture instead of rendering black — so most ShaderToy shaders that expect "some noise" just work the moment you paste them in, and you only need **Add Resource** for shaders that need a _specific_ image (a gradient ramp, a logo, etc.).
 
 Shader files live under `shaders/<name>/` in your [data directory](#where-your-data-lives) — `fragment.glsl` plus any `channel0`–`channel3` image files — so you can also edit or drop resources in by hand if you'd rather not use the file picker.
 
@@ -247,7 +268,7 @@ Live demo clips for every controller in the built-in model library. (The `+` bad
 
 ## Work in progress / known bugs
 
-- **Racing wheel / flightstick** – planned, not yet in model library or input path.
+- **Racing wheel** – planned, not yet in model library or input path.
 - **macOS/Windows testing** – less real‑world mileage than Linux; expect occasional platform‑specific rough edges.
 - **General stability** – edge cases from expanded input and import paths are being ironed out.
 
@@ -255,16 +276,13 @@ Live demo clips for every controller in the built-in model library. (The `+` bad
 
 ## Known issues (tracked)
 
-| Issue                                                      | Status              | Notes                                                        |
-| ---------------------------------------------------------- | ------------------- | ------------------------------------------------------------ |
-| Click‑through performance on Windows                       | Under investigation | Reduced message‑loop overhead and suppressed WM_MOUSEMOVE.   |
-| Click‑through not registering clicks                       | Under investigation | Global hook now more responsive.                             |
-| “Show Grid” not visible                                    | Under investigation | Grid now smaller, positioned lower, and brighter.            |
-| Transparent background not working on some drivers         | Known limitation    | Depends on GPU/driver support. A warning is shown in the UI. |
-| macOS Accessibility permission required for keyboard/mouse | By design           | See README for instructions.                                 |
-| Gyro reset combo not working on certain controllers        | Under investigation | Use manual reset button as workaround.                       |
-| Imported model preview sometimes crashes on large files    | Rare                | Reduce polygon count or use simpler format.                  |
-| Taskbar/tray icon not available on macOS                    | Known limitation    | Windows and Linux only for now; needs an Objective-C++ implementation. |
+| Issue                                                                      | Status                       | Notes                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS Accessibility permission required for keyboard/mouse                 | By design                    | See README for instructions.                                                                                                                                                                                                                                                        |
+| Gyro reset combo not working on certain controllers                        | Under investigation          | Use manual reset button as workaround.                                                                                                                                                                                                                                              |
+| Imported model preview sometimes crashes on large files                    | Rare                         | Reduce polygon count or use simpler format.                                                                                                                                                                                                                                         |
+| Taskbar/tray icon left/right-click can act the same on some Linux desktops | Known limitation (host-side) | Some StatusNotifierItem hosts (a few GNOME extensions included) always show the menu on any click once one is advertised, rather than distinguishing left/right. Not something this app controls; macOS/Windows both distinguish correctly since we own the whole click path there. |
+| Minimized windows aren't capturable by OBS/other capture tools             | By design (OS-level)         | Minimized windows generally aren't composited by any OS, so no capture method can see their content. Not specific to this app.                                                                                                                                                      |
 
 ---
 
@@ -321,6 +339,8 @@ mingw32-make -j$(nproc)
 ```
 
 **"Windows protected your PC" / SmartScreen warning:** The Windows executable is not code-signed with a certificate from a trusted authority (Microsoft's code-signing process requires a yearly fee and a verification process, which I haven't gone through for this project). As a result, Windows SmartScreen may show a warning when you try to run the downloaded `.exe` file. This is normal for unsigned open-source software. To run it, click **"More info"** and then **"Run anyway"**. If you're still unsure, you can build the executable yourself from the source code — the build instructions are just above. The warning does not indicate that the software is malicious; it's simply Windows's way of telling you that the publisher is unknown.
+
+**Moving a window on Windows:** these are borderless windows with no title bar to drag by design (that's the point of an overlay). To reposition one, check **Drag to Move** in that window's settings first - without it, click-and-drag on the model itself does whatever its normal input binding does instead of moving the window.
 
 The resulting executable is **`3dco+`** (`3dco+.exe` on Windows).
 

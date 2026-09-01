@@ -36,11 +36,26 @@ void main()
     float level = floor(diff * 4.0) / 4.0;
     level = max(level, 0.5); // keep shadows readable rather than black
 
+    // ---- Form/curvature shading ----
+    // The banding above only reacts to ONE directional light, so a
+    // rounded part (a thumbstick's dome, a concave button) viewed
+    // from an angle where that light barely varies across it - e.g.
+    // looking straight down at a stick lit mostly from above - can
+    // end up in a single flat band with no visible shape at all. This
+    // adds a second, always-on shading term based purely on view
+    // angle (bright dead-on, darker toward the silhouette) - the toon
+    // equivalent of ambient occlusion/a studio fill light - so
+    // concave/convex shape reads correctly from *any* viewing angle,
+    // not just ones where the key light happens to help.
+    float form = clamp(facing, 0.0, 1.0);
+    float formShade = mix(0.72, 1.08, form);
+
     // Saturate the base color for a vibrant anime look, and use a
     // strong ambient + diffuse term for bright, flat coloring.
     vec3 baseColor = material.color.rgb * 1.4;
     vec3 finalColor =
-        baseColor * (material.ambient * 1.2 + material.diffuse * level);
+        baseColor * (material.ambient * 1.2 + material.diffuse * level) *
+        formShade;
 
     // ---- Hard-edged specular "pop" ----
     // Real cel-shaded/anime rendering almost never has a smooth

@@ -20,6 +20,8 @@ lib/
 dist/
 src/models_zip_data.h
 src/gamecontrollerdb_data.h
+src/icon_data.h
+src/shaders_data.h
 
 
 # CMake generated files

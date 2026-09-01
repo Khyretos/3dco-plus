@@ -5,7 +5,7 @@
       "name": "0_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -38,7 +38,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "0_text.obj",
@@ -78,14 +79,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "1_button.obj",
       "name": "1_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -118,7 +120,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "1_text.obj",
@@ -158,14 +161,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "2_button.obj",
       "name": "2_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -198,7 +202,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "2_text.obj",
@@ -238,14 +243,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "3_button.obj",
       "name": "3_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -278,7 +284,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "3_text.obj",
@@ -318,14 +325,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "4_button.obj",
       "name": "4_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -358,7 +366,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "4_text.obj",
@@ -398,14 +407,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "5_button.obj",
       "name": "5_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -438,7 +448,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "5_text.obj",
@@ -478,14 +489,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "6_buttton.obj",
       "name": "6_buttton",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -518,7 +530,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "6_text.obj",
@@ -558,14 +571,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "7_button.obj",
       "name": "7_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -598,7 +612,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "7_text.obj",
@@ -638,14 +653,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "8_button.obj",
       "name": "8_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -678,7 +694,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "8_text.obj",
@@ -718,14 +735,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "9_button.obj",
       "name": "9_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -758,7 +776,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "9_text.obj",
@@ -798,14 +817,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "ALT_left_button.obj",
       "name": "ALT_left_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -838,7 +858,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "ALT_left_text.obj",
@@ -878,14 +899,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "ALT_right_button.obj",
       "name": "ALT_right_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -918,7 +940,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "ALT_right_text.obj",
@@ -958,14 +981,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "ARROW_DOWN_button.obj",
       "name": "ARROW_DOWN_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -998,7 +1022,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "ARROW_DOWN_text.obj",
@@ -1038,14 +1063,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "ARROW_LEFT_button.obj",
       "name": "ARROW_LEFT_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -1078,7 +1104,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "ARROW_LEFT_text.obj",
@@ -1118,14 +1145,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "ARROW_RIGHT_button.obj",
       "name": "ARROW_RIGHT_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -1158,7 +1186,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "ARROW_RIGHT_text.obj",
@@ -1198,14 +1227,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "ARROW_UP_button.obj",
       "name": "ARROW_UP_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -1238,7 +1268,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "ARROW_UP_text.obj",
@@ -1278,14 +1309,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "A_button.obj",
       "name": "A_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -1318,7 +1350,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "A_text.obj",
@@ -1358,14 +1391,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "BACKSPACE_button.obj",
       "name": "BACKSPACE_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -1398,7 +1432,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "BACKSPACE_text.obj",
@@ -1438,14 +1473,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "BRACKET_left_button.obj",
       "name": "BRACKET_left_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -1478,7 +1514,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "BRACKET_left_text.obj",
@@ -1518,14 +1555,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "BRACKET_right_button.obj",
       "name": "BRACKET_right_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -1558,7 +1596,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "BRACKET_right_text.obj",
@@ -1598,14 +1637,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "B_button.obj",
       "name": "B_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -1638,7 +1678,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "B_text.obj",
@@ -1678,7 +1719,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "Base.obj",
@@ -1718,14 +1760,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "CAPS_button.obj",
       "name": "CAPS_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -1758,7 +1801,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "CAPS_text.obj",
@@ -1798,14 +1842,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "COMMA_button.obj",
       "name": "COMMA_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -1838,7 +1883,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "COMMA_text.obj",
@@ -1878,14 +1924,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "CTRL_left_button.obj",
       "name": "CTRL_left_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -1918,7 +1965,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "CTRL_left_text.obj",
@@ -1958,14 +2006,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "CTRL_right_button.obj",
       "name": "CTRL_right_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -1998,7 +2047,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "CTRL_right_text.obj",
@@ -2038,7 +2088,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "C_button.obj",
@@ -2046,7 +2097,7 @@
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
       "travel": [0.000000, 0.000000, 0.000000],
-      "popup_offset": [0.000000, 0.000000, 0.000000],
+      "popup_offset": [0.000000, -0.010000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
       "stick_max": 0.000000,
@@ -2078,7 +2129,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "C_text.obj",
@@ -2118,14 +2170,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "D_button.obj",
       "name": "D_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -2158,7 +2211,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "D_text.obj",
@@ -2198,14 +2252,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "END_button.obj",
       "name": "END_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -2238,7 +2293,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "END_text.obj",
@@ -2278,14 +2334,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "ENTER_button.obj",
       "name": "ENTER_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -2318,7 +2375,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "ENTER_text.obj",
@@ -2358,14 +2416,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "ESC_button.obj",
       "name": "ESC_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -2398,7 +2457,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "ESC_text.obj",
@@ -2438,14 +2498,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "E_button.obj",
       "name": "E_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -2478,7 +2539,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "E_text.obj",
@@ -2518,7 +2580,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "FN_Text.obj",
@@ -2558,14 +2621,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "FN_button.obj",
       "name": "FN_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -2598,14 +2662,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "F_button.obj",
       "name": "F_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -2638,7 +2703,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "F_text.obj",
@@ -2678,14 +2744,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "G_button.obj",
       "name": "G_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -2718,7 +2785,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "G_text.obj",
@@ -2758,14 +2826,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "HOME_button.obj",
       "name": "HOME_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -2798,7 +2867,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "HOME_text.obj",
@@ -2838,14 +2908,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "H_button.obj",
       "name": "H_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -2878,7 +2949,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "H_text.obj",
@@ -2918,14 +2990,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "I_button.obj",
       "name": "I_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -2958,7 +3031,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "I_text.obj",
@@ -2998,14 +3072,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "J_button.obj",
       "name": "J_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -3038,7 +3113,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "J_text.obj",
@@ -3078,14 +3154,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "K_button.obj",
       "name": "K_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -3118,7 +3195,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "K_text.obj",
@@ -3158,14 +3236,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "L_button.obj",
       "name": "L_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -3198,7 +3277,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "L_text.obj",
@@ -3238,14 +3318,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "MENU_button.obj",
       "name": "MENU_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -3278,7 +3359,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "MENU_text.obj",
@@ -3318,14 +3400,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "MINUS_button.obj",
       "name": "MINUS_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -3358,7 +3441,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "MINUS_text.obj",
@@ -3398,14 +3482,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "M_button.obj",
       "name": "M_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -3438,7 +3523,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "M_text.obj",
@@ -3478,14 +3564,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "N_button.obj",
       "name": "N_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -3518,7 +3605,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "N_text.obj",
@@ -3558,14 +3646,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "O_button.obj",
       "name": "O_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -3598,7 +3687,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "O_text.obj",
@@ -3638,14 +3728,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "PERIOD_button.obj",
       "name": "PERIOD_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -3678,7 +3769,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "PERIOD_text.obj",
@@ -3718,14 +3810,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "PGDN_button.obj",
       "name": "PGDN_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -3758,7 +3851,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "PGDN_text.obj",
@@ -3798,14 +3892,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "PGUP_button.obj",
       "name": "PGUP_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -3838,7 +3933,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "PGUP_text.obj",
@@ -3878,14 +3974,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "PLUS_button.obj",
       "name": "PLUS_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -3918,7 +4015,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "PLUS_text.obj",
@@ -3958,14 +4056,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "P_button.obj",
       "name": "P_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -3998,7 +4097,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "P_text.obj",
@@ -4038,14 +4138,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "QUOTE_button.obj",
       "name": "QUOTE_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -4078,7 +4179,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "QUOTE_text.obj",
@@ -4118,14 +4220,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "Q_button.obj",
       "name": "Q_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -4158,7 +4261,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "Q_text.obj",
@@ -4198,14 +4302,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "R_button.obj",
       "name": "R_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -4238,7 +4343,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "R_text.obj",
@@ -4278,14 +4384,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "SEMICOLON_button.obj",
       "name": "SEMICOLON_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -4318,7 +4425,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "SEMICOLON_text.obj",
@@ -4358,14 +4466,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "SHIFT_left_button.obj",
       "name": "SHIFT_left_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -4398,7 +4507,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "SHIFT_left_text.obj",
@@ -4438,14 +4548,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "SHIFT_right_button.obj",
       "name": "SHIFT_right_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -4478,7 +4589,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "SHIFT_right_text.obj",
@@ -4518,14 +4630,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "SLASH_button.obj",
       "name": "SLASH_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -4558,7 +4671,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "SLASH_text.obj",
@@ -4598,14 +4712,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "SPACE_button.obj",
       "name": "SPACE_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -4638,7 +4753,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "SPACE_text.obj",
@@ -4678,14 +4794,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "S_button.obj",
       "name": "S_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -4718,7 +4835,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "S_text.obj",
@@ -4758,14 +4876,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "TAB_button.obj",
       "name": "TAB_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -4798,7 +4917,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "TAB_text.obj",
@@ -4838,14 +4958,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "T_button.obj",
       "name": "T_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -4878,7 +4999,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "T_text.obj",
@@ -4918,14 +5040,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "U_button.obj",
       "name": "U_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -4958,7 +5081,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "U_text.obj",
@@ -4998,14 +5122,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "V_button.obj",
       "name": "V_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -5038,7 +5163,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "V_text.obj",
@@ -5078,14 +5204,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "WINDOWS_button.obj",
       "name": "WINDOWS_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -5118,7 +5245,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "WINDOWS_text.obj",
@@ -5158,14 +5286,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "W_button.obj",
       "name": "W_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -5198,7 +5327,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "W_text.obj",
@@ -5238,14 +5368,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "X_button.obj",
       "name": "X_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -5278,7 +5409,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "X_text.obj",
@@ -5318,14 +5450,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "Y_button.obj",
       "name": "Y_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -5358,7 +5491,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "Y_text.obj",
@@ -5398,7 +5532,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "Z_Text.obj",
@@ -5438,14 +5573,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "Z_button.obj",
       "name": "Z_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -5478,14 +5614,15 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "__button.obj",
       "name": "|_button",
       "assigned_part": -1,
       "position": [0.000000, 0.000000, 0.000000],
-      "travel": [0.000000, 0.000000, 0.000000],
+      "travel": [0.000000, -0.010000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
       "trigger_max": 0.000000,
@@ -5518,7 +5655,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     },
     {
       "filename": "__text.obj",
@@ -5558,7 +5696,8 @@
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
-      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000]
+      "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
+      "visible": true
     }
   ],
   "source": "https://free3d.com/3d-model/low-profile-mechanical-keyboard-337074.html"

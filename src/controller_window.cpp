@@ -1373,9 +1373,22 @@ void createTransparentOverlay(controller_window &w) {
   // reaches it (and gets forwarded), it just doesn't become the
   // active/foreground window on click, matching how an overlay should
   // behave.
+  //
+  // Title: read back from the (still-existing, just hidden) GLFW
+  // window rather than left empty. This companion window is the one
+  // actually visible on screen once transparency is active - the GLFW
+  // window itself gets hidden a few lines down - so capture tools like
+  // OBS's Window Capture source enumerate *this* HWND, and previously
+  // saw an empty title (shown by OBS as a bare "null") instead of the
+  // controller's actual name (e.g. "Mouse", "FlightStick R").
+  wchar_t title_buf[256] = L"";
+  GetWindowTextW(glfwGetWin32Window(w.glfw_window), title_buf,
+                 static_cast<int>(sizeof(title_buf) / sizeof(title_buf[0])));
+
   HWND hwnd = CreateWindowExW(
-      WS_EX_LAYERED | WS_EX_NOACTIVATE, kOverlayClassName, L"", WS_POPUP, x, y,
-      width, height, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
+      WS_EX_LAYERED | WS_EX_NOACTIVATE, kOverlayClassName, title_buf,
+      WS_POPUP, x, y, width, height, nullptr, nullptr,
+      GetModuleHandleW(nullptr), nullptr);
 
   if (!hwnd) {
     spdlog::error(
@@ -2842,52 +2855,37 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
         }
 
         if (value == "mouse_xy" || value == "mouse_scroll_xy") {
-          // ---- Handle accumulated scroll ----
+          // ---- Scroll wheel: treat like a button ----
           if (value == "mouse_scroll_xy" || value == "mouse_scroll_x" ||
               value == "mouse_scroll_y") {
-            // Accumulate scroll values with clamping to prevent overflow
-            const float MAX_SCROLL = 1.0f;
-            float scrollX = globalScrollDx;
-            float scrollY = globalScrollDy;
+            // Scroll-wheel bindings previously tried to show
+            // direction/magnitude as a stick-style X/Y position
+            // (stick_X/stick_Y/pull) with a continuously-scaled
+            // highlight. That didn't read well: these bindings are
+            // normally used on a button-shaped mesh, not a joystick,
+            // and a partial-brightness highlight looked more like a
+            // bug than an intentional effect. This now just lights
+            // the mesh fully the moment scroll motion is detected,
+            // matching the plain on/off highlight every other button
+            // binding uses.
+            //
+            // Scroll events are discrete per-tick deltas rather than
+            // a held value, so w.scroll_accum_magnitude here is reused
+            // purely as a short decaying "lit recently" flag (see the
+            // decay step further down) rather than an actual
+            // accumulated position - without it, a single scroll tick
+            // would flash for one frame and be easy to miss.
+            bool scrolledX =
+                value != "mouse_scroll_y" && fabs(globalScrollDx) > 0.001f;
+            bool scrolledY =
+                value != "mouse_scroll_x" && fabs(globalScrollDy) > 0.001f;
+            if (scrolledX || scrolledY)
+              w.scroll_accum_magnitude = 1.0f;
 
-            // Only accumulate if there's actual scroll movement
-            if (fabs(scrollX) > 0.001f || fabs(scrollY) > 0.001f) {
-              // Apply scroll sensitivity
-              scrollX *= 0.5f;
-              scrollY *= 0.5f;
-
-              w.scroll_accum_x =
-                  std::max(-MAX_SCROLL,
-                           std::min(MAX_SCROLL, w.scroll_accum_x + scrollX));
-              w.scroll_accum_y =
-                  std::max(-MAX_SCROLL,
-                           std::min(MAX_SCROLL, w.scroll_accum_y + scrollY));
-              w.scroll_accum_magnitude =
-                  sqrt(w.scroll_accum_x * w.scroll_accum_x +
-                       w.scroll_accum_y * w.scroll_accum_y);
-            }
-
-            // Apply the accumulated scroll to the mesh
-            if (value == "mouse_scroll_xy") {
-              mesh.press = w.scroll_accum_magnitude > 0.01f ? 1.0f : 0.0f;
-              mesh.highlight_value = w.scroll_accum_magnitude;
-              mesh.stick_X = w.scroll_accum_x * 32767.0f;
-              mesh.stick_Y = w.scroll_accum_y * 32767.0f;
-              mesh.pull = w.scroll_accum_magnitude * 32767.0f;
-              continue;
-            } else if (value == "mouse_scroll_x") {
-              mesh.press = fabs(w.scroll_accum_x) > 0.01f ? 1.0f : 0.0f;
-              mesh.highlight_value = fabs(w.scroll_accum_x);
-              mesh.stick_X = w.scroll_accum_x * 32767.0f;
-              mesh.pull = fabs(w.scroll_accum_x) * 32767.0f;
-              continue;
-            } else if (value == "mouse_scroll_y") {
-              mesh.press = fabs(w.scroll_accum_y) > 0.01f ? 1.0f : 0.0f;
-              mesh.highlight_value = fabs(w.scroll_accum_y);
-              mesh.stick_Y = w.scroll_accum_y * 32767.0f;
-              mesh.pull = fabs(w.scroll_accum_y) * 32767.0f;
-              continue;
-            }
+            bool lit = w.scroll_accum_magnitude > 0.05f;
+            mesh.press = lit ? 1.0f : 0.0f;
+            mesh.highlight_value = lit ? 1.0f : 0.0f;
+            continue;
           }
 
           dx *= w.mouse_sensitivity * MOUSE_SCALE;
@@ -3435,27 +3433,18 @@ void controller_window_input() {
           }
         }
 
-        // ---- Decay scroll accumulation (optimized) ----
-        static const float DECAY = 0.98f;
-        static const float EPSILON = 0.0001f;
-
-        if (fabs(w.scroll_accum_x) > EPSILON) {
-          w.scroll_accum_x *= DECAY;
-          if (fabs(w.scroll_accum_x) < EPSILON)
-            w.scroll_accum_x = 0.0f;
-        }
-        if (fabs(w.scroll_accum_y) > EPSILON) {
-          w.scroll_accum_y *= DECAY;
-          if (fabs(w.scroll_accum_y) < EPSILON)
-            w.scroll_accum_y = 0.0f;
-        }
-
-        if (fabs(w.scroll_accum_x) > EPSILON ||
-            fabs(w.scroll_accum_y) > EPSILON) {
-          w.scroll_accum_magnitude = sqrt(w.scroll_accum_x * w.scroll_accum_x +
-                                          w.scroll_accum_y * w.scroll_accum_y);
-        } else {
-          w.scroll_accum_magnitude = 0.0f;
+        // ---- Decay the scroll-wheel "lit recently" flag ----
+        // w.scroll_accum_magnitude is now just a short decaying pulse
+        // set to 1.0 the instant a scroll tick is detected above, not
+        // an accumulated position - see the mouse_scroll_* handling
+        // above for why. scroll_accum_x/y are unused now that scroll
+        // bindings behave like a plain button instead of a stick.
+        static const float SCROLL_HIGHLIGHT_DECAY = 0.85f;
+        static const float SCROLL_EPSILON = 0.001f;
+        if (w.scroll_accum_magnitude > SCROLL_EPSILON) {
+          w.scroll_accum_magnitude *= SCROLL_HIGHLIGHT_DECAY;
+          if (w.scroll_accum_magnitude < SCROLL_EPSILON)
+            w.scroll_accum_magnitude = 0.0f;
         }
 
         // Propagate stick motion
