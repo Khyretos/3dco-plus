@@ -206,9 +206,6 @@ Local controller input is ignored on a window that's in Receiver mode — everyt
 
 ## Shader effects
 
-![Shader effect functionality demo placeholder](images/placeholder-shaders-demo.webp)
-_(Video coming soon)_
-
 Each mesh (or a whole window, via the global shader setting) can use a custom fragment shader instead of the default lit material — accessible from a mesh's **Shader Effect** section in Settings. A handful of looks ship built in, including:
 
 - **Pixel Art** – genuinely blocky, posterized shading (screen-space "pixels", not just a color tweak), with hue-graded shadow/highlight bands and view-angle form shading so dark/gray controllers still read with depth instead of turning into a flat gray-and-black blur.
@@ -221,12 +218,12 @@ Each mesh (or a whole window, via the global shader setting) can use a custom fr
 
 A note on results: these shaders were tuned against a handful of controllers, not every model — how well one looks depends a lot on the shape and base color of the specific controller you're applying it to. Some combinations will look great immediately; others may look flat, too dark, or too busy. If a shader doesn't look right on your controller, try adjusting the mesh's base color or brightness settings first — most looks improve a lot with a little manual fine-tuning rather than being a fixed, one-size-fits-all effect.
 
-|                                                                           |                                                                          |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| **Pixel Art**<br>![Pixel Art](images/placeholder-shader-pixelart.webp)    | **Cel-shaded / Toon**<br>![Toon](images/placeholder-shader-cartoon.webp) |
-| **Aurora**<br>![Aurora](images/placeholder-shader-aurora.webp)            | **Galaxy**<br>![Galaxy](images/placeholder-shader-galaxy.webp)           |
-| **Infernal**<br>![Infernal](images/placeholder-shader-infernal.webp)      | **Rainbow**<br>![Rainbow](images/placeholder-shader-rainbow.webp)        |
-| **Black Hole**<br>![Black Hole](images/placeholder-shader-blackhole.webp) |                                                                          |
+|                                                                |                                                              |
+| -------------------------------------------------------------- | ------------------------------------------------------------ |
+| **Pixel Art**<br>![Pixel Art](images/shader_pixelart.webp)     | **Cel-shaded / Toon**<br>![Toon](images/shader_cartoon.webp) |
+| **Aurora**<br>![Aurora](images/shader_aurora.webp)             | **Galaxy**<br>![Galaxy](images/shader_galaxy.webp)           |
+| **Infernal**<br>![Infernal](images/shader_infernal.webp)       | **Rainbow**<br>![Rainbow](images/shader_rainbow.webp)        |
+| **Black Hole**<br>![Black Hole](images/shader_black_hole.webp) |                                                              |
 
 **Importing your own ShaderToy shader:** paste (or point the app at) a standard ShaderToy `mainImage()` shader and it's automatically wrapped with the right uniforms (`iTime`, `iResolution`, `iMouse`, `iFrame`, etc.). If the shader samples a channel texture (`iChannel0`-`iChannel3`) — very common for shaders that use a noise or gradient texture — you no longer need to track that texture down and wire it up by hand:
 

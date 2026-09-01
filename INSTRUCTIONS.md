@@ -21,10 +21,9 @@
 
 ---
 
-## What's New in 1.1.0
+![Demo](images/demo.webp)
 
-![New features walkthrough placeholder](images/placeholder-1.1.0-walkthrough.webp)
-*(Video coming soon)*
+## What's New in 1.1.0
 
 Quick tour of what's new this release — see the linked section for each for the full how-to:
 
@@ -39,8 +38,6 @@ Quick tour of what's new this release — see the linked section for each for th
 
 ## First Launch
 
-![First launch GIF](images/first_start.gif)
-
 On first launch, the app extracts its built‑in model library to your data directory – this takes a few seconds and only happens once.
 
 **macOS users:** grant Accessibility permissions (see README) for keyboard/mouse overlay.
@@ -49,7 +46,7 @@ On first launch, the app extracts its built‑in model library to your data dire
 
 ## Opening a Controller Window
 
-![Model picker GIF](images/models.gif)
+![Model picker GIF](images/model_picker.webp)
 
 From the Settings window, pick a model from your library and a connected controller. Each model corresponds to a specific controller layout with meshes pre‑assigned.
 
@@ -121,7 +118,7 @@ By default, pressing a button glows the mesh in a global highlight colour.
 
 ## Importing a Custom Model
 
-![Import preview GIF](images/placeholder-import.gif)
+![Import preview GIF](images/import.webp)
 
 You can bring in your own 3D model (common formats like FBX, glTF, OBJ, etc.) instead of using a built‑in one:
 
@@ -165,7 +162,7 @@ Each window supports **directional**, **point**, and **spot** lights. Adjust amb
 
 ## Network Functionality
 
-![Network settings placeholder](images/placeholder-network-settings.webp)
+![Network settings placeholder](images/network.webp)
 
 Send a controller window's live state to another running instance of the app instead of only rendering it locally — useful for a two-PC setup where you want the overlay/capture happening on a machine other than the one generating input.
 
@@ -183,7 +180,7 @@ A window in Receiver mode ignores local controller input entirely — everything
 
 ## Shader Effects
 
-![Shader effect picker placeholder](images/placeholder-shader-effects.webp)
+![Shader effect picker placeholder](images/shader.webp)
 
 Each mesh has a **Shader Effect** dropdown (and there's a global one per window) offering built-in looks: **Pixel Art**, **Cartoon** (cel-shaded/toon), **Aurora**, **Galaxy**, **Infernal**, **Rainbow**, and **Black Hole** (a swirling accretion disk, not a literal simulation) — plus support for pasting in your own ShaderToy-style shader.
 
