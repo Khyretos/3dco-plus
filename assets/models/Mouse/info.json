@@ -31,7 +31,7 @@
       "specular": 0.100000,
       "shininess": 32.000000,
       "color": [1.000000, 1.000000, 1.000000],
-      "alpha": 0.875287,
+      "alpha": 0.872049,
       "use_custom_highlight": false,
       "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
       "travel_rotation": [0.000000, 0.000000, 0.000000],
@@ -39,7 +39,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": false,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "button_3.obj",
@@ -80,7 +82,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "button_4.obj",
@@ -121,7 +125,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "button_6.obj",
@@ -162,7 +168,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "dpi_+.obj",
@@ -203,7 +211,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "dpi_-.obj",
@@ -244,7 +254,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "left_click.obj",
@@ -285,7 +297,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "mousepad.obj",
@@ -326,7 +340,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": false
+      "visible": false,
+      "smooth_travel_enabled": false,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "right_click.obj",
@@ -367,7 +383,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "shell.obj",
@@ -408,7 +426,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "wheel_inner.obj",
@@ -449,7 +469,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "wheel_outer.obj",
@@ -490,7 +512,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     }
   ],
   "source": "https://www.cgtrader.com/items/6950150/download-page"

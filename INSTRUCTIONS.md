@@ -2,26 +2,39 @@
 
 ## Table of Contents
 
-1. [What's New in 1.1.0](#whats-new-in-110)
-2. [First Launch](#first-launch)
-3. [Opening a Controller Window](#opening-a-controller-window)
-4. [Mapping Inputs](#mapping-inputs)
-5. [Gyro Support](#gyro-support)
-6. [Touchpads](#touchpads)
-7. [Highlighting & Press Feedback](#highlighting--press-feedback)
-8. [Importing a Custom Model](#importing-a-custom-model)
-9. [Lighting](#lighting)
-10. [Window & Camera Settings](#window--camera-settings)
-11. [Network Functionality](#network-functionality)
-12. [Shader Effects](#shader-effects)
-13. [The Log Window](#the-log-window)
-14. [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode)
-15. [Data Directory & Backups](#data-directory--backups)
-16. [Troubleshooting](#troubleshooting)
+1. [What's New in 1.1.1](#whats-new-in-111)
+2. [What's New in 1.1.0](#whats-new-in-110)
+3. [First Launch](#first-launch)
+4. [Opening a Controller Window](#opening-a-controller-window)
+5. [Mapping Inputs](#mapping-inputs)
+6. [Gyro Support](#gyro-support)
+7. [Touchpads](#touchpads)
+8. [Highlighting & Press Feedback](#highlighting--press-feedback)
+9. [Smooth Travel Animation](#smooth-travel-animation)
+10. [Importing a Custom Model](#importing-a-custom-model)
+11. [Lighting](#lighting)
+12. [Window & Camera Settings](#window--camera-settings)
+13. [Network Functionality](#network-functionality)
+14. [Shader Effects](#shader-effects)
+15. [The Log Window](#the-log-window)
+16. [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode)
+17. [Data Directory & Backups](#data-directory--backups)
+18. [Troubleshooting](#troubleshooting)
 
 ---
 
 ![Demo](images/demo.webp)
+
+## What's New in 1.1.1
+
+Quick tour of what's new this release:
+
+- [Smooth Travel Animation](#smooth-travel-animation) – buttons and paddles can now ease into a press instead of snapping instantly, with a per-mesh toggle and duration, plus one-click Copy/Unassign across every button on the controller.
+- Popup (bumper/paddle) offsets and Travel now stack instead of one silently disabling the other — a mesh flagged as a bumper/paddle with Popup enabled now still presses and travels normally.
+- Fixed the Touch Area's Yaw/Pitch/Roll sliders only rotating a tiny fraction of the angle shown — they now match the displayed degrees exactly.
+- Settings window polish: collapsible section headers ("Position", "Rotation", "Shader Effect", etc.) now have their own darker background tint, so the header reads as a distinct title bar instead of blending into the section above it.
+
+---
 
 ## What's New in 1.1.0
 
@@ -113,6 +126,22 @@ By default, pressing a button glows the mesh in a global highlight colour.
 ![Dual Highlight color picker](images/highlight_dual.webp)
 
 **Dual highlighting** (for axes) – different colours for positive/negative directions, with adjustable deadzone.
+
+---
+
+## Smooth Travel Animation
+
+![Smooth vs instant travel placeholder](images/key_smooth.webp)
+
+By default, a button's Travel (its press offset/rotation, set under **Movement & Animation**) snaps instantly between pressed and released. Smooth Travel Animation eases it instead, so a press reads as a smooth motion rather than a single-frame jump — the GIF above shows the same button with it off vs. on, side by side.
+
+Per mesh, under **Movement & Animation**:
+
+- **Smooth Travel Animation** – on/off.
+- **Duration (s)** – roughly how long the press/release takes to settle once enabled. Lower is snappier, higher is softer/slower.
+- **Copy to All Buttons** / **Unassign from All Buttons** – apply (or clear) the current enabled state and duration across every other button-type mesh on the controller in one click, instead of setting each one individually.
+
+**Not available on sticks, triggers, or touchpads/touchpoints** – those track a live physical position every frame (how far a trigger is actually pulled, where a finger actually is on a touchpad right now), so easing them would make the rendered part visibly lag behind the real input instead of just looking like a nice animation. The control is hidden for those mesh types for exactly that reason; regular buttons, bumpers, and paddles are unaffected and can use it normally.
 
 ---
 

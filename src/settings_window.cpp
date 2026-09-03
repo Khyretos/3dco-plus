@@ -394,6 +394,50 @@ static void EndShadedGroup(ImU32 bgColor, ImU32 borderColor) {
   ImGui::Unindent(6.0f);
 }
 
+// ------------------------------------------------------------------
+// Shaded TreeNode header
+//
+// Every collapsible section below ("Position", "Pivot Point",
+// "Rotation", etc.) tints its body via BeginShadedGroup()/
+// EndShadedGroup() once expanded, but the TreeNode header row itself -
+// the clickable arrow + label above that body - was left in plain
+// ImGui styling (default text color, no background), which made it
+// easy to lose track of where one section's header ends and another
+// section's tinted body begins, especially with several expanded at
+// once. This draws a background behind just that header row, using
+// the same channel-split trick BeginShadedGroup/EndShadedGroup already
+// use for the body - just applied to the single TreeNode widget
+// instead of a whole group - so the header reads as a distinct title
+// bar sitting on top of its own body instead of blending into the
+// window background above it.
+//
+// Use in place of a plain `ImGui::TreeNode(label)` call; returns the
+// same open/closed bool. Pass ShadeHeaderColor() with the *same*
+// r/g/b the section's own EndShadedGroup(ShadeColor(r, g, b), ...)
+// call uses, so the header and body read as one cohesive colored
+// block (header just a deeper, darker shade of the body's tint).
+static bool ShadedTreeNode(const char *label, ImU32 headerBgColor) {
+  ImDrawList *dl = ImGui::GetWindowDrawList();
+  dl->ChannelsSplit(2);
+  dl->ChannelsSetCurrent(1);
+  bool open = ImGui::TreeNode(label);
+  ImVec2 rectMin = ImGui::GetItemRectMin();
+  ImVec2 rectMax = ImGui::GetItemRectMax();
+  float fullWidth =
+      ImGui::GetWindowWidth() - ImGui::GetStyle().WindowPadding.x * 2;
+  rectMin.x = ImGui::GetWindowPos().x + ImGui::GetStyle().WindowPadding.x;
+  rectMax.x = rectMin.x + fullWidth;
+  ImVec2 pad(8.0f, 1.0f);
+  rectMin.x -= pad.x;
+  rectMax.x += pad.x;
+  rectMin.y -= pad.y;
+  rectMax.y += pad.y;
+  dl->ChannelsSetCurrent(0);
+  dl->AddRectFilled(rectMin, rectMax, headerBgColor, 4.0f);
+  dl->ChannelsMerge();
+  return open;
+}
+
 // Fitting purple/black themed accent shades - each submenu gets its own
 // tint so the UI reads as colorful while staying on-theme.
 static ImU32 ShadeColor(float r, float g, float b, float a = 0.30f) {
@@ -401,6 +445,15 @@ static ImU32 ShadeColor(float r, float g, float b, float a = 0.30f) {
 }
 static ImU32 ShadeBorder(float r, float g, float b, float a = 0.65f) {
   return ImGui::ColorConvertFloat4ToU32(ImVec4(r, g, b, a));
+}
+// A visibly deeper/darker version of the same hue ShadeColor() gives a
+// section's body, for that section's TreeNode header (see
+// ShadedTreeNode() above) - roughly 45% as bright, with a higher alpha
+// than the body so a thin one-line header still reads as solidly
+// colored rather than a faint tint.
+static ImU32 ShadeHeaderColor(float r, float g, float b, float a = 0.75f) {
+  return ImGui::ColorConvertFloat4ToU32(
+      ImVec4(r * 0.45f, g * 0.45f, b * 0.45f, a));
 }
 
 // Actual filenames of OBJ meshes (used for file I/O)
@@ -1429,7 +1482,7 @@ void drawSettingsWindow() {
       if (receiverMode)
         ImGui::EndDisabled();
 
-      if (ImGui::TreeNode("Settings")) {
+      if (ShadedTreeNode("Settings", ShadeHeaderColor(0.42f, 0.28f, 0.62f))) {
         // Apply a dark purple background for the tree node
         BeginShadedGroup();
         ImGui::Checkbox("Popup Bumpers", &current_window->model.popup_bumpers);
@@ -1738,7 +1791,8 @@ void drawSettingsWindow() {
       // ============================================================
       if (!current_window->model.meshes.empty()) {
         // ---- Materials ----
-        if (ImGui::TreeNode("Materials")) {
+        if (ShadedTreeNode("Materials",
+                           ShadeHeaderColor(0.55f, 0.18f, 0.45f))) {
           BeginShadedGroup();
           // Ensure material_mesh is valid
           if (material_mesh >= (int)current_window->model.meshes.size())
@@ -1794,7 +1848,8 @@ void drawSettingsWindow() {
         }
 
         // ---- Textures ----
-        if (ImGui::TreeNode("Textures")) {
+        if (ShadedTreeNode("Textures",
+                           ShadeHeaderColor(0.22f, 0.38f, 0.58f))) {
           BeginShadedGroup();
           if (texture_mesh >= (int)current_window->model.meshes.size())
             texture_mesh = (int)current_window->model.meshes.size() - 1;
@@ -2672,7 +2727,8 @@ void drawSettingsWindow() {
             ImGui::SetTooltip("Write current settings to info.json.");
 
           // ---- Position Section (collapsible) ----
-          if (ImGui::TreeNode("Position")) {
+          if (ShadedTreeNode("Position",
+                             ShadeHeaderColor(0.20f, 0.40f, 0.62f))) {
             BeginShadedGroup();
             ImGui::InputFloat("X Position", &selectedMesh.position[0], 0.01f,
                               1.0f, "%.3f");
@@ -2692,7 +2748,8 @@ void drawSettingsWindow() {
           }
 
           // ---- Pivot Section (collapsible) ----
-          if (ImGui::TreeNode("Pivot Point")) {
+          if (ShadedTreeNode("Pivot Point",
+                             ShadeHeaderColor(0.58f, 0.38f, 0.10f))) {
             BeginShadedGroup();
             ImGui::TextWrapped(
                 "The pivot is the point around which the mesh rotates "
@@ -2756,7 +2813,8 @@ void drawSettingsWindow() {
           }
 
           // ---- Rotation Section (collapsible) ----
-          if (ImGui::TreeNode("Rotation")) {
+          if (ShadedTreeNode("Rotation",
+                             ShadeHeaderColor(0.22f, 0.52f, 0.30f))) {
             BeginShadedGroup();
             ImGui::InputFloat("Rot X (deg)", &selectedMesh.rotation[0], 0.1f,
                               1.0f, "%.1f");
@@ -2776,7 +2834,8 @@ void drawSettingsWindow() {
           }
 
           // ---- Movement & Animation (collapsible) ----
-          if (ImGui::TreeNode("Movement & Animation")) {
+          if (ShadedTreeNode("Movement & Animation",
+                             ShadeHeaderColor(0.16f, 0.48f, 0.52f))) {
             BeginShadedGroup();
             ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.8f, 1.0f),
                                "Travel (button press offset)");
@@ -2796,6 +2855,76 @@ void drawSettingsWindow() {
                               1.0f, "%.1f");
             if (ImGui::IsItemHovered())
               ImGui::SetTooltip("Movement when the button is pressed.");
+
+            if (isAnalogTravelMesh(selectedMesh)) {
+              ImGui::TextDisabled(
+                  "Smooth Travel Animation isn't available for stick/"
+                  "trigger/touchpad meshes - their travel already tracks "
+                  "the physical input's live position, and easing that "
+                  "would just make them lag behind the real input. "
+                  "Buttons, bumpers, and paddles can use it normally.");
+            } else {
+              ImGui::Checkbox("Smooth Travel Animation",
+                              &selectedMesh.smooth_travel_enabled);
+              if (ImGui::IsItemHovered())
+                ImGui::SetTooltip(
+                    "Ease the travel/travel rotation above toward its "
+                    "target over time instead of snapping instantly, so a "
+                    "press (and release) reads as a smooth motion.");
+              if (selectedMesh.smooth_travel_enabled) {
+                ImGui::SliderFloat("Duration (s)",
+                                   &selectedMesh.smooth_travel_duration,
+                                   0.02f, 0.6f, "%.2f");
+                if (ImGui::IsItemHovered())
+                  ImGui::SetTooltip(
+                      "Roughly how long the press/release animation takes "
+                      "to settle. Lower is snappier, higher is softer/"
+                      "slower.");
+                if (ImGui::Button("Copy to All Buttons")) {
+                  int applied = 0;
+                  for (auto &m : current_window->model.meshes) {
+                    if (isAnalogTravelMesh(m))
+                      continue; // skip sticks/triggers - never applicable
+                    m.smooth_travel_enabled =
+                        selectedMesh.smooth_travel_enabled;
+                    m.smooth_travel_duration =
+                        selectedMesh.smooth_travel_duration;
+                    ++applied;
+                  }
+                  spdlog::info("Copied Smooth Travel Animation ({}s) to {} "
+                              "non-analog mesh(es).",
+                              selectedMesh.smooth_travel_duration, applied);
+                }
+                if (ImGui::IsItemHovered())
+                  ImGui::SetTooltip(
+                      "Applies this enabled state and duration to every "
+                      "other button-type mesh on this controller. Stick "
+                      "and trigger meshes are skipped automatically, since "
+                      "this setting doesn't apply to them.");
+                ImGui::SameLine();
+                if (ImGui::Button("Unassign from All Buttons")) {
+                  int cleared = 0;
+                  for (auto &m : current_window->model.meshes) {
+                    if (isAnalogTravelMesh(m))
+                      continue; // never had it applicable in the first place
+                    if (m.smooth_travel_enabled) {
+                      m.smooth_travel_enabled = false;
+                      ++cleared;
+                    }
+                  }
+                  spdlog::info("Disabled Smooth Travel Animation on {} "
+                              "mesh(es).",
+                              cleared);
+                }
+                if (ImGui::IsItemHovered())
+                  ImGui::SetTooltip(
+                      "Turns Smooth Travel Animation back off on every "
+                      "other button-type mesh on this controller, without "
+                      "touching its duration setting - so re-enabling it "
+                      "later on any of them keeps whatever duration was "
+                      "already set.");
+              }
+            }
             ImGui::Separator();
             ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.8f, 1.0f),
                                "Popup (bumper/paddle)");
@@ -2853,7 +2982,8 @@ void drawSettingsWindow() {
           }
 
           // ---- Highlight Override (per-mesh) ----
-          if (ImGui::TreeNode("Highlight Override")) {
+          if (ShadedTreeNode("Highlight Override",
+                             ShadeHeaderColor(0.58f, 0.16f, 0.16f))) {
             BeginShadedGroup();
             bool useCustom = selectedMesh.use_custom_highlight;
             if (ImGui::Checkbox("Override global highlight color",
@@ -2910,7 +3040,8 @@ void drawSettingsWindow() {
           }
 
           // ---- Shader Selection ----
-          if (ImGui::TreeNode("Shader Effect")) {
+          if (ShadedTreeNode("Shader Effect",
+                             ShadeHeaderColor(0.2f, 0.5f, 0.3f))) {
             BeginShadedGroup();
             ImGui::TextWrapped("Select a custom shader effect for this mesh.");
 
@@ -3158,16 +3289,26 @@ void drawSettingsWindow() {
                 DraggableTooltip("Touchpoint depth offset.");
               ImGui::TableSetColumnIndex(1);
               ImGui::Text("Rotation (degrees)");
+              // is_radians=false: unlike popup_rotation/stick_max/
+              // trigger_max (fed straight into glm::rotate() with no
+              // conversion, so genuinely radians-native), touch_rotation
+              // is stored in degrees - see the glm::radians(...) wrapper
+              // around every read of it in model.cpp/controller_window.cpp.
+              // This was previously passing is_radians=true, which
+              // silently double-converts degrees<->radians on every
+              // edit and crushes the slider's effective range down to a
+              // small fraction of what the -360..360 shown here implies
+              // - that's the "barely moves 20-30 degrees" symptom.
               draggableFloatAngle("Yaw", &selectedMesh.touch_rotation[1],
-                                  /*is_radians=*/true, 0.5f, -360.0f, 360.0f);
+                                  /*is_radians=*/false, 0.5f, -360.0f, 360.0f);
               if (ImGui::IsItemHovered())
                 DraggableTooltip("Touchpoint yaw rotation.");
               draggableFloatAngle("Pitch", &selectedMesh.touch_rotation[0],
-                                  /*is_radians=*/true, 0.5f, -360.0f, 360.0f);
+                                  /*is_radians=*/false, 0.5f, -360.0f, 360.0f);
               if (ImGui::IsItemHovered())
                 DraggableTooltip("Touchpoint pitch rotation.");
               draggableFloatAngle("Roll", &selectedMesh.touch_rotation[2],
-                                  /*is_radians=*/true, 0.5f, -360.0f, 360.0f);
+                                  /*is_radians=*/false, 0.5f, -360.0f, 360.0f);
               if (ImGui::IsItemHovered())
                 DraggableTooltip("Touchpoint roll rotation.");
               ImGui::EndTable();
@@ -3443,7 +3584,8 @@ void drawSettingsWindow() {
     // ============================================================
     if (ImGui::CollapsingHeader("Lighting")) {
       // ---- Directional Lights ----
-      if (ImGui::TreeNode("Directional Lights")) {
+      if (ShadedTreeNode("Directional Lights",
+                         ShadeHeaderColor(0.58f, 0.46f, 0.10f))) {
         BeginShadedGroup();
         static unsigned current_dir_light = 0;
         std::string preview_name = "";
@@ -3551,7 +3693,8 @@ void drawSettingsWindow() {
       }
 
       // ---- Point Lights ----
-      if (ImGui::TreeNode("Point Lights")) {
+      if (ShadedTreeNode("Point Lights",
+                         ShadeHeaderColor(0.58f, 0.20f, 0.36f))) {
         BeginShadedGroup();
         static unsigned current_point_light = 0;
         std::string preview_name = "";
@@ -3675,7 +3818,8 @@ void drawSettingsWindow() {
       }
 
       // ---- Spot Lights ----
-      if (ImGui::TreeNode("Spot Lights")) {
+      if (ShadedTreeNode("Spot Lights",
+                         ShadeHeaderColor(0.16f, 0.42f, 0.56f))) {
         BeginShadedGroup();
         static unsigned current_spot_light = 0;
         std::string preview_name = "";

@@ -39,7 +39,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "bottom_shell.obj",
@@ -80,7 +82,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "extra.obj",
@@ -121,7 +125,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "left_trigger.obj",
@@ -162,7 +168,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": false,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "right_trigger.obj",
@@ -203,7 +211,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": false,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "left_stick.obj",
@@ -244,7 +254,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": false,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "right_stick.obj",
@@ -285,7 +297,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": false,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "left_ring.obj",
@@ -326,7 +340,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": false,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "right_ring.obj",
@@ -367,7 +383,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": false,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "a_button.obj",
@@ -408,7 +426,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "b_button.obj",
@@ -449,7 +469,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "x_button.obj",
@@ -490,7 +512,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "y_button.obj",
@@ -531,7 +555,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "back_button.obj",
@@ -572,7 +598,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "guide_button.obj",
@@ -613,7 +641,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "start_button.obj",
@@ -654,7 +684,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "left_cap.obj",
@@ -695,7 +727,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": false,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "right_cap.obj",
@@ -736,7 +770,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": false,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "left_bumper.obj",
@@ -777,7 +813,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "right_bumper.obj",
@@ -818,7 +856,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "dpad_up.obj",
@@ -859,7 +899,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "dpad_down.obj",
@@ -900,7 +942,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "dpad_left.obj",
@@ -941,7 +985,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     },
     {
       "filename": "dpad_right.obj",
@@ -982,7 +1028,9 @@
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
-      "visible": true
+      "visible": true,
+      "smooth_travel_enabled": true,
+      "smooth_travel_duration": 0.150000
     }
   ],
   "source": "https://sketchfab.com/3d-models/steam-machine-controller-c1fcf77d71984c11818a5e2412816705"

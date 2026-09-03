@@ -168,6 +168,10 @@ void writeJson(Model &m, const std::string &path) {
          << mesh.highlight_color_negative[2] << ", "
          << mesh.highlight_color_negative[3] << "],\n";
     json << "      \"visible\": " << (mesh.visible ? "true" : "false")
+         << ",\n";
+    json << "      \"smooth_travel_enabled\": "
+         << (mesh.smooth_travel_enabled ? "true" : "false") << ",\n";
+    json << "      \"smooth_travel_duration\": " << mesh.smooth_travel_duration
          << "\n";
     json << "    }" << (i < m.meshes.size() - 1 ? "," : "") << "\n";
   }
@@ -354,6 +358,13 @@ void readInfoJson(Model &m, const std::string &path) {
     // to visible every time. Defaults to true for older info.json files
     // written before this field existed.
     mesh.visible = p.value("visible", true);
+    // Smooth travel animation (1.1.1) - off by default, matching every
+    // info.json written before this feature existed.
+    mesh.smooth_travel_enabled = p.value("smooth_travel_enabled", false);
+    mesh.smooth_travel_duration = p.value("smooth_travel_duration", 0.15f);
+    // travel_value_display/travel_signed_display are intentionally not
+    // read here - see their declaration in model.h for why (runtime-only,
+    // re-derived from travel_value/travel_signed every frame regardless).
 
     // After setting mesh.material.color (possibly from JSON)
     mesh.original_color[0] = mesh.material.color[0];
@@ -1112,7 +1123,7 @@ glm::mat4 computeMeshTransform(const Model &m, int meshIndex,
                        glm::vec3(mesh.scale[0], mesh.scale[1], mesh.scale[2]));
   }
 
-  // ---- Popup or button travel (translations) ----
+  // ---- Popup (static offset for bumpers/triggers/paddles) ----
   if (mesh.popup) {
     model = glm::translate(model,
                            glm::vec3(mesh.popup_offset[0], mesh.popup_offset[1],
@@ -1123,15 +1134,31 @@ glm::mat4 computeMeshTransform(const Model &m, int meshIndex,
         glm::rotate(model, mesh.popup_rotation[1], glm::vec3(0.0f, 1.0f, 0.0f));
     model =
         glm::rotate(model, mesh.popup_rotation[2], glm::vec3(0.0f, 0.0f, 1.0f));
-  } else {
-    // ---- Travel translation and rotation (button press / axis deflection)
-    // ---- Use signed value if available, otherwise fallback to absolute
-    // travel_value.
+  }
+
+  // ---- Travel translation and rotation (button press / axis deflection)
+  // ---- Previously this was an "else" alongside Popup above, meaning a
+  // bumper/trigger/paddle mesh with "Popup Bumpers"/"Popup Triggers"/
+  // "Popup Paddles" enabled got the popup offset applied INSTEAD of
+  // travel, silently disabling its press animation entirely - Popup and
+  // Travel represent different things (a static "this part sits
+  // rotated out" pose vs. a live press-driven offset) and there's no
+  // real reason they can't both apply to the same mesh, so this now
+  // always runs regardless of mesh.popup, stacking on top of the popup
+  // offset above when both apply.
+  //
+  // Uses the *display* copies (travel_value_display / travel_signed_display),
+  // not the raw travel_value/travel_signed - when smooth travel is off
+  // these are updated to exactly mirror the raw values every frame (see
+  // controller_window.cpp), so this is a no-op change for meshes that
+  // don't use the feature; when it's on, these instead ease toward the
+  // raw target over smooth_travel_duration seconds.
+  {
     float travelMult = 0.0f;
-    if (fabs(mesh.travel_signed) > 0.001f) {
-      travelMult = mesh.travel_signed;
-    } else if (mesh.travel_value > 0.001f) {
-      travelMult = mesh.travel_value;
+    if (fabs(mesh.travel_signed_display) > 0.001f) {
+      travelMult = mesh.travel_signed_display;
+    } else if (mesh.travel_value_display > 0.001f) {
+      travelMult = mesh.travel_value_display;
     }
 
     if (fabs(travelMult) > 0.001f) {
@@ -1500,6 +1527,11 @@ glm::vec3 computeMeshCenter(const Mesh &mesh) {
   if (!mesh.hasBBox)
     return glm::vec3(0.0f);
   return (mesh.bboxMin + mesh.bboxMax) * 0.5f;
+}
+
+bool isAnalogTravelMesh(const Mesh &mesh) {
+  return mesh.isTrigger || mesh.stick_max > 0.0f || mesh.isTouchpad ||
+         mesh.isTouchpoint;
 }
 
 // Compute the world matrix of a mesh, ignoring the global gyro matrix

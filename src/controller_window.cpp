@@ -4190,6 +4190,58 @@ void drawControllerWindows() {
             mesh.visible = false;
           }
         }
+
+        // ---- Smooth travel animation (optional, 1.1.1) ----
+        // travel_value/travel_signed are set instantly from input
+        // earlier this frame (see the input-handling code further up)
+        // and stay that way - anything that wants the true current
+        // input state (network sync included) still reads those
+        // directly. What actually gets rendered is
+        // travel_value_display/travel_signed_display, updated here:
+        // eased toward the raw target when smooth travel is enabled for
+        // this mesh, or just snapped straight to it otherwise (so
+        // behavior is completely unchanged for every mesh that doesn't
+        // use this feature).
+        //
+        // The easing itself is frame-rate-independent exponential
+        // smoothing rather than a fixed-duration start/end tween: on
+        // rapid repeated input (button mashing, a stick being wiggled)
+        // there's no "previous tween" to cancel or restart, it just
+        // keeps easing toward whatever the current target is, every
+        // frame. smooth_travel_duration is calibrated so the display
+        // value is ~99% of the way to the target after that many
+        // seconds of a held, unchanging input.
+        //
+        // !isAnalogTravelMesh(mesh): a runtime safety net alongside the
+        // settings UI hiding this control for stick/trigger meshes (see
+        // isAnalogTravelMesh() in model.h/.cpp) - those meshes' travel
+        // tracks the physical input's live position every frame, so
+        // easing it would make the rendered part visibly lag behind
+        // the real stick/trigger instead of just looking like a nice
+        // animation. This catches smooth_travel_enabled ending up set
+        // on one of them anyway (an older save, an unusual custom
+        // model) without needing every call site to remember to check.
+        if (mesh.smooth_travel_enabled && !isAnalogTravelMesh(mesh) &&
+            mesh.smooth_travel_duration > 0.0001f) {
+          float rate =
+              1.0f - powf(0.01f, w.deltaTime / mesh.smooth_travel_duration);
+          rate = glm::clamp(rate, 0.0f, 1.0f);
+          mesh.travel_value_display +=
+              (mesh.travel_value - mesh.travel_value_display) * rate;
+          mesh.travel_signed_display +=
+              (mesh.travel_signed - mesh.travel_signed_display) * rate;
+          // Snap the last little bit rather than asymptotically crawling
+          // toward it forever - avoids a mesh sitting at, say, 0.0004
+          // past "resting" indefinitely, which fabs(...) > 0.001f checks
+          // elsewhere would otherwise treat as still slightly pressed.
+          if (fabs(mesh.travel_value - mesh.travel_value_display) < 0.0005f)
+            mesh.travel_value_display = mesh.travel_value;
+          if (fabs(mesh.travel_signed - mesh.travel_signed_display) < 0.0005f)
+            mesh.travel_signed_display = mesh.travel_signed;
+        } else {
+          mesh.travel_value_display = mesh.travel_value;
+          mesh.travel_signed_display = mesh.travel_signed;
+        }
       }
 
       // Pass global highlight color (will be overridden per mesh if custom)

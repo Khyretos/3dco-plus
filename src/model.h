@@ -94,6 +94,24 @@ typedef struct mesh_struct {
   // Press-induced rotation (for flightsticks, etc.)
   float travel_rotation[3] = {0.0f, 0.0f, 0.0f}; // degrees
 
+  // ---- Smooth travel animation (optional, 1.1.1) ----
+  // Off by default (identical to pre-1.1.1 behavior: travel/travel_rotation
+  // snap instantly to their target every frame). When enabled, the
+  // *rendered* travel amount eases toward its target over
+  // smooth_travel_duration seconds instead of snapping - see
+  // computeMeshTransform() in model.cpp for where this is applied, and
+  // the per-frame update in controller_window.cpp for where the easing
+  // itself happens. travel_value/travel_signed below are deliberately
+  // left as the raw, instantaneous input state (network sync and
+  // anything else that wants the true current input still reads those
+  // directly) - travel_value_display/travel_signed_display are the
+  // eased copies actually used for rendering, and are runtime-only
+  // (not persisted - there's nothing meaningful to save mid-animation).
+  bool smooth_travel_enabled = false;
+  float smooth_travel_duration = 0.15f; // seconds
+  float travel_value_display = 0.0f;
+  float travel_signed_display = 0.0f;
+
   // Dual highlight for axes
   bool use_dual_highlight = false;
   float axis_deadzone = 0.1f; // 0-1 range, default 10%
@@ -255,6 +273,24 @@ glm::mat4 getMeshFinalMatrix(const Model &m, int idx,
                              const glm::mat4 &parent = glm::mat4(1.0f));
 
 glm::vec3 computeMeshCenter(const Mesh &mesh);
+
+// Smooth Travel Animation only makes sense for a mesh whose travel is
+// driven by a discrete/digital input (a button, fully on or off) - a
+// joystick cap (stick_max > 0, driven every frame by the physical
+// stick's live tilt), a trigger (isTrigger, driven by how far it's
+// actually pulled right now), or a touchpad/touchpoint (isTouchpad /
+// isTouchpoint, driven by live touch position) are all continuous
+// analog inputs, and easing any of those would make the rendered part
+// visibly lag behind the real physical position under the user's
+// fingers. Bumpers and paddles (isBumper/isPaddle) are NOT excluded -
+// physically they're just buttons (fully pressed or not), regardless
+// of whether they also happen to use the separate Popup offset/
+// rotation. Shared between the settings UI (to hide/disable the
+// control for these meshes) and the per-frame update in
+// controller_window.cpp (as a runtime safety net, in case
+// smooth_travel_enabled is set on one of these anyway - e.g. from an
+// older save, or an unusual custom model).
+bool isAnalogTravelMesh(const Mesh &mesh);
 
 void writeJson(Model &m, const std::string &path);
 

@@ -11,6 +11,13 @@ This is a **fork, not a replacement**. It exists as an homage to the original to
 
 The **`+`** in the name means exactly that: **improvements and extra features** layered on top of the original — more controllers, more rendering features, more input paths, more build tooling — while keeping the same "point it at your input device and it just works" spirit. It's also a personal passion project: a way for me to see what I'm actually capable of building and maintaining with AI as a collaborator rather than a crutch.
 
+## What's new in 1.1.1
+
+- **Smooth Travel Animation.** Buttons, bumpers, and paddles can now ease into a press instead of snapping instantly — per-mesh toggle plus a duration slider, with **Copy to All Buttons**/**Unassign from All Buttons** to apply it across the whole controller in one click. Deliberately not available on sticks, triggers, or touchpads/touchpoints, since those track a live physical position every frame and easing them would just look like input lag.
+- **Fixed Popup and Travel silently disabling each other.** A mesh flagged as a bumper/paddle with "Popup Bumpers"/"Popup Paddles" enabled would stop responding to Travel/press animation entirely; the two now stack correctly.
+- **Fixed the Touch Area's Yaw/Pitch/Roll sliders** rotating only a small fraction of the angle actually shown (a degrees/radians mismatch) — they now match the displayed value exactly.
+- **Settings window polish:** collapsible section headers now get their own darker background tint instead of blending into the plain window background above them.
+
 ## What's new in 1.1.0
 
 - **Network functionality** – send a window's live mesh state (button/axis/touch data) over UDP or TCP to another instance of the app on the same machine or over the network, so you can render the overlay on a second PC (e.g. a dedicated streaming/capture box) instead of the one you're playing on.
@@ -49,6 +56,7 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 
 - [What stayed the same](#what-stayed-the-same)
 - [What's new in the `+`](#whats-new-in-the-)
+- [What's new in 1.1.1](#whats-new-in-111)
 - [What's new in 1.1.0](#whats-new-in-110)
 - [What's new in 1.0.0](#whats-new-in-100)
 - [How it works](#how-it-works)
