@@ -1,0 +1,24 @@
+{
+  "display_name": "Xbox Series",
+  "mappings": {
+    "gamepad:button:south": "XboxSeriesX_A.png",
+    "gamepad:button:east": "XboxSeriesX_B.png",
+    "gamepad:button:west": "XboxSeriesX_X.png",
+    "gamepad:button:north": "XboxSeriesX_Y.png",
+    "gamepad:dpad:up": "XboxSeriesX_Dpad_Up.png",
+    "gamepad:dpad:down": "XboxSeriesX_Dpad_Down.png",
+    "gamepad:dpad:left": "XboxSeriesX_Dpad_Left.png",
+    "gamepad:dpad:right": "XboxSeriesX_Dpad_Right.png",
+    "gamepad:button:shoulder_left": "XboxSeriesX_LB.png",
+    "gamepad:button:shoulder_right": "XboxSeriesX_RB.png",
+    "gamepad:trigger:left": "XboxSeriesX_LT.png",
+    "gamepad:trigger:right": "XboxSeriesX_RT.png",
+    "gamepad:button:stick_left": "XboxSeriesX_Left_Stick.png",
+    "gamepad:button:stick_left_click": "XboxSeriesX_Left_Stick_Click.png",
+    "gamepad:button:stick_right": "XboxSeriesX_Right_Stick.png",
+    "gamepad:button:stick_right_click": "XboxSeriesX_Right_Stick_Click.png",
+    "gamepad:button:back": "XboxSeriesX_View.png",
+    "gamepad:button:start": "XboxSeriesX_Menu.png",
+    "gamepad:button:misc1": "XboxSeriesX_Share.png"
+  }
+}

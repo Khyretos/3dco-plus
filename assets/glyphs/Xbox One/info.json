@@ -1,0 +1,23 @@
+{
+  "display_name": "Xbox One",
+  "mappings": {
+    "gamepad:button:south": "XboxOne_A.png",
+    "gamepad:button:east": "XboxOne_B.png",
+    "gamepad:button:west": "XboxOne_X.png",
+    "gamepad:button:north": "XboxOne_Y.png",
+    "gamepad:dpad:up": "XboxOne_Dpad_Up.png",
+    "gamepad:dpad:down": "XboxOne_Dpad_Down.png",
+    "gamepad:dpad:left": "XboxOne_Dpad_Left.png",
+    "gamepad:dpad:right": "XboxOne_Dpad_Right.png",
+    "gamepad:button:shoulder_left": "XboxOne_LB.png",
+    "gamepad:button:shoulder_right": "XboxOne_RB.png",
+    "gamepad:trigger:left": "XboxOne_LT.png",
+    "gamepad:trigger:right": "XboxOne_RT.png",
+    "gamepad:button:stick_left": "XboxOne_Left_Stick.png",
+    "gamepad:button:stick_left_click": "XboxOne_Left_Stick_Click.png",
+    "gamepad:button:stick_right": "XboxOne_Right_Stick.png",
+    "gamepad:button:stick_right_click": "XboxOne_Right_Stick_Click.png",
+    "gamepad:button:start": "XboxOne_Menu.png",
+    "gamepad:button:guide": "XboxOne_Windows.png"
+  }
+}

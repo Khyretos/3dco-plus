@@ -1,0 +1,23 @@
+{
+  "display_name": "Xbox 360",
+  "mappings": {
+    "gamepad:button:south": "360_A.png",
+    "gamepad:button:east": "360_B.png",
+    "gamepad:button:west": "360_X.png",
+    "gamepad:button:north": "360_Y.png",
+    "gamepad:dpad:up": "360_Dpad_Up.png",
+    "gamepad:dpad:down": "360_Dpad_Down.png",
+    "gamepad:dpad:left": "360_Dpad_Left.png",
+    "gamepad:dpad:right": "360_Dpad_Right.png",
+    "gamepad:button:shoulder_left": "360_LB.png",
+    "gamepad:button:shoulder_right": "360_RB.png",
+    "gamepad:trigger:left": "360_LT.png",
+    "gamepad:trigger:right": "360_RT.png",
+    "gamepad:button:stick_left": "360_Left_Stick.png",
+    "gamepad:button:stick_left_click": "360_Left_Stick_Click.png",
+    "gamepad:button:stick_right": "360_Right_Stick.png",
+    "gamepad:button:stick_right_click": "360_Right_Stick_Click.png",
+    "gamepad:button:back": "360_Back.png",
+    "gamepad:button:start": "360_Start.png"
+  }
+}

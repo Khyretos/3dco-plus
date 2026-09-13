@@ -1,0 +1,24 @@
+{
+  "display_name": "PlayStation 4",
+  "mappings": {
+    "gamepad:button:south": "PS4_Cross.png",
+    "gamepad:button:east": "PS4_Circle.png",
+    "gamepad:button:west": "PS4_Square.png",
+    "gamepad:button:north": "PS4_Triangle.png",
+    "gamepad:dpad:up": "PS4_Dpad_Up.png",
+    "gamepad:dpad:down": "PS4_Dpad_Down.png",
+    "gamepad:dpad:left": "PS4_Dpad_Left.png",
+    "gamepad:dpad:right": "PS4_Dpad_Right.png",
+    "gamepad:button:shoulder_left": "PS4_L1.png",
+    "gamepad:button:shoulder_right": "PS4_R1.png",
+    "gamepad:trigger:left": "PS4_L2.png",
+    "gamepad:trigger:right": "PS4_R2.png",
+    "gamepad:button:stick_left": "PS4_Left_Stick.png",
+    "gamepad:button:stick_left_click": "PS4_Left_Stick_Click.png",
+    "gamepad:button:stick_right": "PS4_Right_Stick.png",
+    "gamepad:button:stick_right_click": "PS4_Right_Stick_Click.png",
+    "gamepad:button:back": "PS4_Share.png",
+    "gamepad:button:start": "PS4_Options.png",
+    "gamepad:button:touchpad": "PS4_Touch_Pad.png"
+  }
+}

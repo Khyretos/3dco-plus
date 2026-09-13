@@ -1,0 +1,23 @@
+{
+  "display_name": "PlayStation 3",
+  "mappings": {
+    "gamepad:button:south": "PS3_Cross.png",
+    "gamepad:button:east": "PS3_Circle.png",
+    "gamepad:button:west": "PS3_Square.png",
+    "gamepad:button:north": "PS3_Triangle.png",
+    "gamepad:dpad:up": "PS3_Dpad_Up.png",
+    "gamepad:dpad:down": "PS3_Dpad_Down.png",
+    "gamepad:dpad:left": "PS3_Dpad_Left.png",
+    "gamepad:dpad:right": "PS3_Dpad_Right.png",
+    "gamepad:button:shoulder_left": "PS3_L1.png",
+    "gamepad:button:shoulder_right": "PS3_R1.png",
+    "gamepad:trigger:left": "PS3_L2.png",
+    "gamepad:trigger:right": "PS3_R2.png",
+    "gamepad:button:stick_left": "PS3_Left_Stick.png",
+    "gamepad:button:stick_left_click": "PS3_Left_Stick_Click.png",
+    "gamepad:button:stick_right": "PS3_Right_Stick.png",
+    "gamepad:button:stick_right_click": "PS3_Right_Stick_Click.png",
+    "gamepad:button:back": "PS3_Select.png",
+    "gamepad:button:start": "PS3_Start.png"
+  }
+}

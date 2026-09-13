@@ -1,0 +1,24 @@
+{
+  "display_name": "Nintendo Switch",
+  "mappings": {
+    "gamepad:button:south": "Switch_B.png",
+    "gamepad:button:east": "Switch_A.png",
+    "gamepad:button:west": "Switch_Y.png",
+    "gamepad:button:north": "Switch_X.png",
+    "gamepad:dpad:up": "Switch_Dpad_Up.png",
+    "gamepad:dpad:down": "Switch_Dpad_Down.png",
+    "gamepad:dpad:left": "Switch_Dpad_Left.png",
+    "gamepad:dpad:right": "Switch_Dpad_Right.png",
+    "gamepad:button:shoulder_left": "Switch_LB.png",
+    "gamepad:button:shoulder_right": "Switch_RB.png",
+    "gamepad:trigger:left": "Switch_LT.png",
+    "gamepad:trigger:right": "Switch_RT.png",
+    "gamepad:button:stick_left": "Switch_Left_Stick.png",
+    "gamepad:button:stick_left_click": "Switch_Left_Stick_Click.png",
+    "gamepad:button:stick_right": "Switch_Right_Stick.png",
+    "gamepad:button:stick_right_click": "Switch_Right_Stick_Click.png",
+    "gamepad:button:back": "Switch_Minus.png",
+    "gamepad:button:start": "Switch_Plus.png",
+    "gamepad:button:guide": "Switch_Home.png"
+  }
+}

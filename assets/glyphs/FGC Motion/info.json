@@ -1,0 +1,30 @@
+{
+  "display_name": "FGC Motion (+ PS5)",
+  "combine_with": "PS5",
+  "mappings": {
+    "gamepad:direction:1": "InputIcon_1.png",
+    "gamepad:direction:2": "InputIcon_2.png",
+    "gamepad:direction:3": "InputIcon_3.png",
+    "gamepad:direction:4": "InputIcon_4.png",
+    "gamepad:direction:5": "InputIcon_5.png",
+    "gamepad:direction:6": "InputIcon_6.png",
+    "gamepad:direction:7": "InputIcon_7.png",
+    "gamepad:direction:8": "InputIcon_8.png",
+    "gamepad:direction:9": "InputIcon_9.png",
+    "gamepad:direction:214": "64px-InputIcon_214.png",
+    "gamepad:direction:21478": "64px-InputIcon_21478.png",
+    "gamepad:direction:236": "64px-InputIcon_236.png",
+    "gamepad:direction:23698": "64px-InputIcon_23698.png",
+    "gamepad:direction:360": "64px-InputIcon_360.png",
+    "gamepad:direction:41236": "64px-InputIcon_41236.png",
+    "gamepad:direction:47896": "64px-InputIcon_47896.png",
+    "gamepad:direction:623": "64px-InputIcon_623.png",
+    "gamepad:direction:63214": "64px-InputIcon_63214.png",
+    "gamepad:direction:69874": "64px-InputIcon_69874.png",
+    "gamepad:direction:87412": "64px-InputIcon_87412.png",
+    "gamepad:direction:89632": "64px-InputIcon_89632.png"
+  },
+  "exclude_from_combine": [
+    "gamepad:dpad:"
+  ]
+}

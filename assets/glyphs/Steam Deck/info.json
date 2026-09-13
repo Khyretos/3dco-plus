@@ -1,0 +1,30 @@
+{
+  "display_name": "Steam Deck",
+  "mappings": {
+    "gamepad:button:south": "SteamDeck_A.png",
+    "gamepad:button:east": "SteamDeck_B.png",
+    "gamepad:button:west": "SteamDeck_X.png",
+    "gamepad:button:north": "SteamDeck_Y.png",
+    "gamepad:dpad:up": "SteamDeck_Dpad_Up.png",
+    "gamepad:dpad:down": "SteamDeck_Dpad_Down.png",
+    "gamepad:dpad:left": "SteamDeck_Dpad_Left.png",
+    "gamepad:dpad:right": "SteamDeck_Dpad_Right.png",
+    "gamepad:button:shoulder_left": "SteamDeck_L1.png",
+    "gamepad:button:shoulder_right": "SteamDeck_R1.png",
+    "gamepad:trigger:left": "SteamDeck_L2.png",
+    "gamepad:trigger:right": "SteamDeck_R2.png",
+    "gamepad:button:stick_left": "SteamDeck_Left_Stick.png",
+    "gamepad:button:stick_left_click": "SteamDeck_Left_Stick_Click.png",
+    "gamepad:button:stick_right": "SteamDeck_Right_Stick.png",
+    "gamepad:button:stick_right_click": "SteamDeck_Right_Stick_Click.png",
+    "gamepad:button:back": "SteamDeck_Minus.png",
+    "gamepad:button:start": "SteamDeck_Plus.png",
+    "gamepad:button:guide": "SteamDeck_Steam.png",
+    "gamepad:button:misc1": "SteamDeck_Dots.png",
+    "gamepad:button:paddle_left1": "SteamDeck_L4.png",
+    "gamepad:button:paddle_right1": "SteamDeck_R4.png",
+    "gamepad:button:paddle_left2": "SteamDeck_L5.png",
+    "gamepad:button:paddle_right2": "SteamDeck_R5.png",
+    "gamepad:gyro": "SteamDeck_Gyro.png"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "display_name": "PlayStation 5",
+  "mappings": {
+    "gamepad:button:south": "PS5_Cross.png",
+    "gamepad:button:east": "PS5_Circle.png",
+    "gamepad:button:west": "PS5_Square.png",
+    "gamepad:button:north": "PS5_Triangle.png",
+    "gamepad:dpad:up": "PS5_Dpad_Up.png",
+    "gamepad:dpad:down": "PS5_Dpad_Down.png",
+    "gamepad:dpad:left": "PS5_Dpad_Left.png",
+    "gamepad:dpad:right": "PS5_Dpad_Right.png",
+    "gamepad:button:shoulder_left": "PS5_L1.png",
+    "gamepad:button:shoulder_right": "PS5_R1.png",
+    "gamepad:trigger:left": "PS5_L2.png",
+    "gamepad:trigger:right": "PS5_R2.png",
+    "gamepad:button:stick_left": "PS5_Left_Stick.png",
+    "gamepad:button:stick_left_click": "PS5_Left_Stick_Click.png",
+    "gamepad:button:stick_right": "PS5_Right_Stick.png",
+    "gamepad:button:stick_right_click": "PS5_Right_Stick_Click.png",
+    "gamepad:button:back": "PS5_Share.png",
+    "gamepad:button:start": "PS5_Options.png",
+    "gamepad:button:misc1": "PS5_Microphone.png",
+    "gamepad:button:touchpad": "PS5_Touch_Pad.png"
+  }
+}
