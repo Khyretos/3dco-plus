@@ -58,11 +58,29 @@ typedef struct texture_struct {
   int wrapX = 0;
   int wrapY = 0;
   float offsetX = 0;
-  float offsetY = 0;
+  // Default is 1.0 (not 0) and flipY below defaults to true - this is
+  // the combination that correctly aligns a freshly-added texture
+  // against this app's UV convention for most images exported the
+  // ordinary way (confirmed against a real model+texture pair). Only
+  // affects a *newly added* texture's starting values - an existing
+  // texture loaded from a saved model keeps whatever it was actually
+  // saved with, even if that model predates this default and has no
+  // flipY/offsetY key at all (see readInfoJson() in model.cpp, whose
+  // fallback for a missing key is unchanged at false/0, specifically
+  // so this doesn't retroactively change already-correct old models).
+  float offsetY = 1.0f;
   float scaleX = 1.0f;
   float scaleY = 1.0f;
   float rotation = 0.0f;
   float border[4] = {0.8f, 0.8f, 0.8f, 1.0f};
+  // Mirrors the texture horizontally/vertically within its own UV
+  // space, before rotation/offset are applied - for source images
+  // whose content reads backwards on a mesh (e.g. exported/authored
+  // mirrored relative to how the mesh's own UV island is laid out,
+  // like text appearing reversed) with no way to fix that by editing
+  // the source image itself without also breaking its alignment.
+  bool flipX = false;
+  bool flipY = true;
 } Texture;
 
 enum InputType {

@@ -5,6 +5,10 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+// Forward declaration only - avoids pulling in all of imgui.h just for
+// a pointer type (see controller_window::input_history_imgui_ctx).
+struct ImGuiContext;
+
 #include "stb_image.h"
 
 #include <array>
@@ -14,10 +18,12 @@
 #include <string>
 #include <vector>
 
+#include "input_history_types.h"
 #include "model.h"
 #include <GLFW/glfw3.h>
 #include <SDL3/SDL.h>
 #include <array>
+#include <deque>
 #include <glad/glad.h>
 #include <map>
 #include <math.h>
@@ -26,6 +32,7 @@
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/spdlog.h>
 #include <string>
+#include <utility>
 #include <vector>
 
 // typedefs (unchanged)
@@ -71,6 +78,96 @@ typedef struct spot_light_struct {
   bool hide = false;
 } spot_light;
 
+#if defined(_WIN32)
+// Real per-pixel window transparency on Windows, via a companion
+// window - reusable by any GLFW window that needs this, not tied to
+// controller_window specifically. See createCompanionWindow()'s
+// definition in controller_window.cpp for the full explanation of why
+// this exists (short version: GLFW's own window class uses CS_OWNDC,
+// which is incompatible with WS_EX_LAYERED, so real per-pixel window
+// transparency is impossible on a GLFW window itself - this is a
+// second, plain HWND that mirrors it instead).
+//
+// Previously duplicated separately for controller windows and Input
+// History windows (each with its own HWND field, its own WndProc, its
+// own PBO/fence state) instead of sharing one implementation - which
+// is exactly how Input History's copy silently fell behind and ended
+// up missing several handlers (WM_NCHITTEST, keyboard forwarding,
+// SetCapture) the original already had. One shared type/WndProc/set
+// of functions now, used by both, so a fix or feature only ever needs
+// to be made once.
+struct CompanionWindow {
+  // Typed as void* rather than HWND so this cross-platform header
+  // doesn't need <windows.h>. Null when the companion doesn't exist
+  // (transparency off, or not yet created).
+  void *hwnd = nullptr;
+
+  // ---- Async readback state for updateCompanionWindow() ----
+  // A plain glReadPixels() straight into client memory forces the
+  // driver to wait for every previously issued GPU command to finish
+  // first - a full pipeline stall. Confirmed on NVIDIA: while a
+  // fullscreen/borderless game has the GPU's attention, the driver can
+  // deprioritize this hidden background context's command execution
+  // enough that the stall freezes the whole app. The fix is to read
+  // into a PBO (asynchronous) and poll a fence with a zero timeout
+  // (guaranteed non-blocking) instead of waiting. Two PBOs are used
+  // round-robin so one frame's read can still be in flight while the
+  // next frame's render proceeds.
+  GLuint pbo[2] = {0, 0};
+  GLsync fence[2] = {nullptr, nullptr};
+  bool pbo_pending[2] = {false, false};
+  int pbo_write_index = 0;
+  // The exact width/height each PBO slot's storage was allocated for
+  // when its read was issued - needed because the window can be
+  // resized between a slot's read being issued and it later being
+  // consumed, and mapping a range larger than what was actually
+  // allocated fails GL's range validation.
+  int pbo_width[2] = {0, 0};
+  int pbo_height[2] = {0, 0};
+  double last_update_time = 0.0;
+
+  // Set once at creation, read by both updateCompanionWindow() and
+  // CompanionWndProc (via GWLP_USERDATA, not a global window-list
+  // search - see createCompanionWindow()'s comment for why that's an
+  // improvement over how this used to work).
+  GLFWwindow *source_window = nullptr;
+  // Points into the owner's own click-through bool field (e.g.
+  // &w.click_through) rather than copying the value, so a live
+  // checkbox toggle is reflected immediately without needing an
+  // explicit sync step.
+  bool *click_through = nullptr;
+
+  // Settable externally - see controller_window::overlay_minimized's
+  // old declaration for the full reasoning (GLFW's own iconified
+  // tracking couldn't be trusted together with glfwHideWindow()).
+  // Window types with no minimize concept of their own (Input
+  // History) just never set this.
+  bool minimized = false;
+};
+
+// Creates the companion window and hides source_window (which keeps
+// rendering normally, just not shown directly). window_title is used
+// for the companion's own native title (helps tools like OBS's Window
+// Capture source find it by name instead of showing a bare "null").
+void createCompanionWindow(CompanionWindow &cw, GLFWwindow *source_window,
+                           bool *click_through_field,
+                           const std::string &window_title);
+void destroyCompanionWindow(CompanionWindow &cw);
+// Call once per frame instead of glfwSwapBuffers() while the
+// companion exists. update_interval throttles how often the companion
+// actually refreshes (reduces DWM load); always_on_top mirrors the
+// owner's own always-on-top state onto the companion HWND.
+void updateCompanionWindow(CompanionWindow &cw, bool always_on_top,
+                           double update_interval);
+
+// Converts one BGRA, bottom-up, straight-alpha frame (what OpenGL
+// produces) into what UpdateLayeredWindow needs and blits it. Pure
+// function, no CompanionWindow coupling - takes void* rather than
+// HWND so this cross-platform header doesn't need <windows.h>.
+void blitOverlayFrame(void *hwnd, int width, int height,
+                      const unsigned char *src);
+#endif
+
 typedef struct controller_window_struct {
   GLFWwindow *glfw_window;
   unsigned ID;
@@ -112,15 +209,41 @@ typedef struct controller_window_struct {
   float mouse_sensitivity =
       0.5f; // scale factor for mouse->stick mapping (reduced from 0.005)
 
-  // ---- Scroll state accumulation ----
-  float scroll_accum_x = 0.0f;
-  float scroll_accum_y = 0.0f;
-  float scroll_accum_magnitude = 0.0f;
-  float scroll_accum_decay = 0.9f; // Decay factor per frame
+  // ---- Scroll wheel highlight ----
+  // A scroll tick is a single-frame discrete pulse, not a held state
+  // like a real button - without some minimum visible duration it
+  // would flash for 1/60th of a second and be imperceptible. This is
+  // a clean, instant on/off timer (stay lit until this absolute time,
+  // then snap off), not a gradual fade - a previous version decayed
+  // the highlight multiplicatively over ~20 frames (~300ms at 60fps),
+  // which read as a visible lag before the highlight turned off
+  // rather than a clean button-like tap. scroll_accum_x/y were part
+  // of an even earlier "scroll intensity" design (a continuously-
+  // scaled highlight) that was discarded in favor of a plain on/off
+  // response matching every other button binding - unused now.
+  double scroll_highlight_until = 0.0;
+  float scroll_highlight_duration_ms = 120.0f;
 
   // ---- Touchpoint mouse tracking ----
   std::unordered_map<int, double> touchpoint_last_move_time;
   double mouse_idle_timeout = 0.05; // seconds (~2-3 frames @ 60fps)
+  // How long a mouse-bound touchpoint mesh sits idle before snapping
+  // back to center (0.5, 0.5) - a mouse has no hardware self-centering
+  // the way an analog stick does, so without this the visual position
+  // would just sit wherever it last was, drifting further from center
+  // the longer someone moved the mouse in one direction, with no way
+  // back to neutral short of moving it the opposite way by hand.
+  float touchpoint_recenter_seconds = 3.0f;
+  // Per-window frame counter for the recenter idle-check (was a
+  // function-static shared across every window, meaning the same
+  // global count was divided among all of them - with N controller
+  // windows open, any individual window's check fired roughly 1/N as
+  // often as intended, since the "every 60 counts" threshold was being
+  // consumed by whichever window's turn it happened to be, round-robin,
+  // not per-window. Confirmed directly: with 5 windows, a specific
+  // window's check fired about once every ~4 seconds instead of the
+  // intended ~once per second.
+  int touchpoint_check_frame_counter = 0;
 
   bool left_click = false;
   double left_click_x = 0;
@@ -207,6 +330,18 @@ typedef struct controller_window_struct {
   std::string model_name = "";
   std::string mesh_name = "";
   Model model;
+  // Counts changes to the model made since the last save, for the
+  // "N changes made without saving" indicator next to the Model
+  // section header - reset to 0 wherever writeJson(model, ...)
+  // actually runs. Covers the highest-traffic mutation points
+  // (textures - add/remove/type/wrap/flip/rotation/scale/offset -
+  // plus mesh add/remove/duplicate/visibility and model import), not
+  // literally every slider in the Model section (position/rotation/
+  // pivot/lighting/etc. aren't individually instrumented - there are
+  // too many to cover exhaustively in one pass), so treat the count
+  // as a useful approximation rather than a perfectly exhaustive
+  // per-field tracker.
+  int unsaved_change_count = 0;
 
   ImportPreviewData import_preview;
   bool is_import_preview = false;
@@ -266,61 +401,23 @@ typedef struct controller_window_struct {
   std::string window_title;
 
 #if defined(_WIN32)
-  // See createTransparentOverlay()'s comment in controller_window.cpp for
-  // the full explanation. Short version: GLFW's own window class uses
-  // CS_OWNDC, which Microsoft's docs say is incompatible with
-  // WS_EX_LAYERED - so real per-pixel window transparency is impossible
-  // on the GLFW window itself. When Transparent Background is on, this
-  // becomes a second, plain HWND (no CS_OWNDC) that's the visible,
-  // clickable window; the GLFW window keeps rendering normally but
-  // hidden, and every frame its pixels are copied into this window via
-  // UpdateLayeredWindow. Typed as void* rather than HWND so this
-  // cross-platform header doesn't need <windows.h>. Null when Transparent
-  // Background is off (the normal GLFW window is visible directly).
-  void *transparent_overlay_hwnd = nullptr;
-
-  // ---- Async readback state for updateTransparentOverlay() ----
-  // A plain glReadPixels() straight into client memory forces the driver
-  // to wait for every previously issued GPU command to finish before it
-  // returns - a full pipeline stall. Confirmed on NVIDIA: while a
-  // fullscreen/borderless game has the GPU's attention, the driver can
-  // deprioritize this hidden background context's command execution
-  // enough that the stall freezes the whole app, since gamepad polling
-  // shares the same single thread (see Input()/Draw() in main.cpp). AMD
-  // doesn't exhibit this. The fix is to read into a PBO (an
-  // asynchronous, non-blocking issue) and poll a fence with a zero
-  // timeout (guaranteed non-blocking by the GL spec) instead of waiting
-  // - see updateTransparentOverlay()'s definition for the full
-  // explanation. Two PBOs are used round-robin so one frame's read can
-  // still be in flight while the next frame's render proceeds.
-  GLuint overlay_pbo[2] = {0, 0};
-  GLsync overlay_fence[2] = {nullptr, nullptr};
-  bool overlay_pbo_pending[2] = {false, false};
-  int overlay_pbo_write_index = 0;
-  // The exact width/height each PBO slot's storage was allocated for
-  // when its read was issued (via glBufferData in the "issue" phase of
-  // updateTransparentOverlay()). Needed because the window can be
-  // resized between when a slot's read is issued and when it's later
-  // consumed (mapped) - using the CURRENT frame's width/height at map
-  // time instead of what that specific slot was actually sized for
-  // caused "glMapBufferRange failed" whenever a resize happened while a
-  // read was still in flight (requesting a map range larger than what
-  // was actually allocated fails GL's range validation).
-  int overlay_pbo_width[2] = {0, 0};
-  int overlay_pbo_height[2] = {0, 0};
-
-  // Set by minimizeControllerWindow()/restoreControllerWindow() only -
-  // updateTransparentOverlay() uses this instead of GLFW_ICONIFIED to
-  // decide whether to hide the companion window and skip rendering.
-  // Calling glfwIconifyWindow() together with glfwHideWindow() (which
-  // the companion mechanism needs to keep the real GLFW window hidden)
-  // turned out to corrupt GLFW's own internal iconified tracking - after
-  // that combination, GLFW_ICONIFIED stopped reliably reading true on
-  // later frames, so the companion never got hidden and stayed frozen
-  // showing its last frame. Tracking minimized state ourselves sidesteps
-  // needing to know how GLFW's internal state reacts to that unusual
-  // combination of calls at all.
-  bool overlay_minimized = false;
+  // Real per-pixel window transparency (see CompanionWindow's own doc
+  // comment above for the full explanation). Field access changed
+  // from the old scattered transparent_overlay_hwnd/overlay_pbo/
+  // overlay_fence/etc. to transparent_overlay.hwnd/.pbo/.fence/etc.
+  CompanionWindow transparent_overlay;
+  // True for exactly one frame: the one right after this window (and
+  // its companion) were created. Creating the companion hides this
+  // window's own GLFW window via glfwHideWindow() - immediately
+  // trying to bind a fresh GL context to a window that's still mid-
+  // visibility-transition can fail on some Windows graphics drivers
+  // ("WGL: Failed to make context current: The requested
+  // transformation operation is not supported"), seen specifically
+  // right when a new controller window is created. Skipping the
+  // render for that one frame gives Windows a full frame to settle
+  // the transition first; every frame after renders completely
+  // normally. See drawControllerWindows()'s use of this flag.
+  bool companion_first_frame_pending = true;
 #endif
 
   int preferred_guid_index = -1; // ordinal among devices with same GUID
@@ -414,10 +511,240 @@ typedef struct controller_window_struct {
   bool network_handshake_ack = false;
   double network_last_handshake_sent = 0.0;
 
-  double last_overlay_update_time = 0.0;       // in seconds
+  // Companion window's own last-update timestamp now lives in
+  // transparent_overlay.last_update_time instead of a standalone field
+  // here.
   double overlay_update_interval = 1.0 / 60.0; // 60 FPS
 
+  // ---- Input History (1.2.0) ----
+  // See input_history.h for InputHistoryEntry and the window/capture
+  // functions. Settings here are persisted per-window like Network's
+  // are; the deque/state below is runtime-only.
+  bool input_history_enabled = false;
+  // 0 = Raw text, 1 = Fighting-game notation, 2+ = index into
+  // kGlyphDisplayStyles (input_history.cpp) - i.e. which bundled glyph
+  // pack to render buttons as icons in.
+  int input_history_display_style = 0;
+  int input_history_length = 20; // visible/retained entries in the live window
+  bool input_history_capture_gamepad = true;
+  bool input_history_capture_keyboard = false;
+  bool input_history_capture_mouse = false;
+  // Groups inputs landing in the same frame into one history entry
+  // (e.g. "A+B") instead of one row per input - see the checkbox's
+  // tooltip in settings_window.cpp for the fighting-game-vs-everything-
+  // else framing this was specifically requested with.
+  bool input_history_merge_simultaneous = false;
+  // Which input drives the numpad-notation direction digit (5=neutral,
+  // 1-9 otherwise) in Fighting-game notation mode. 0=Auto (whichever of
+  // D-Pad/Left Stick is actually deflected; see
+  // computeNumpadDirection() in input_history.cpp), 1=D-Pad only,
+  // 2=Left Stick only, 3=Right Stick only - for lefty/unusual control
+  // setups where "movement" isn't D-Pad-or-left-stick.
+  int input_history_direction_source = 0;
+  float input_history_opacity = 0.85f;
+  // Background and content (text/glyphs) get independent transparency
+  // instead of one blanket alpha over everything - e.g. a 70% black
+  // background with fully opaque icons, or the reverse. opacity above
+  // is kept as the background's alpha specifically; this is the
+  // separate content one.
+  float input_history_content_opacity = 1.0f;
+  bool input_history_log_to_file = true;
+  bool input_history_click_through = true;
+  // Defaults true, matching the hardcoded always-topmost behavior this
+  // setting replaces - existing configurations keep working exactly as
+  // before unless someone explicitly turns it off. Unlike a controller
+  // window's own Always on Top (which toggles GLFW_FLOATING on the
+  // GLFW window directly), this is read by updateCompanionWindow() as
+  // its always_on_top parameter each frame - see the Windows companion
+  // window comments in controller_window.cpp for why Input History
+  // goes through that path instead on Windows.
+  bool input_history_always_on_top = true;
+  // How far a trigger needs to be pulled (0-1) before it registers as
+  // a "press" in the history - triggers are analog, so unlike a
+  // button there's no natural on/off point without one. Exposed as a
+  // setting since what counts as "pressed" is genuinely a matter of
+  // taste/game (a fighting game player mashing a trigger-mapped button
+  // wants a low threshold; someone just resting a finger on the
+  // trigger doesn't want that registering as a press).
+  float input_history_trigger_threshold = 0.1f;
+  // false (default) = newest entry at the bottom, oldest at top,
+  // scrolling upward as new inputs arrive - matches how a terminal/log
+  // reads. true = newest at the top instead, so the most recent input
+  // is always the first thing visible without needing to scroll -
+  // useful for a small window where you don't want to watch it scroll.
+  bool input_history_newest_on_top = false;
+  // Show the ms-since-previous-input timing - independent of display
+  // style now (previously baked into Fighting-Game Notation only),
+  // since timing is equally meaningful for Raw text or a glyph style,
+  // and for any input source, not just gamepad directions.
+  bool input_history_show_timing = false;
+  // A gap longer than this (ms) doesn't count as measured timing - see
+  // InputHistoryEntry::timingReset's doc comment in
+  // input_history_types.h.
+  int input_history_timing_reset_ms = 3000;
+  // Timing shown as milliseconds (default) or frames, for players who
+  // think in frame data rather than wall-clock time. Frames are
+  // computed against a fixed 60fps reference, the same assumption
+  // fighting-game frame data conventionally uses regardless of a
+  // game's actual render rate.
+  bool input_history_timing_in_frames = false;
+  // Max total time (ms) allowed for a compound motion (236, 623, 360,
+  // etc.) to complete, from its first required direction to its last -
+  // see detectMotionCompletion() in input_history.cpp. Real games vary
+  // a lot here: Street Fighter 6 (the default's basis) uses roughly
+  // 183ms for quarter-circles, 200ms for half-circles, and 533ms for
+  // full-circle (360) motions - see the setting's own tooltip in
+  // Settings for the full comparison against Tekken 8 and Guilty Gear
+  // Strive. This app uses one flat window for every motion rather than
+  // SF6's per-motion-length values, for simplicity.
+  int input_history_motion_timeout_ms = 220;
+  // Hold detection - shows a live-updating "Hold" + timer next to a
+  // button's glyph/label while it's held past the threshold, pinned
+  // at the newest-entry end (top or bottom, matching Newest Entry On
+  // Top) until released. Off by default. Multiple simultaneous holds
+  // (e.g. holding two buttons at once) each get their own entry.
+  bool input_history_show_holds = false;
+  // How long a press has to be held before it counts as a "hold"
+  // rather than a tap - 150ms is a commonly-used rough threshold in
+  // games for distinguishing a deliberate hold from a quick press.
+  int input_history_hold_threshold_ms = 150;
+  // Icon size in pixels for glyph display styles (square). Also scales
+  // the text-fallback font size proportionally so a style that mixes
+  // icons and text (most controller glyph packs don't have art for
+  // every button - see input_history_glyphs.h) stays visually
+  // consistent rather than having oddly-small fallback text next to
+  // large icons or vice versa.
+  int input_history_glyph_size = 28;
+  // Text size for every column in the window (Input, Timing, Date/
+  // Time) - previously only scoped to Raw/Notation's Input column,
+  // which left the other two columns visually inconsistent with it.
+  int input_history_font_size = 16;
+  // Alternating row background shading - off by default alongside a
+  // fully transparent background (0 opacity), since with the
+  // background already invisible the alternating stripe was the only
+  // thing left rendering, which isn't "no decoration, just glyphs and
+  // text" like the setting implies.
+  bool input_history_alternating_rows = true;
+  // Whether a "return to neutral" (digit 5, stick/D-pad centered)
+  // produces its own history entry. Off by default - most players
+  // don't want a fresh line every time they let go of the stick, only
+  // the fighting-game-notation crowd tends to want it, so this is
+  // opt-in rather than opt-out.
+  bool input_history_show_neutral_direction = false;
+  // How close together (ms) two inputs need to land to be merged into
+  // one entry when input_history_merge_simultaneous is on - previously
+  // this was implicitly "within the same capture call" (~one frame,
+  // as tight as ~16ms at 60fps), which is stricter than most people
+  // mean by "simultaneous" (a human press of two buttons "at once" is
+  // routinely 30-80ms apart). Now an explicit, tunable window instead.
+  int input_history_simultaneous_window_ms = 50;
+  // Adds a Date/Time column (leftmost) showing the real wall-clock
+  // time each entry was captured, for whatever reason someone wants
+  // to know exactly when a button was pressed (not just how long
+  // since the last one).
+  bool input_history_show_timestamp = false;
+  // ---- Gyro ("flick") capture ----
+  // Gyro is continuous, unlike a button - showing every small motion
+  // would flood the history and bury real button presses (this is
+  // the overflow concern raised directly), so this doesn't log
+  // "gyro activity" as a continuous stream. Instead, motion below
+  // input_history_gyro_threshold (deg/sec) is ignored entirely (hand
+  // tremor, idle drift), and anything above it accumulates over a
+  // short rolling window - crossing input_history_gyro_flick_threshold
+  // (total degrees) within that window is what actually produces one
+  // history entry (a "flick"), in whichever of the four directions
+  // dominated that window, with a cooldown after each one so a single
+  // continued motion doesn't spam repeated entries.
+  bool input_history_capture_gyro = false;
+  float input_history_gyro_threshold = 50.0f;       // deg/sec
+  float input_history_gyro_flick_threshold = 25.0f; // degrees, accumulated
+  int input_history_gyro_flick_window_ms = 150;
+  int input_history_gyro_flick_cooldown_ms = 400;
+  // Same "Drag to Move"/"Scroll to Resize" mechanism the controller
+  // windows already have (see controller_window_scroll_callback() and
+  // the drag_to_move handling in controller_window.cpp) - only
+  // meaningful while Click-Through is off, same as for a controller
+  // window, since click-through means this window never receives
+  // mouse events at all.
+  bool input_history_drag_to_move = false;
+  bool input_history_scroll_to_resize = false;
+
+  // Runtime-only state (not persisted) - see input_history.cpp
+  std::deque<InputHistoryEntry> input_history_entries;
+  bool input_history_last_gamepad_button[64] = {};
+  bool input_history_gamepad_state_initialized = false;
+  // Triggers are SDL axes, not buttons, so they need their own
+  // rising-edge tracking separate from the button array above - see
+  // captureInputHistory()'s trigger handling in input_history.cpp.
+  bool input_history_last_trigger_state[2] = {}; // [left, right]
+  std::array<bool, SDL_SCANCODE_COUNT> input_history_last_key_state{};
+  bool input_history_key_state_initialized = false;
+  std::array<bool, 8> input_history_last_mouse_state{};
+  bool input_history_mouse_state_initialized = false;
+  int input_history_last_dpad_dir = 0; // last numpad digit (5=neutral)
+  int input_history_last_stick_dir[2] = {
+      5, 5}; // [left, right] stick numpad digits
+  // Rolling buffer of recent (digit, timestampMs) direction changes,
+  // for compound-motion detection (236, 623, 360, etc.) - see
+  // detectMotionCompletion() in input_history.cpp. Capped to a modest
+  // size in captureInputHistory(), not unbounded.
+  std::deque<std::pair<int, Uint64>> input_history_motion_buffer;
+  // Currently-held inputs - see ActiveHold's doc comment in
+  // input_history_types.h.
+  std::vector<ActiveHold> input_history_active_holds;
+  Uint64 input_history_last_event_ms = 0;
+  // Rolling-window accumulation for gyro flick detection - see
+  // input_history_capture_gyro's doc comment above.
+  float input_history_gyro_accum_yaw = 0.0f;
+  float input_history_gyro_accum_pitch = 0.0f;
+  Uint64 input_history_gyro_window_start_ms = 0;
+  Uint64 input_history_gyro_last_flick_ms = 0;
+  FILE *input_history_log_file = nullptr;
+  std::string input_history_log_path;
+
+  GLFWwindow *input_history_glfw_window = nullptr;
+  ImGuiContext *input_history_imgui_ctx = nullptr;
+  bool input_history_backend_ready = false;
+  // Drag-to-move tracking - same screen-space-anchor approach as
+  // controller windows (see the big comment in controller_window.cpp's
+  // drag_to_move handling for why screen space, not window-relative
+  // coordinates, which change meaning the instant the window moves).
+  bool input_history_drag_moving = false;
+  double input_history_drag_move_anchor_x = 0.0;
+  double input_history_drag_move_anchor_y = 0.0;
+  int input_history_drag_move_start_win_x = 0;
+  int input_history_drag_move_start_win_y = 0;
+
+#if defined(_WIN32)
+  // Real per-pixel transparency for the Input History window hits the
+  // exact same CS_OWNDC/WS_EX_LAYERED wall as the controller windows do
+  // (see CompanionWindow's doc comment above) - GLFW's own
+  // GLFW_TRANSPARENT_FRAMEBUFFER support on Windows falls back to
+  // DwmEnableBlurBehindWindow, which glfw/glfw#2731 documents as
+  // unreliable on AMD (shows solid black instead of transparent).
+  // Now shares controller_window's own CompanionWindow type/functions
+  // (transparent_overlay above) instead of a separate, duplicated
+  // implementation - see CompanionWindow's own doc comment for why
+  // that duplication was a mistake in the first place (a duplicate
+  // copy silently fell behind the original, missing several handlers
+  // it should have had from day one). Field access changed from the
+  // old input_history_overlay_hwnd/_pbo/_fence/etc. to
+  // input_history_overlay.hwnd/.pbo/.fence/etc.
+  CompanionWindow input_history_overlay;
+#endif
+
 } controller_window;
+
+// SDL_GamepadButton index (0-20) -> human-readable name - defined in
+// controller_window.cpp, used there for debug logging and here (via
+// this extern) for Input History's Raw-text labels.
+extern std::string button_names[21];
+
+// All currently open controller windows - defined in
+// controller_window.cpp. input_history.cpp iterates this directly to
+// draw each window's Input History overlay without needing its own
+// separate registry.
+extern std::vector<controller_window> windows;
 
 // Function declarations (unchanged)
 void createControllerWindow(std::string title, std::string model_path);
@@ -449,23 +776,6 @@ void controller_window_iconify_callback(GLFWwindow *window, int iconified);
 void createTouchAreaRect(controller_window &w);
 void recreateControllerWindow(controller_window *w);
 void setWindowClickThrough(GLFWwindow *window, bool enable);
-
-#if defined(_WIN32)
-// Create/destroy/update the Win32 layered companion window used for real
-// per-pixel window transparency on Windows (see controller_window::
-// transparent_overlay_hwnd's declaration above, and
-// createTransparentOverlay()'s definition in controller_window.cpp, for
-// the full explanation of why this exists). createTransparentOverlay()
-// hides the GLFW window and shows the companion window in its place;
-// destroyTransparentOverlay() reverses that. updateTransparentOverlay()
-// must be called once per frame (from drawControllerWindows()) instead
-// of glfwSwapBuffers() while the companion window exists - it copies the
-// GLFW window's just-rendered frame into the companion window and keeps
-// the companion window's position/size/topmost state following it.
-void createTransparentOverlay(controller_window &w);
-void destroyTransparentOverlay(controller_window &w);
-void updateTransparentOverlay(controller_window &w);
-#endif
 
 // Wrappers for minimize/maximize/restore that behave correctly with the
 // Windows companion window (see controller_window::overlay_minimized's
@@ -502,4 +812,25 @@ void initNetwork(controller_window &w);
 void shutdownNetwork(controller_window &w);
 void sendNetworkState(controller_window &w);
 void receiveNetworkState(controller_window &w);
+
+// ---- Input History (1.2.0, see input_history.h/.cpp) ----
+// Declared here (rather than only in input_history.h) since main.cpp's
+// Draw()/Input() need drawInputHistoryWindows()/captureInputHistory()
+// without otherwise needing the rest of input_history.h's API
+// (notation formatting, glyph style list, etc).
+void captureInputHistory(controller_window &w);
+void drawInputHistoryWindows();
+void setInputHistoryEnabled(controller_window &w, bool enabled);
+// Closes the log file and destroys the GLFW window/ImGui context (if
+// any) for this window's Input History - called from
+// releaseControllerWindowResources() so closing a controller tab
+// doesn't leak either, the same way it already cleans up the
+// transparent-overlay/network/etc. resources for that window.
+void cleanupInputHistory(controller_window &w);
+// Number of glyph display styles available (valid input_history_display_style
+// values are 0=Raw, 1=Fighting-game notation, 2..N+1=glyph styles).
+int inputHistoryGlyphStyleCount();
+// Human-readable label for a given input_history_display_style value,
+// for the settings dropdown.
+std::string inputHistoryDisplayStyleName(int displayStyleIndex);
 #endif

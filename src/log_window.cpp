@@ -8,6 +8,7 @@
 #include "icon_data.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include "settings_window.h"
 #include "stb_image.h"
 
 #include <spdlog/details/log_msg.h>
@@ -98,6 +99,17 @@ static void ensureLogWindowCreated() {
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 #endif
 
+  // Explicit, not inherited - glfwWindowHint() is "sticky" across
+  // multiple glfwCreateWindow() calls until changed again, and the
+  // controller/Input History windows set GLFW_DECORATED=FALSE for
+  // their own borderless, companion-window-based overlay purposes
+  // (see CompanionWindow's own doc comment in controller_window.h).
+  // The Log window is not one of those - it's a completely ordinary
+  // window, not an overlay, and has no reason to ever be borderless -
+  // without setting this explicitly, it could silently inherit
+  // GLFW_DECORATED=FALSE from whichever of those ran most recently
+  // and come up with no title bar/borders at all.
+  glfwWindowHint(GLFW_DECORATED, GLFW_TRUE);
   g_log_glfw_window =
       glfwCreateWindow(700, 400, "3D Controller Overlay - Log", NULL, NULL);
   if (!g_log_glfw_window) {
@@ -123,6 +135,7 @@ static void ensureLogWindowCreated() {
   ImGui::SetCurrentContext(g_log_imgui_ctx);
   ImGui::GetIO().IniFilename = nullptr; // don't persist a second imgui.ini
   ImGui::StyleColorsDark();
+  applyCustomImGuiTheme(); // match the main Settings window's purple theme
 
   ImGui_ImplGlfw_InitForOpenGL(g_log_glfw_window, true);
   g_log_backend_ready = ImGui_ImplOpenGL3_Init(glsl_version);
@@ -200,6 +213,7 @@ void drawLogWindow() {
 
   glfwMakeContextCurrent(g_log_glfw_window);
   ImGui::SetCurrentContext(g_log_imgui_ctx);
+  applyCustomImGuiTheme(); // re-applied every frame - see its doc comment
 
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplGlfw_NewFrame();

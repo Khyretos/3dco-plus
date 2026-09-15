@@ -25,8 +25,17 @@ bool is_usable_dir(const std::filesystem::path &p) {
          !std::filesystem::is_empty(p, ec);
 }
 
-static bool extract_zip_from_memory(const unsigned char *data, size_t size,
-                                    const std::string &dest_dir) {
+} // namespace
+
+// Extracts an in-memory ZIP (typically one of the embedded
+// Embedded::*_zip_data blobs baked in by a tools/generate_*_zip.py
+// script) to dest_dir. Exposed via settings.h rather than kept
+// file-local, since more than one embedded asset pack now uses this
+// exact "extract once to the user's data directory on first use"
+// pattern - see get_models_root() below for the original, and
+// input_history.cpp's glyph extraction for the other caller.
+bool extract_zip_from_memory(const unsigned char *data, size_t size,
+                             const std::string &dest_dir) {
   if (!data || size == 0) {
     spdlog::error("Embedded ZIP data is empty");
     return false;
@@ -124,8 +133,6 @@ static bool extract_zip_from_memory(const unsigned char *data, size_t size,
   mz_zip_reader_end(&zip_archive);
   return true;
 }
-
-} // namespace
 
 std::string get_models_root() {
   namespace fs = std::filesystem;

@@ -17,6 +17,7 @@
 #include "imfilebrowser.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include "input_history_glyphs.h"
 #include "keyboard_input.h"
 #include "log_window.h"
 #include "model.h"
@@ -27,6 +28,7 @@
 #include "strings.h"
 #include "tray_icon.h"
 #include <SDL3/SDL_joystick.h>
+#include <unordered_map>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -49,6 +51,20 @@ static void DraggableTooltip(const char *text) {
     ImGui::PopStyleColor();
     // Second line – normal white (default color)
     ImGui::TextUnformatted(text);
+    ImGui::EndTooltip();
+  }
+}
+
+// Plain ImGui::SetTooltip() doesn't wrap long text at all - it just
+// keeps extending sideways, which is unreadable once a tooltip gets
+// more than a sentence or two long. This wraps at a fixed width
+// instead, for any tooltip long enough to need it.
+static void WrappedTooltip(const char *text, float wrapWidthEm = 40.0f) {
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::PushTextWrapPos(ImGui::GetFontSize() * wrapWidthEm);
+    ImGui::TextUnformatted(text);
+    ImGui::PopTextWrapPos();
     ImGui::EndTooltip();
   }
 }
@@ -230,8 +246,27 @@ static bool pollAndCapture(controller_window *w, int meshIdx, int type,
           SDL_GetGamepadAxis(w->sdl_controller, (SDL_GamepadAxis)i) / 32767.0f;
       float snap = capture.axis_snapshot[i];
       if (fabs(current) > 0.8f && fabs(current - snap) > 0.2f) {
-        std::string dir = (current > 0) ? "+" : "-";
-        outBinding = "a" + std::to_string(i) + dir;
+        // A mesh configured for Dual Highlight expects a genuinely
+        // bidirectional, continuously-signed response (e.g. -90 to
+        // +90 degrees of travel rotation as the stick swings fully
+        // one way to fully the other) - but capturing with a +/-
+        // suffix bakes in a ONE-DIRECTIONAL threshold response keyed
+        // to whichever way the stick happened to be pushed at the
+        // exact instant of capture (see the isDirection branch in
+        // controller_window.cpp's binding parser), which silently
+        // discards the other half of the axis's range entirely. This
+        // was capturing "aN+"/"aN-" unconditionally, with no path to
+        // the plain "aN" binding Dual Highlight actually needs -
+        // exactly the "0-90 instead of -90 to 90" symptom this fixes.
+        bool wantsBidirectional =
+            meshIdx >= 0 && meshIdx < (int)w->model.meshes.size() &&
+            w->model.meshes[meshIdx].use_dual_highlight;
+        if (wantsBidirectional) {
+          outBinding = "a" + std::to_string(i);
+        } else {
+          std::string dir = (current > 0) ? "+" : "-";
+          outBinding = "a" + std::to_string(i) + dir;
+        }
         spdlog::debug("Gamepad axis capture: {}", outBinding);
         return true;
       }
@@ -262,8 +297,16 @@ static bool pollAndCapture(controller_window *w, int meshIdx, int type,
         float current = SDL_GetJoystickAxis(joy, i) / 32767.0f;
         float snap = capture.axis_snapshot[i];
         if (fabs(current) > 0.8f && fabs(current - snap) > 0.2f) {
-          std::string dir = (current > 0) ? "+" : "-";
-          outBinding = "a" + std::to_string(i) + dir;
+          // Same Dual Highlight fix as the gamepad axis path above.
+          bool wantsBidirectional =
+              meshIdx >= 0 && meshIdx < (int)w->model.meshes.size() &&
+              w->model.meshes[meshIdx].use_dual_highlight;
+          if (wantsBidirectional) {
+            outBinding = "a" + std::to_string(i);
+          } else {
+            std::string dir = (current > 0) ? "+" : "-";
+            outBinding = "a" + std::to_string(i) + dir;
+          }
           spdlog::debug("Joystick axis capture: {}", outBinding);
           return true;
         }
@@ -315,6 +358,21 @@ bool g_tray_enabled = false;
 // but was previously always emitted at spdlog::info - see
 // setDebugModeEnabled() below for what this actually does at runtime.
 bool g_debug_mode_enabled = false;
+
+// App-wide theme colors - the three-tier scheme applyCustomImGuiTheme()
+// applies to every ImGui context in the app (Settings, Log, Glyph
+// Mapping Editor, and every open Input History window - see that
+// function's own doc comment for why it needs to reach all of them,
+// not just Settings' own context). User-editable via the Theme
+// section (Settings, just before Help); these are the shipped
+// defaults, used both as the initial values and as what "Reset to
+// Default" restores.
+const ImVec4 kDefaultThemePrimary = ImVec4(0.45f, 0.18f, 0.59f, 1.0f);
+const ImVec4 kDefaultThemePrimaryLight = ImVec4(0.6f, 0.3f, 0.75f, 1.0f);
+const ImVec4 kDefaultThemePrimaryDark = ImVec4(0.3f, 0.1f, 0.4f, 1.0f);
+ImVec4 g_theme_primary = kDefaultThemePrimary;
+ImVec4 g_theme_primary_light = kDefaultThemePrimaryLight;
+ImVec4 g_theme_primary_dark = kDefaultThemePrimaryDark;
 
 void setDebugModeEnabled(bool enabled) {
   g_debug_mode_enabled = enabled;
@@ -545,16 +603,796 @@ ImGui::FileBrowser texture_dialog;
 ImGui::FileBrowser model_dialog;
 ImGui::FileBrowser import_model_dialog;
 ImGui::FileBrowser shader_resource_dialog;
+ImGui::FileBrowser glyph_mapping_image_dialog;
+// Set when an import fails, shown right below the Import button - a
+// failed import previously only logged to spdlog (easy to miss unless
+// the Log Window happens to be open), leaving the file dialog just
+// silently closing with no visible feedback in Settings itself.
+std::string g_lastImportError;
 // Which shader the next shader_resource_dialog selection should be
 // copied into as a channelN.* file - set when the "Add Resource" button
 // opens the dialog, consumed once a file is picked.
 std::string g_shader_resource_target;
+
+// ------------------------------------------------------------------
+// Glyph Mapping Editor (custom Input History display styles) - state
+// for the in-progress edit. Deliberately a lightweight ImGui popup
+// within the main settings window rather than its own GLFW window
+// (unlike the model-import preview) since this is plain data entry -
+// one row per input, each mapped to a glyph image - not anything
+// needing its own 3D viewport.
+// ------------------------------------------------------------------
+struct GlyphMappingRow {
+  // 0=Gamepad Button, 1=Gamepad Direction, 2=Gamepad Trigger,
+  // 3=Keyboard, 4=Mouse, 5=Gamepad Motion - see buildGlyphMappingKey()
+  // below for how each becomes the actual "gamepad:button:south" style
+  // key. Motion is a dropdown of known compound sequences (236, 623,
+  // 360, ...) rather than free text, because there's no actual
+  // detection of a player performing a multi-direction motion at
+  // runtime to match against - this only lets you assign a glyph to
+  // one of the sequences the bundled FGC Motion art already covers,
+  // for whatever future or external use, not a claim that the app
+  // recognizes when you've done a 236 in-game.
+  int category = 0;
+  int buttonIndex = 0;    // category 0: index into kGamepadButtonNames
+  int directionDigit = 5; // category 1: index into kDirectionDigits (1-9)
+  int triggerSide = 0;    // category 2: 0=left, 1=right
+  std::string keyboardText = "w";  // category 3: lowercased scancode name
+  int mouseIndex = 0;     // category 4: 0/1/2/3=default
+  int motionIndex = 0;    // category 5: index into kKnownMotions
+
+  std::string sourcePath;  // absolute path of a newly-picked image, if any
+  std::string glyphFilename; // filename once saved into the mapping folder
+                            // (existing mappings start with this already set)
+};
+
+bool g_glyphMappingEditorOpen = false;
+bool g_glyphMappingIsNew = true;
+std::string g_glyphMappingFolder;
+char g_glyphMappingNameBuf[128] = "";
+std::string g_glyphMappingCombineWith; // folder name, or empty
+std::vector<GlyphMappingRow> g_glyphMappingRows;
+int g_glyphMappingRowForImagePick = -1;
+
+// Thumbnail cache for the mapping editor's Glyph column - separate
+// from the glyph style system's own texture cache in
+// input_history_glyphs.cpp, since this needs to preview both existing
+// saved glyphs AND a freshly-picked source file that hasn't been
+// converted/copied into any style folder yet (see
+// drawGlyphMappingEditorContent()'s Browse handling). Keyed by
+// absolute path; cleared when the editor closes so stale thumbnails
+// for a previous mapping don't linger.
+std::unordered_map<std::string, GLuint> g_glyphMappingThumbnailCache;
+
+GLuint getMappingThumbnail(const std::string &absolutePath) {
+  if (absolutePath.empty())
+    return 0;
+  auto it = g_glyphMappingThumbnailCache.find(absolutePath);
+  if (it != g_glyphMappingThumbnailCache.end())
+    return it->second;
+
+  if (!std::filesystem::exists(absolutePath)) {
+    g_glyphMappingThumbnailCache[absolutePath] = 0;
+    return 0;
+  }
+  int w = 0, h = 0, c = 0;
+  unsigned char *data = stbi_load(absolutePath.c_str(), &w, &h, &c, 4);
+  if (!data) {
+    g_glyphMappingThumbnailCache[absolutePath] = 0;
+    return 0;
+  }
+  GLuint id = 0;
+  glGenTextures(1, &id);
+  glBindTexture(GL_TEXTURE_2D, id);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+              data);
+  stbi_image_free(data);
+  g_glyphMappingThumbnailCache[absolutePath] = id;
+  return id;
+}
+
+// Own OS window + ImGui context (previously embedded inside the
+// Settings window's own frame, which meant it could only ever be open
+// while Settings was, shared its window bounds, and could get hidden
+// behind Settings on a stray click) - same "own GLFW window, own
+// context, own frame" pattern as the log window (see log_window.cpp).
+GLFWwindow *g_glyphMappingEditorGlfwWindow = nullptr;
+ImGuiContext *g_glyphMappingEditorImguiCtx = nullptr;
+bool g_glyphMappingEditorBackendReady = false;
+
+// The compound motions the bundled FGC Motion art actually has icons
+// for (see assets/glyphs/FGC Motion) - a fixed dropdown rather than
+// free text, since these are the only ones anything can meaningfully
+// use.
+const char *kKnownMotions[] = {
+    "214", "21478", "236", "23698", "360", "41236",
+    "47896", "623", "63214", "69874", "87412", "89632",
+};
+// Plain-English description of each motion's literal directional
+// path, parallel to kKnownMotions above. The well-known ones use
+// their standard fighting-game names (Quarter/Half Circle, Dragon
+// Punch motion, 360); the less common 5-direction ones (21478 and
+// similar) don't have one universally agreed name across games, so
+// those are described by their actual direction sequence instead of
+// guessing at a name that might be wrong for a given game.
+const char *kKnownMotionDescriptions[] = {
+    "Quarter Circle Back",             // 214
+    "Down to Up via Back",             // 21478
+    "Quarter Circle Forward",          // 236
+    "Down to Up via Forward",          // 23698
+    "Full Circle",                     // 360
+    "Half Circle Forward",             // 41236
+    "Back to Forward via Up",          // 47896
+    "Dragon Punch Motion",             // 623
+    "Half Circle Back",                // 63214
+    "Forward to Back via Up",          // 69874
+    "Up to Down via Back",             // 87412
+    "Up to Down via Forward",          // 89632
+};
+constexpr int kKnownMotionCount =
+    sizeof(kKnownMotions) / sizeof(kKnownMotions[0]);
+
+// Plain-English description for each numpad direction digit, so the
+// dropdown reads as "6 (Forward)" rather than a bare number nobody
+// but a fighting-game player would immediately recognize.
+const char *kDirectionDescriptions[10] = {
+    "",             // 0 unused
+    "Down-Back",    // 1
+    "Down",         // 2
+    "Down-Forward", // 3
+    "Back",         // 4
+    "Neutral",      // 5
+    "Forward",      // 6
+    "Up-Back",      // 7
+    "Up",           // 8
+    "Up-Forward",   // 9
+};
+
+const char *kGamepadButtonNames[] = {
+    "South",       "East",        "West",         "North",
+    "Back",        "Start",       "Guide",        "Misc1",
+    "Touchpad",    "Shoulder Left", "Shoulder Right",
+    "Stick Left (tilt)", "Stick Left Click",
+    "Stick Right (tilt)", "Stick Right Click",
+    "Paddle Left1", "Paddle Right1", "Paddle Left2", "Paddle Right2",
+    "D-Pad Up",    "D-Pad Down",  "D-Pad Left",   "D-Pad Right",
+};
+const char *kGamepadButtonKeys[] = {
+    "gamepad:button:south",         "gamepad:button:east",
+    "gamepad:button:west",          "gamepad:button:north",
+    "gamepad:button:back",          "gamepad:button:start",
+    "gamepad:button:guide",         "gamepad:button:misc1",
+    "gamepad:button:touchpad",      "gamepad:button:shoulder_left",
+    "gamepad:button:shoulder_right","gamepad:button:stick_left",
+    "gamepad:button:stick_left_click", "gamepad:button:stick_right",
+    "gamepad:button:stick_right_click", "gamepad:button:paddle_left1",
+    "gamepad:button:paddle_right1", "gamepad:button:paddle_left2",
+    "gamepad:button:paddle_right2", "gamepad:dpad:up",
+    "gamepad:dpad:down",            "gamepad:dpad:left",
+    "gamepad:dpad:right",
+};
+
+// Converts one editor row into the actual mapping key (see the input
+// key format documented in input_history_glyphs.h).
+std::string buildGlyphMappingKey(const GlyphMappingRow &row) {
+  switch (row.category) {
+  case 0:
+    if (row.buttonIndex >= 0 &&
+        row.buttonIndex < (int)(sizeof(kGamepadButtonKeys) / sizeof(char *)))
+      return kGamepadButtonKeys[row.buttonIndex];
+    return "";
+  case 1:
+    return "gamepad:direction:" + std::to_string(row.directionDigit);
+  case 2:
+    return row.triggerSide == 0 ? "gamepad:trigger:left" : "gamepad:trigger:right";
+  case 3: {
+    std::string lowered;
+    for (char c : row.keyboardText)
+      lowered.push_back((char)tolower((unsigned char)c));
+    return lowered.empty() ? "" : ("keyboard:" + lowered);
+  }
+  case 4:
+    if (row.mouseIndex >= 0 && row.mouseIndex <= 2)
+      return "mouse:" + std::to_string(row.mouseIndex);
+    return "mouse:default";
+  case 5:
+    if (row.motionIndex >= 0 && row.motionIndex < kKnownMotionCount)
+      return std::string("gamepad:direction:") + kKnownMotions[row.motionIndex];
+    return "";
+  default:
+    return "";
+  }
+}
+
+void resetGlyphMappingEditor() {
+  g_glyphMappingIsNew = true;
+  g_glyphMappingFolder.clear();
+  g_glyphMappingNameBuf[0] = '\0';
+  g_glyphMappingCombineWith.clear();
+  g_glyphMappingRows.clear();
+  g_glyphMappingRowForImagePick = -1;
+
+  // Free the actual GL textures, not just the C++ map entries -
+  // clear() alone would leak one GPU texture per thumbnail ever shown
+  // in this editor, for the rest of the process's lifetime, since
+  // nothing else ever frees them. Needs the editor's own GL context
+  // current (a texture ID isn't meaningful in a different context),
+  // which isn't necessarily the currently-active one when this runs -
+  // e.g. called from the "New Glyph Mapping..." button, which lives
+  // in Settings' own context - so this explicitly switches to the
+  // editor's context and back. If the editor window doesn't exist yet
+  // (e.g. the very first time this is ever called), the cache is
+  // guaranteed empty already (nothing could have loaded into it
+  // without a context to load into), so there's nothing to free.
+  if (g_glyphMappingEditorGlfwWindow) {
+    GLFWwindow *previous_context = glfwGetCurrentContext();
+    ImGuiContext *previous_imgui_ctx = ImGui::GetCurrentContext();
+    glfwMakeContextCurrent(g_glyphMappingEditorGlfwWindow);
+    for (auto &[path, id] : g_glyphMappingThumbnailCache) {
+      if (id != 0)
+        glDeleteTextures(1, &id);
+    }
+    if (previous_context)
+      glfwMakeContextCurrent(previous_context);
+    if (previous_imgui_ctx)
+      ImGui::SetCurrentContext(previous_imgui_ctx);
+  }
+  g_glyphMappingThumbnailCache.clear();
+}
+
+void loadGlyphMappingIntoEditor(const std::string &folderName) {
+  g_glyphMappingIsNew = false;
+  g_glyphMappingFolder = folderName;
+  std::string displayName = getGlyphStyleDisplayNameFor(folderName);
+  strncpy(g_glyphMappingNameBuf, displayName.c_str(),
+         sizeof(g_glyphMappingNameBuf) - 1);
+  g_glyphMappingNameBuf[sizeof(g_glyphMappingNameBuf) - 1] = '\0';
+  g_glyphMappingCombineWith = getGlyphStyleCombineWith(folderName);
+  g_glyphMappingRows.clear();
+
+  for (auto &[key, filename] : getGlyphStyleMappings(folderName)) {
+    GlyphMappingRow row;
+    row.glyphFilename = filename;
+    // Reverse buildGlyphMappingKey() - find which category/sub-value
+    // this saved key corresponds to, so editing an existing mapping
+    // shows sensible dropdown selections instead of everything reset
+    // to the defaults.
+    bool matched = false;
+    for (int i = 0; i < (int)(sizeof(kGamepadButtonKeys) / sizeof(char *));
+        ++i) {
+      if (key == kGamepadButtonKeys[i]) {
+        row.category = 0;
+        row.buttonIndex = i;
+        matched = true;
+        break;
+      }
+    }
+    if (!matched && key.rfind("gamepad:direction:", 0) == 0) {
+      // "gamepad:direction:" is 18 characters - the actual digit/
+      // motion value starts right after it, at index 18.
+      std::string suffix = key.substr(18);
+      bool isSingleDigit = suffix.size() == 1 && isdigit((unsigned char)suffix[0]);
+      if (isSingleDigit) {
+        row.category = 1;
+        row.directionDigit = suffix[0] - '0';
+      } else {
+        row.category = 5;
+        row.motionIndex = 0;
+        for (int m = 0; m < kKnownMotionCount; ++m) {
+          if (suffix == kKnownMotions[m]) {
+            row.motionIndex = m;
+            break;
+          }
+        }
+      }
+      matched = true;
+    }
+    if (!matched && key == "gamepad:trigger:left") {
+      row.category = 2;
+      row.triggerSide = 0;
+      matched = true;
+    }
+    if (!matched && key == "gamepad:trigger:right") {
+      row.category = 2;
+      row.triggerSide = 1;
+      matched = true;
+    }
+    if (!matched && key.rfind("keyboard:", 0) == 0) {
+      row.category = 3;
+      row.keyboardText = key.substr(9);
+      matched = true;
+    }
+    if (!matched && key.rfind("mouse:", 0) == 0) {
+      row.category = 4;
+      std::string suffix = key.substr(6);
+      row.mouseIndex = (suffix == "default") ? 3 : atoi(suffix.c_str());
+      matched = true;
+    }
+    g_glyphMappingRows.push_back(row);
+  }
+}
+
+// Lazily creates the editor's own GLFW window + ImGui context the
+// first time it's opened - kept alive for the rest of the process
+// after that (just hidden/shown), same reasoning as the log window's
+// ensureLogWindowCreated().
+static void ensureGlyphMappingEditorWindowCreated() {
+  if (g_glyphMappingEditorGlfwWindow)
+    return;
+
+  // Explicit, not inherited - glfwWindowHint() is "sticky" across
+  // multiple glfwCreateWindow() calls until changed again, and other
+  // windows (Input History, controller overlays) set
+  // GLFW_DECORATED=FALSE for their own borderless-overlay purposes.
+  // Without setting this explicitly, this window could silently
+  // inherit whichever of those ran most recently and come up
+  // borderless instead of a normal decorated window like Log.
+  glfwWindowHint(GLFW_DECORATED, GLFW_TRUE);
+  glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+
+#if defined(IMGUI_IMPL_OPENGL_ES2)
+  const char *glsl_version = "#version 100";
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+#elif defined(__APPLE__)
+  const char *glsl_version = "#version 150";
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+#else
+  const char *glsl_version = "#version 130";
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+#endif
+
+  g_glyphMappingEditorGlfwWindow = glfwCreateWindow(
+      780, 580, "3D Controller Overlay - Glyph Mapping Editor", NULL, NULL);
+  if (!g_glyphMappingEditorGlfwWindow) {
+    spdlog::error("Failed to create Glyph Mapping Editor window.");
+    return;
+  }
+
+  GLFWimage images[1];
+  images[0].pixels = stbi_load_from_memory(
+      Embedded::icon_data, static_cast<int>(Embedded::icon_size),
+      &images[0].width, &images[0].height, nullptr, 4);
+  if (images[0].pixels) {
+    glfwSetWindowIcon(g_glyphMappingEditorGlfwWindow, 1, images);
+    stbi_image_free(images[0].pixels);
+  }
+
+  GLFWwindow *previous_context = glfwGetCurrentContext();
+  glfwMakeContextCurrent(g_glyphMappingEditorGlfwWindow);
+  glfwSwapInterval(0);
+
+  ImGuiContext *previous_imgui_ctx = ImGui::GetCurrentContext();
+  g_glyphMappingEditorImguiCtx = ImGui::CreateContext();
+  ImGui::SetCurrentContext(g_glyphMappingEditorImguiCtx);
+  ImGui::GetIO().IniFilename = nullptr;
+  ImGui::StyleColorsDark();
+  applyCustomImGuiTheme(); // match the main Settings window's purple theme
+
+  ImGui_ImplGlfw_InitForOpenGL(g_glyphMappingEditorGlfwWindow, true);
+  g_glyphMappingEditorBackendReady = ImGui_ImplOpenGL3_Init(glsl_version);
+  if (!g_glyphMappingEditorBackendReady) {
+    spdlog::error("Failed to initialize ImGui OpenGL3 backend for the Glyph "
+                  "Mapping Editor window.");
+  }
+
+  if (previous_imgui_ctx)
+    ImGui::SetCurrentContext(previous_imgui_ctx);
+  if (previous_context)
+    glfwMakeContextCurrent(previous_context);
+}
+
+void setGlyphMappingEditorOpen(bool open) {
+  g_glyphMappingEditorOpen = open;
+  if (open) {
+    ensureGlyphMappingEditorWindowCreated();
+    if (g_glyphMappingEditorGlfwWindow) {
+      glfwShowWindow(g_glyphMappingEditorGlfwWindow);
+      glfwFocusWindow(g_glyphMappingEditorGlfwWindow);
+    }
+  } else if (g_glyphMappingEditorGlfwWindow) {
+    glfwHideWindow(g_glyphMappingEditorGlfwWindow);
+  }
+}
+
+// The actual editor UI - called from within the editor window's own
+// frame (see drawGlyphMappingEditorWindow() below), so every ImGui
+// call here targets that window/context, not Settings'.
+void drawGlyphMappingEditorContent() {
+  ImGui::TextWrapped(
+      "%s a glyph mapping - one row per input, each pointing at an "
+      "image. Works exactly like the built-in styles (Xbox Series, "
+      "PS5, etc.) - once saved, this shows up as its own Display "
+      "Style choice in Input History, for any window.",
+      g_glyphMappingIsNew ? "Creating" : "Editing");
+  ImGui::Separator();
+
+  ImGui::InputText("Name", g_glyphMappingNameBuf, sizeof(g_glyphMappingNameBuf));
+      WrappedTooltip(
+        "Both the display name in the style dropdown and the folder "
+        "name under glyphs/ this gets saved to.");
+
+  // ---- Combine With ----
+  {
+    const auto &styles = listGlyphStyles();
+    std::string preview =
+        g_glyphMappingCombineWith.empty() ? "(none)" : g_glyphMappingCombineWith;
+    if (ImGui::BeginCombo("Combine With", preview.c_str())) {
+      bool noneSelected = g_glyphMappingCombineWith.empty();
+      if (ImGui::Selectable("(none)", noneSelected))
+        g_glyphMappingCombineWith.clear();
+      for (auto &s : styles) {
+        if (s.folderName == g_glyphMappingFolder)
+          continue; // can't combine with itself
+        bool selected = (g_glyphMappingCombineWith == s.folderName);
+        if (ImGui::Selectable(s.folderName.c_str(), selected))
+          g_glyphMappingCombineWith = s.folderName;
+      }
+      ImGui::EndCombo();
+    }
+          WrappedTooltip(
+          "Optional - any input this mapping doesn't define itself "
+          "falls back to this style instead (e.g. FGC Motion combines "
+          "with PS5, so it only needs to define directions).");
+  }
+
+  ImGui::Separator();
+
+  if (ImGui::Button("Add Row")) {
+    g_glyphMappingRows.push_back(GlyphMappingRow{});
+  }
+  ImGui::SameLine();
+  ImGui::TextDisabled("(%d rows)", (int)g_glyphMappingRows.size());
+
+  ImGui::Spacing();
+  if (ImGui::BeginTable(
+          "GlyphMappingTable", 6,
+          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+              ImGuiTableFlags_SizingStretchProp,
+          ImVec2(0, 300))) {
+    ImGui::TableSetupColumn("Input Type", ImGuiTableColumnFlags_WidthFixed,
+                            140);
+    ImGui::TableSetupColumn("Specific Input", ImGuiTableColumnFlags_WidthFixed,
+                            180);
+    ImGui::TableSetupColumn("Glyph Name", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("Glyph", ImGuiTableColumnFlags_WidthFixed, 36);
+    ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 70);
+    ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 30);
+    ImGui::TableHeadersRow();
+
+    int rowToRemove = -1;
+    const char *categoryNames[] = {"Gamepad Button", "Gamepad Direction",
+                                   "Gamepad Trigger", "Keyboard", "Mouse",
+                                   "Gamepad Motion"};
+    constexpr int kCategoryCount =
+        sizeof(categoryNames) / sizeof(categoryNames[0]);
+
+    // Computed once per frame, not once per row per frame - this
+    // still does a filesystem create_directories() call (harmless if
+    // the directory already exists, but a real syscall each time
+    // nonetheless), and every row in this mapping shares the same
+    // style directory anyway.
+    std::string styleDir = getGlyphStyleDirectory(g_glyphMappingFolder);
+
+    for (int r = 0; r < (int)g_glyphMappingRows.size(); ++r) {
+      GlyphMappingRow &row = g_glyphMappingRows[r];
+      ImGui::PushID(r);
+      ImGui::TableNextRow();
+
+      ImGui::TableNextColumn();
+      ImGui::SetNextItemWidth(-FLT_MIN);
+      if (ImGui::BeginCombo("##category", categoryNames[row.category])) {
+        for (int c = 0; c < kCategoryCount; ++c) {
+          if (ImGui::Selectable(categoryNames[c], row.category == c))
+            row.category = c;
+        }
+        ImGui::EndCombo();
+      }
+
+      ImGui::TableNextColumn();
+      ImGui::SetNextItemWidth(-FLT_MIN);
+      switch (row.category) {
+      case 0: {
+        int count = (int)(sizeof(kGamepadButtonNames) / sizeof(char *));
+        if (ImGui::BeginCombo("##button", kGamepadButtonNames[row.buttonIndex])) {
+          for (int b = 0; b < count; ++b) {
+            if (ImGui::Selectable(kGamepadButtonNames[b], row.buttonIndex == b))
+              row.buttonIndex = b;
+          }
+          ImGui::EndCombo();
+        }
+        break;
+      }
+      case 1: {
+        char label[32];
+        snprintf(label, sizeof(label), "%d (%s)", row.directionDigit,
+                kDirectionDescriptions[row.directionDigit]);
+        if (ImGui::BeginCombo("##direction", label)) {
+          for (int d = 1; d <= 9; ++d) {
+            char opt[32];
+            snprintf(opt, sizeof(opt), "%d (%s)", d, kDirectionDescriptions[d]);
+            if (ImGui::Selectable(opt, row.directionDigit == d))
+              row.directionDigit = d;
+          }
+          ImGui::EndCombo();
+        }
+                  WrappedTooltip("Numpad digit - 5 is neutral, the rest are "
+                            "the 8 directions (2/4/6/8 cardinal, "
+                            "1/3/7/9 diagonal).");
+        break;
+      }
+      case 2: {
+        const char *sides[] = {"Left", "Right"};
+        if (ImGui::BeginCombo("##trigger", sides[row.triggerSide])) {
+          for (int s = 0; s < 2; ++s) {
+            if (ImGui::Selectable(sides[s], row.triggerSide == s))
+              row.triggerSide = s;
+          }
+          ImGui::EndCombo();
+        }
+        break;
+      }
+      case 3: {
+        char buf[64];
+        strncpy(buf, row.keyboardText.c_str(), sizeof(buf) - 1);
+        buf[sizeof(buf) - 1] = '\0';
+        if (ImGui::InputText("##keyboard", buf, sizeof(buf)))
+          row.keyboardText = buf;
+                  WrappedTooltip(
+              "Lowercased key name, e.g. \"w\", \"space\", \"left ctrl\".");
+        break;
+      }
+      case 4: {
+        const char *mouseNames[] = {"Left Click", "Right Click",
+                                    "Middle Click", "Other (default)"};
+        if (ImGui::BeginCombo("##mouse", mouseNames[row.mouseIndex])) {
+          for (int m = 0; m < 4; ++m) {
+            if (ImGui::Selectable(mouseNames[m], row.mouseIndex == m))
+              row.mouseIndex = m;
+          }
+          ImGui::EndCombo();
+        }
+        break;
+      }
+      case 5: {
+        char motionLabel[64];
+        snprintf(motionLabel, sizeof(motionLabel), "%s (%s)",
+                kKnownMotions[row.motionIndex],
+                kKnownMotionDescriptions[row.motionIndex]);
+        if (ImGui::BeginCombo("##motion", motionLabel)) {
+          for (int m = 0; m < kKnownMotionCount; ++m) {
+            char opt[64];
+            snprintf(opt, sizeof(opt), "%s (%s)", kKnownMotions[m],
+                    kKnownMotionDescriptions[m]);
+            if (ImGui::Selectable(opt, row.motionIndex == m))
+              row.motionIndex = m;
+          }
+          ImGui::EndCombo();
+        }
+                  WrappedTooltip(
+              "A fixed list of the compound motions the bundled FGC "
+              "Motion art has icons for. These ARE detected during "
+              "play now (see Input History's Motion Timeout setting) "
+              "- a completed quarter-circle, dragon punch, etc. within "
+              "the configured time window gets its own combined-motion "
+              "entry, using whichever glyph is assigned here.");
+        break;
+      }
+      }
+
+      ImGui::TableNextColumn();
+      std::string glyphLabel =
+          row.glyphFilename.empty()
+              ? (row.sourcePath.empty() ? "(none)"
+                                        : std::filesystem::path(row.sourcePath)
+                                              .filename()
+                                              .string())
+              : row.glyphFilename;
+      ImGui::TextUnformatted(glyphLabel.c_str());
+
+      ImGui::TableNextColumn();
+      {
+        // Existing saved glyph (glyphFilename set) previews from its
+        // style folder on disk; a freshly-picked-but-not-yet-saved
+        // image (sourcePath set) previews directly from wherever it
+        // was browsed from - either way, downscaled to fit the row.
+        std::string previewPath;
+        if (!row.glyphFilename.empty())
+          previewPath = styleDir + "/" + row.glyphFilename;
+        else if (!row.sourcePath.empty())
+          previewPath = row.sourcePath;
+        GLuint thumb = getMappingThumbnail(previewPath);
+        if (thumb)
+          ImGui::Image((ImTextureID)(intptr_t)thumb, ImVec2(28, 28));
+        else
+          ImGui::TextDisabled("--");
+      }
+
+      ImGui::TableNextColumn();
+      if (ImGui::Button("Browse...")) {
+        g_glyphMappingRowForImagePick = r;
+        glyph_mapping_image_dialog.Open();
+      }
+
+      ImGui::TableNextColumn();
+      if (ImGui::Button("X"))
+        rowToRemove = r;
+              WrappedTooltip("Remove this row.");
+
+      ImGui::PopID();
+    }
+    ImGui::EndTable();
+
+    if (rowToRemove >= 0)
+      g_glyphMappingRows.erase(g_glyphMappingRows.begin() + rowToRemove);
+  }
+
+  ImGui::Separator();
+  bool canSave = g_glyphMappingNameBuf[0] != '\0';
+  if (!canSave)
+    ImGui::BeginDisabled();
+  if (ImGui::Button("Save Mapping")) {
+    std::string folderName = g_glyphMappingIsNew ? std::string(g_glyphMappingNameBuf)
+                                                 : g_glyphMappingFolder;
+    std::string destDir = getGlyphStyleDirectory(folderName);
+
+    std::vector<std::pair<std::string, std::string>> mappings;
+    for (auto &row : g_glyphMappingRows) {
+      std::string key = buildGlyphMappingKey(row);
+      if (key.empty())
+        continue;
+
+      std::string filename = row.glyphFilename;
+      if (!row.sourcePath.empty()) {
+        // A new image was picked for this row - convert/resize it
+        // into this mapping's own folder (see
+        // convertAndSaveGlyphImage()'s doc comment), matching how the
+        // built-in styles' images live inside their own folder too.
+        std::string safeKey = key;
+        std::replace(safeKey.begin(), safeKey.end(), ':', '_');
+        filename = safeKey + ".png";
+        convertAndSaveGlyphImage(row.sourcePath, destDir + "/" + filename);
+      }
+      if (!filename.empty())
+        mappings.emplace_back(key, filename);
+    }
+
+    if (saveGlyphStyleMapping(folderName, g_glyphMappingNameBuf, mappings,
+                              g_glyphMappingCombineWith)) {
+      setGlyphMappingEditorOpen(false);
+      resetGlyphMappingEditor();
+    }
+  }
+  if (!canSave) {
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::TextDisabled("(enter a name first)");
+  }
+}
+
+// Own-window wrapper around drawGlyphMappingEditorContent() - manages
+// this window's own frame lifecycle (own context swap, own Begin/End/
+// Render/swap-buffers), same pattern as drawLogWindow() in
+// log_window.cpp. The image-picker file dialog is handled here too
+// (not back in drawSettingsWindow(), where it used to live) so it
+// renders inside this window's own context - otherwise it would try
+// to draw itself against Settings' context while the editor lives in
+// a completely different OS window, which would look broken.
+void drawGlyphMappingEditorWindow() {
+  if (!g_glyphMappingEditorOpen || !g_glyphMappingEditorGlfwWindow ||
+      !g_glyphMappingEditorBackendReady)
+    return;
+
+  if (glfwWindowShouldClose(g_glyphMappingEditorGlfwWindow)) {
+    glfwSetWindowShouldClose(g_glyphMappingEditorGlfwWindow, GLFW_FALSE);
+    setGlyphMappingEditorOpen(false);
+    return;
+  }
+
+  GLFWwindow *previous_context = glfwGetCurrentContext();
+  ImGuiContext *previous_imgui_ctx = ImGui::GetCurrentContext();
+
+  glfwMakeContextCurrent(g_glyphMappingEditorGlfwWindow);
+  ImGui::SetCurrentContext(g_glyphMappingEditorImguiCtx);
+  applyCustomImGuiTheme(); // re-applied every frame - see its doc comment
+
+  ImGui_ImplOpenGL3_NewFrame();
+  ImGui_ImplGlfw_NewFrame();
+  ImGui::NewFrame();
+
+  ImGui::SetNextWindowPos(ImVec2(0, 0));
+  int win_w, win_h;
+  glfwGetWindowSize(g_glyphMappingEditorGlfwWindow, &win_w, &win_h);
+  ImGui::SetNextWindowSize(ImVec2((float)win_w, (float)win_h));
+  ImGui::Begin("GlyphMappingEditorRoot", nullptr,
+              ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+
+  drawGlyphMappingEditorContent();
+
+  glyph_mapping_image_dialog.Display();
+  if (glyph_mapping_image_dialog.HasSelected()) {
+    if (g_glyphMappingRowForImagePick >= 0 &&
+        g_glyphMappingRowForImagePick < (int)g_glyphMappingRows.size()) {
+      // Just remembers the picked path for now - the actual convert/
+      // resize/copy into this mapping's folder happens on Save (see
+      // drawGlyphMappingEditorContent()), same as the main texture
+      // dialog only committing on an explicit action rather than
+      // immediately.
+      g_glyphMappingRows[g_glyphMappingRowForImagePick].sourcePath =
+          glyph_mapping_image_dialog.GetSelected().string();
+      g_glyphMappingRows[g_glyphMappingRowForImagePick].glyphFilename.clear();
+    }
+    glyph_mapping_image_dialog.ClearSelected();
+    g_glyphMappingRowForImagePick = -1;
+  }
+
+  ImGui::End();
+
+  ImGui::Render();
+  glViewport(0, 0, win_w, win_h);
+  glClearColor(0.06f, 0.06f, 0.06f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT);
+  ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+  glfwSwapBuffers(g_glyphMappingEditorGlfwWindow);
+
+  if (previous_imgui_ctx)
+    ImGui::SetCurrentContext(previous_imgui_ctx);
+  if (previous_context)
+    glfwMakeContextCurrent(previous_context);
+}
 
 std::vector<window_tab> tabs;
 std::vector<Texture> textures;
 
 ImVec4 clear_color = ImVec4(0.05f, 0.05f, 0.05f, 1.00f);
 ImGuiIO *io;
+
+// Applies the app's custom purple color scheme on top of whatever
+// ImGui::StyleColorsDark() just set up. Previously only ever called
+// for the main Settings window's own ImGui context, which is why the
+// Log window, Glyph Mapping Editor, and Input History windows (each
+// with their own separate context - see their own createContext()
+// call sites) fell back to ImGui's generic default dark theme instead
+// of matching Settings - this is meant to be called once per context,
+// right after that context's own StyleColorsDark(), everywhere a new
+// ImGui context gets created in this app.
+void applyCustomImGuiTheme() {
+  ImGuiStyle &style = ImGui::GetStyle();
+  ImVec4 &purple = g_theme_primary;
+  ImVec4 &purple_light = g_theme_primary_light;
+  ImVec4 &purple_dark = g_theme_primary_dark;
+  style.Colors[ImGuiCol_Button] = purple;
+  style.Colors[ImGuiCol_ButtonHovered] = purple_light;
+  style.Colors[ImGuiCol_ButtonActive] = purple_dark;
+  style.Colors[ImGuiCol_Header] = purple;
+  style.Colors[ImGuiCol_HeaderHovered] = purple_light;
+  style.Colors[ImGuiCol_HeaderActive] = purple_dark;
+  style.Colors[ImGuiCol_CheckMark] = purple_light;
+  style.Colors[ImGuiCol_SliderGrab] = purple;
+  style.Colors[ImGuiCol_SliderGrabActive] = purple_light;
+  style.Colors[ImGuiCol_Tab] = purple_dark;
+  style.Colors[ImGuiCol_TabHovered] = purple_light;
+  style.Colors[ImGuiCol_TabActive] = purple;
+  style.Colors[ImGuiCol_ResizeGrip] = purple;
+  style.Colors[ImGuiCol_ResizeGripHovered] = purple_light;
+  style.Colors[ImGuiCol_ResizeGripActive] = purple_dark;
+
+  // ---- Additional styling for tree nodes and combo boxes ----
+  style.Colors[ImGuiCol_FrameBg] = purple_dark;
+  style.Colors[ImGuiCol_FrameBgHovered] = purple_light;
+  style.Colors[ImGuiCol_FrameBgActive] = purple;
+}
 
 void createSettingsWindow() {
   // Set error callback first
@@ -659,31 +1497,7 @@ void createSettingsWindow() {
   io->IniFilename = ini_path.c_str();
 
   ImGui::StyleColorsDark();
-  ImGuiStyle &style = ImGui::GetStyle();
-  ImVec4 purple = ImVec4(0.45f, 0.18f, 0.59f, 1.0f); // royal purple
-  ImVec4 purple_light = ImVec4(0.6f, 0.3f, 0.75f, 1.0f);
-  ImVec4 purple_dark = ImVec4(0.3f, 0.1f, 0.4f, 1.0f);
-  style.Colors[ImGuiCol_Button] = purple;
-  style.Colors[ImGuiCol_ButtonHovered] = purple_light;
-  style.Colors[ImGuiCol_ButtonActive] = purple_dark;
-  style.Colors[ImGuiCol_Header] = purple;
-  style.Colors[ImGuiCol_HeaderHovered] = purple_light;
-  style.Colors[ImGuiCol_HeaderActive] = purple_dark;
-  style.Colors[ImGuiCol_CheckMark] = purple_light;
-  style.Colors[ImGuiCol_SliderGrab] = purple;
-  style.Colors[ImGuiCol_SliderGrabActive] = purple_light;
-  style.Colors[ImGuiCol_FrameBgHovered] = purple_dark;
-  style.Colors[ImGuiCol_Tab] = purple_dark;
-  style.Colors[ImGuiCol_TabHovered] = purple_light;
-  style.Colors[ImGuiCol_TabActive] = purple;
-  style.Colors[ImGuiCol_ResizeGrip] = purple;
-  style.Colors[ImGuiCol_ResizeGripHovered] = purple_light;
-  style.Colors[ImGuiCol_ResizeGripActive] = purple_dark;
-
-  // ---- Additional styling for tree nodes and combo boxes ----
-  style.Colors[ImGuiCol_FrameBg] = purple_dark;
-  style.Colors[ImGuiCol_FrameBgHovered] = purple_light;
-  style.Colors[ImGuiCol_FrameBgActive] = purple;
+  applyCustomImGuiTheme();
 
   ImGui_ImplGlfw_InitForOpenGL(glfw_settings_window, true);
   if (!ImGui_ImplOpenGL3_Init(glsl_version)) {
@@ -709,6 +1523,10 @@ void createSettingsWindow() {
   shader_resource_dialog.SetWindowSize(400, 300);
   shader_resource_dialog.SetTitle("Add Shader Resource (Channel Texture)");
   shader_resource_dialog.SetTypeFilters({".png", ".jpg", ".jpeg"});
+
+  glyph_mapping_image_dialog.SetWindowSize(400, 300);
+  glyph_mapping_image_dialog.SetTitle("Select Glyph Image");
+  glyph_mapping_image_dialog.SetTypeFilters({".png", ".jpg", ".jpeg", ".bmp"});
 }
 
 GLFWwindow *getSettingsWindow() { return glfw_settings_window; }
@@ -775,6 +1593,10 @@ void drawSettingsWindow() {
   glfwMakeContextCurrent(glfw_settings_window);
   ImGui::SetCurrentContext(g_settings_imgui_ctx);
   glfwSwapInterval(1);
+  // Re-applied every frame (not just once at context creation) so a
+  // live edit in the Theme section is reflected immediately, without
+  // needing to reopen this window.
+  applyCustomImGuiTheme();
 
   // Refresh the tray icon's menu data every frame, unconditionally
   // (not nested inside the per-tab detail view below, which only draws
@@ -838,9 +1660,14 @@ void drawSettingsWindow() {
   static bool show_delete_popup = false;
 
   ImGuiWindowFlags window_flags =
-      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoTitleBar |
-      ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
-      ImGuiWindowFlags_NoMove;
+      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+      ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+  // Deliberately NOT ImGuiWindowFlags_NoDecoration - that flag is a
+  // combination of NoTitleBar|NoResize|NoScrollbar|NoCollapse, so
+  // using it here was silently killing the scrollbar too (along with
+  // NoResize/NoCollapse, which are also set explicitly above and so
+  // stayed correct) - meaning content taller than the window had no
+  // way to scroll to it at all.
 
 #ifdef IMGUI_HAS_VIEWPORT
   ImGuiViewport *viewport = ImGui::GetMainViewport();
@@ -937,8 +1764,7 @@ void drawSettingsWindow() {
         tabs[selected_tab].title = std::string(title);
         current_window->window_title = std::string(title);
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Set the window title.");
+              WrappedTooltip("Set the window title.");
       ImGui::NewLine();
 
       // ---- System tray ----
@@ -958,8 +1784,7 @@ void drawSettingsWindow() {
             TrayIcon::disable();
           }
         }
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip(
+                  WrappedTooltip(
               "Adds a system tray icon. Click it to minimize/restore the "
               "main window; right-click for a menu with per-controller "
               "minimize/restore, network status, and Quit.");
@@ -973,8 +1798,7 @@ void drawSettingsWindow() {
       if (ImGui::Checkbox("Enable Debug Mode", &g_debug_mode_enabled)) {
         setDebugModeEnabled(g_debug_mode_enabled);
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip(
+              WrappedTooltip(
             "Enables verbose diagnostic logging (e.g. every mesh loaded "
             "per model). Off by default since it adds a small but "
             "noticeable delay when loading models with many meshes - "
@@ -1001,20 +1825,17 @@ void drawSettingsWindow() {
       if (ImGui::Button("Minimize")) {
         minimizeControllerWindow(*current_window);
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Minimize this window.");
+              WrappedTooltip("Minimize this window.");
       ImGui::SameLine();
       if (ImGui::Button("Maximize")) {
         maximizeControllerWindow(*current_window);
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Maximize this window.");
+              WrappedTooltip("Maximize this window.");
       ImGui::SameLine();
       if (ImGui::Button("Restore")) {
         restoreControllerWindow(*current_window);
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Restore from minimized/maximized back to its "
+              WrappedTooltip("Restore from minimized/maximized back to its "
                           "normal size and position.");
       ImGui::NewLine();
 #endif
@@ -1026,8 +1847,7 @@ void drawSettingsWindow() {
           glfwSetWindowAttrib(current_window->glfw_window, GLFW_FLOATING,
                               current_window->always_on_top);
         }
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Keep window above all others.");
+                  WrappedTooltip("Keep window above all others.");
 
         ImGui::TableNextColumn();
 #if !defined(_WIN32)
@@ -1046,30 +1866,25 @@ void drawSettingsWindow() {
             glfwSetWindowAttrib(current_window->glfw_window, GLFW_DECORATED,
                                 !current_window->borderless);
           }
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Hide title bar and borders.");
+                      WrappedTooltip("Hide title bar and borders.");
         }
 #endif
 
         ImGui::TableNextColumn();
         ImGui::Checkbox("Drag to Move", &current_window->drag_to_move);
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Left‑click drag to move window.");
+                  WrappedTooltip("Left‑click drag to move window.");
 
         ImGui::TableNextColumn();
         ImGui::Checkbox("Scroll to Resize", &current_window->scroll_to_resize);
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Scroll mouse wheel to resize window.");
+                  WrappedTooltip("Scroll mouse wheel to resize window.");
 
         ImGui::TableNextColumn();
         ImGui::Checkbox("Show Grid", &current_window->grid);
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Show/hide reference grid.");
+                  WrappedTooltip("Show/hide reference grid.");
 
         ImGui::TableNextColumn();
         ImGui::Checkbox("Wireframe Mode", &current_window->wireframe);
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Toggle wireframe rendering.");
+                  WrappedTooltip("Toggle wireframe rendering.");
 
         ImGui::TableNextColumn();
         // Transparent Background controls bg_color's alpha (the
@@ -1103,8 +1918,7 @@ void drawSettingsWindow() {
           current_window->bg_color[3] =
               current_window->transparent_bg ? 0.0f : 1.0f;
         }
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip(
+                  WrappedTooltip(
               "Make the window background fully transparent. The 3D model "
               "will appear on your desktop."
 #if defined(_WIN32)
@@ -1121,8 +1935,7 @@ void drawSettingsWindow() {
           ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.7f, 0.2f, 1.0f));
           ImGui::TextUnformatted("(!)");
           ImGui::PopStyleColor();
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip(
+                      WrappedTooltip(
                 "Your graphics driver / display server did not grant a "
                 "transparent framebuffer for this window, so the "
                 "background will stay solid regardless of this setting. "
@@ -1158,8 +1971,7 @@ void drawSettingsWindow() {
             ImGui::PopStyleColor(2);
           }
         }
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip(
+                  WrappedTooltip(
               "Let mouse clicks pass through this window to whatever is "
               "behind it, turning it into a pure on-screen overlay.");
 
@@ -1203,8 +2015,7 @@ void drawSettingsWindow() {
       if (ImGui::SliderInt("Frame Cap", &fc, 5, 144, "%d FPS")) {
         current_window->frame_cap = (Uint8)std::clamp(fc, 5, 144);
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip(
+              WrappedTooltip(
             "Caps how often this window redraws, via a plain sleep - "
             "vsync is never used for controller windows on any platform "
             "(a vsync wait was found to be able to stall this window "
@@ -1245,8 +2056,7 @@ void drawSettingsWindow() {
       if (ImGui::Button("Open Data Directory")) {
         OsOpenInShell(config_base_path.c_str());
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip(
+              WrappedTooltip(
             "Open the folder where settings, models, and logs are stored.");
 
       ImGui::SameLine();
@@ -1254,8 +2064,7 @@ void drawSettingsWindow() {
                                           : "Open Log Window")) {
         toggleLogWindow();
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip(
+              WrappedTooltip(
             "Show a live view of the application log in its own window.\n"
             "Useful on macOS/Linux, where no console is attached unless "
             "you launch the app from a terminal.");
@@ -1297,8 +2106,7 @@ void drawSettingsWindow() {
         current_window->camera_pitch = 89.999f;
         current_window->camera_roll = 0.0f;
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Reset camera to default view.");
+              WrappedTooltip("Reset camera to default view.");
     }
 
     // ============================================================
@@ -1486,32 +2294,27 @@ void drawSettingsWindow() {
         // Apply a dark purple background for the tree node
         BeginShadedGroup();
         ImGui::Checkbox("Popup Bumpers", &current_window->model.popup_bumpers);
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Animate bumpers when pressed.");
+                  WrappedTooltip("Animate bumpers when pressed.");
         ImGui::SameLine();
         ImGui::Checkbox("Popup Triggers",
                         &current_window->model.popup_triggers);
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Animate triggers when pressed.");
+                  WrappedTooltip("Animate triggers when pressed.");
         ImGui::SameLine();
         ImGui::Checkbox("Popup Paddles", &current_window->model.popup_paddles);
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Animate paddles when pressed.");
+                  WrappedTooltip("Animate paddles when pressed.");
         ImGui::NewLine();
         if (current_window->model.meshes.size() > 7) {
           ImGui::SliderInt(
               "L-Stick Highlight Deadzone",
               &current_window->model.meshes[7].ring_highlight_deadzone, 0, 100);
         }
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Deadzone for left stick highlight ring.");
+                  WrappedTooltip("Deadzone for left stick highlight ring.");
         if (current_window->model.meshes.size() > 8) {
           ImGui::SliderInt(
               "R-Stick Highlight Deadzone",
               &current_window->model.meshes[8].ring_highlight_deadzone, 0, 100);
         }
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Deadzone for right stick highlight ring.");
+                  WrappedTooltip("Deadzone for right stick highlight ring.");
         ImGui::ColorEdit4("Highlight Color (Global)",
                           current_window->highlight_color);
         if (ImGui::IsItemHovered())
@@ -1544,8 +2347,7 @@ void drawSettingsWindow() {
             current_window->global_shader_name =
                 shaderNames[currentGlobalShaderIdx];
         }
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Applies to all meshes unless a mesh has its own "
+                  WrappedTooltip("Applies to all meshes unless a mesh has its own "
                             "shader override.");
 
         // ---- Add Resource (channel texture) ----
@@ -1560,8 +2362,7 @@ void drawSettingsWindow() {
             g_shader_resource_target = shaderNames[currentGlobalShaderIdx];
             shader_resource_dialog.Open();
           }
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip(
+                      WrappedTooltip(
                 "Add an image as a channel texture (iChannel0-3) for "
                 "this shader - useful for ShaderToy-style shaders "
                 "that expect a noise or gradient texture. Filled "
@@ -1577,8 +2378,7 @@ void drawSettingsWindow() {
         ImGui::Checkbox("Log Keyboard", &g_log_keyboard);
         ImGui::SameLine();
         ImGui::Checkbox("Log Mouse", &g_log_mouse);
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Toggle logging for each device type.");
+                  WrappedTooltip("Toggle logging for each device type.");
         ImGui::NewLine();
 
         // ---- Input responsiveness / idle CPU trade-off ----
@@ -1595,8 +2395,7 @@ void drawSettingsWindow() {
                              "%d ms")) {
           GlobalKeyboard::setPollIntervalMs(poll_ms);
         }
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip(
+                  WrappedTooltip(
               "How often the background keyboard/mouse listener wakes up "
               "to check for input, even when nothing is being pressed. "
               "Lower values (toward 1ms) notice a key/click sooner after "
@@ -1612,8 +2411,7 @@ void drawSettingsWindow() {
 
       } // end Controller
     }
-    if (ImGui::IsItemHovered())
-      ImGui::SetTooltip("Select a gamepad or joystick.");
+          WrappedTooltip("Select a gamepad or joystick.");
 
     // ============================================================
     // MODEL
@@ -1621,7 +2419,18 @@ void drawSettingsWindow() {
 
     static int mesh_to_delete = -1; // for per‑row delete confirmation
 
-    if (ImGui::CollapsingHeader("Model")) {
+    bool modelSectionOpen = ImGui::CollapsingHeader("Model");
+    if (current_window->unsaved_change_count > 0) {
+      ImGui::SameLine();
+      ImGui::TextColored(ImVec4(1.0f, 0.65f, 0.2f, 1.0f),
+                         "Changes made without saving");
+              WrappedTooltip(
+            "Textures, meshes, and model imports are tracked here - "
+            "this disappears once the model is saved (which happens "
+            "automatically at several points, not just one explicit "
+            "Save button).");
+    }
+    if (modelSectionOpen) {
       ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.2f, 1.0f), "Model Selection");
       ImGui::Separator();
 
@@ -1676,8 +2485,7 @@ void drawSettingsWindow() {
         }
         ImGui::EndCombo();
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Select a controller model.");
+              WrappedTooltip("Select a controller model.");
 
       // ---- Source URL ----
       char source[256];
@@ -1685,14 +2493,12 @@ void drawSettingsWindow() {
       if (ImGui::InputText("Source URL", source, 256)) {
         current_window->model.source = source;
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Optional URL where the model was obtained.");
+              WrappedTooltip("Optional URL where the model was obtained.");
 
       if (ImGui::Button("Duplicate Model")) {
         ImGui::OpenPopup("duplicate");
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Create a copy of the current model with all its "
+              WrappedTooltip("Create a copy of the current model with all its "
                           "meshes and settings.");
 
       if (ImGui::BeginPopup("duplicate")) {
@@ -1741,8 +2547,7 @@ void drawSettingsWindow() {
       if (ImGui::Button("Delete Model")) {
         ImGui::OpenPopup("delete");
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Delete the current model folder.");
+              WrappedTooltip("Delete the current model folder.");
 
       if (ImGui::BeginPopup("delete")) {
         ImGui::Text("Delete this model?");
@@ -1778,8 +2583,11 @@ void drawSettingsWindow() {
       if (ImGui::Button("Import New Model")) {
         import_model_dialog.Open();
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Import a 3D model file and map its meshes.");
+              WrappedTooltip("Import a 3D model file and map its meshes.");
+      if (!g_lastImportError.empty()) {
+        ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s",
+                           g_lastImportError.c_str());
+      }
 
       ImGui::TextWrapped(
           "Import a 3D model (FBX, glTF, OBJ, etc.) and map its meshes "
@@ -1815,8 +2623,7 @@ void drawSettingsWindow() {
             }
             ImGui::EndCombo();
           }
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Select a mesh to edit its material.");
+                      WrappedTooltip("Select a mesh to edit its material.");
 
           Mesh &matMesh = current_window->model.meshes[material_mesh];
           ImGui::NewLine();
@@ -1870,8 +2677,7 @@ void drawSettingsWindow() {
             }
             ImGui::EndCombo();
           }
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Select a mesh to manage its textures.");
+                      WrappedTooltip("Select a mesh to manage its textures.");
 
           Mesh &texMesh = current_window->model.meshes[texture_mesh];
           ImGui::NewLine();
@@ -1891,8 +2697,7 @@ void drawSettingsWindow() {
               texture_dialog.Open();
               current_texture = texMesh.textures.size();
             }
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Add a new texture to the selected mesh.");
+                          WrappedTooltip("Add a new texture to the selected mesh.");
           }
           if (!texMesh.textures.empty()) {
             if (texMesh.textures.size() < 16) {
@@ -1903,6 +2708,7 @@ void drawSettingsWindow() {
               deleteTexture(texMesh.textures[current_texture].id);
               texMesh.textures.erase(texMesh.textures.begin() +
                                      current_texture);
+              current_window->unsaved_change_count++;
               glfwMakeContextCurrent(glfw_settings_window);
               current_texture = 0;
               for (size_t i = 0; i < texMesh.textures.size(); i++) {
@@ -1910,8 +2716,7 @@ void drawSettingsWindow() {
                     std::to_string(i + 1) + ": " + texMesh.textures[i].path;
               }
             }
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Remove the selected texture.");
+                          WrappedTooltip("Remove the selected texture.");
             ImGui::SameLine();
             if (ImGui::ArrowButton("##up", ImGuiDir_Up)) {
               if (current_texture > 0) {
@@ -1926,8 +2731,7 @@ void drawSettingsWindow() {
                     std::to_string(i + 1) + ": " + texMesh.textures[i].path;
               }
             }
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Move selected texture up.");
+                          WrappedTooltip("Move selected texture up.");
             ImGui::SameLine();
             if (ImGui::ArrowButton("##down", ImGuiDir_Down)) {
               if (current_texture < texMesh.textures.size() - 1) {
@@ -1942,20 +2746,16 @@ void drawSettingsWindow() {
                     std::to_string(i + 1) + ": " + texMesh.textures[i].path;
               }
             }
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Move selected texture down.");
+                          WrappedTooltip("Move selected texture down.");
 
             Texture *t = &texMesh.textures[current_texture];
             ImGui::NewLine();
             enum Type { diffuse, specular, emission, type_count };
             const char *type_names[type_count] = {"Diffuse", "Specular",
                                                   "Emissive"};
-            const char *type_name = (t->type >= 0 && t->type < type_count)
-                                        ? type_names[t->type]
-                                        : "Unknown";
-            ImGui::DragInt("Type", &t->type, 1, 0, type_count - 1, type_name);
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip(
+            if (ImGui::Combo("Type", &t->type, type_names, type_count))
+              current_window->unsaved_change_count++;
+                          WrappedTooltip(
                   "Texture type: diffuse, specular, or emissive.");
             enum Wrap {
               repeat,
@@ -1967,11 +2767,8 @@ void drawSettingsWindow() {
             const char *wrap_names[wrap_count] = {"Repeat", "Mirrored Repeat",
                                                   "Clamp to Edge",
                                                   "Clamp to Border"};
-            const char *wrap_name_x = (t->wrapX >= 0 && t->wrapX < wrap_count)
-                                          ? wrap_names[t->wrapX]
-                                          : "Unknown";
-            if (ImGui::DragInt("X Wrap", &t->wrapX, 1, 0, wrap_count - 1,
-                               wrap_name_x)) {
+            if (ImGui::Combo("X Wrap", &t->wrapX, wrap_names, wrap_count)) {
+              current_window->unsaved_change_count++;
               glfwMakeContextCurrent(current_window->glfw_window);
               glBindTexture(GL_TEXTURE_2D, t->id);
               switch (t->wrapX) {
@@ -1995,13 +2792,9 @@ void drawSettingsWindow() {
               }
               glfwMakeContextCurrent(glfw_settings_window);
             }
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Horizontal texture wrapping mode.");
-            const char *wrap_name_y = (t->wrapY >= 0 && t->wrapY < wrap_count)
-                                          ? wrap_names[t->wrapY]
-                                          : "Unknown";
-            if (ImGui::DragInt("Y Wrap", &t->wrapY, 1, 0, wrap_count - 1,
-                               wrap_name_y)) {
+                          WrappedTooltip("Horizontal texture wrapping mode.");
+            if (ImGui::Combo("Y Wrap", &t->wrapY, wrap_names, wrap_count)) {
+              current_window->unsaved_change_count++;
               glfwMakeContextCurrent(current_window->glfw_window);
               glBindTexture(GL_TEXTURE_2D, t->id);
               switch (t->wrapY) {
@@ -2025,33 +2818,45 @@ void drawSettingsWindow() {
               }
               glfwMakeContextCurrent(glfw_settings_window);
             }
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Vertical texture wrapping mode.");
+                          WrappedTooltip("Vertical texture wrapping mode.");
             if (ImGui::ColorEdit3("Border Color", t->border)) {
+              current_window->unsaved_change_count++;
               glfwMakeContextCurrent(current_window->glfw_window);
               glBindTexture(GL_TEXTURE_2D, t->id);
               glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR,
                                t->border);
               glfwMakeContextCurrent(glfw_settings_window);
             }
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip(
+                          WrappedTooltip(
                   "Border color used when clamp‑to‑border is selected.");
-            ImGui::InputFloat("Offset X", &t->offsetX, 0.01f, 1.0f, "%.3f");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Horizontal texture offset.");
-            ImGui::InputFloat("Offset Y", &t->offsetY, 0.01f, 1.0f, "%.3f");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Vertical texture offset.");
-            ImGui::InputFloat("Scale X", &t->scaleX, 0.01f, 1.0f, "%.3f");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Horizontal texture scale.");
-            ImGui::InputFloat("Scale Y", &t->scaleY, 0.01f, 1.0f, "%.3f");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Vertical texture scale.");
-            draggableFloatAngle("Rotation", &t->rotation, /*is_radians=*/true,
-                                0.1f, -180.0f, 180.0f);
+            if (ImGui::InputFloat("Offset X", &t->offsetX, 0.01f, 1.0f, "%.3f"))
+              current_window->unsaved_change_count++;
+                          WrappedTooltip("Horizontal texture offset.");
+            if (ImGui::InputFloat("Offset Y", &t->offsetY, 0.01f, 1.0f, "%.3f"))
+              current_window->unsaved_change_count++;
+                          WrappedTooltip("Vertical texture offset.");
+            if (ImGui::InputFloat("Scale X", &t->scaleX, 0.01f, 1.0f, "%.3f"))
+              current_window->unsaved_change_count++;
+                          WrappedTooltip("Horizontal texture scale.");
+            if (ImGui::InputFloat("Scale Y", &t->scaleY, 0.01f, 1.0f, "%.3f"))
+              current_window->unsaved_change_count++;
+                          WrappedTooltip("Vertical texture scale.");
+            if (draggableFloatAngle("Rotation", &t->rotation,
+                                    /*is_radians=*/true, 0.1f, -180.0f, 180.0f))
+              current_window->unsaved_change_count++;
             DraggableTooltip("Texture rotation angle.");
+            if (ImGui::Checkbox("Flip X", &t->flipX))
+              current_window->unsaved_change_count++;
+                          WrappedTooltip(
+                  "Mirrors the texture horizontally - useful when the "
+                  "source image reads backwards on the mesh (e.g. text "
+                  "appearing reversed) with no way to fix that by "
+                  "flipping the image file itself without also breaking "
+                  "its alignment to the mesh's UV layout.");
+            ImGui::SameLine();
+            if (ImGui::Checkbox("Flip Y", &t->flipY))
+              current_window->unsaved_change_count++;
+                          WrappedTooltip("Mirrors the texture vertically.");
           }
           EndShadedGroup(ShadeColor(0.22f, 0.38f, 0.58f),
                          ShadeBorder(0.22f, 0.38f, 0.58f));
@@ -2076,10 +2881,10 @@ void drawSettingsWindow() {
       if (ImGui::Button("Save Model")) {
         writeJson(current_window->model,
                   current_window->model.path + "/info.json");
+        current_window->unsaved_change_count = 0;
         spdlog::info("Model saved to {}", current_window->model.path);
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Save current model settings to info.json.");
+              WrappedTooltip("Save current model settings to info.json.");
 
       ImGui::SameLine();
       if (ImGui::Button("Export Mapping")) {
@@ -2089,8 +2894,7 @@ void drawSettingsWindow() {
         export_mapping_ok = ok;
         export_mapping_popup_until = glfwGetTime() + 6.0;
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip(
+              WrappedTooltip(
             "Appends this controller's manually-configured bindings to "
             "gamecontrollerdb.txt as a standard SDL mapping line, so you "
             "can share that file (or just this one line) with others - "
@@ -2141,6 +2945,15 @@ void drawSettingsWindow() {
             "Scale factor for mouse movement -> touchpoint displacement. "
             "Lower = slower, higher = faster. Default (0.5) gives a moderate "
             "speed.");
+      ImGui::DragFloat("Touchpoint Recenter (s)",
+                       &current_window->touchpoint_recenter_seconds, 0.1f,
+                       0.5f, 30.0f, "%.1f");
+      if (ImGui::IsItemHovered())
+        DraggableTooltip(
+            "How long a mouse-bound touchpoint sits idle before "
+            "snapping back to center. A mouse has no hardware self-"
+            "centering the way an analog stick does, so without this "
+            "the visual position just stays wherever it last was.");
       ImGui::NewLine();
       if (ImGui::BeginTable("MeshTable", 7,
                             ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
@@ -2521,8 +3334,7 @@ void drawSettingsWindow() {
               }
             }
 
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Choose the input that triggers this mesh.");
+                          WrappedTooltip("Choose the input that triggers this mesh.");
 
             ImGui::PopID();
           } else {
@@ -2592,10 +3404,10 @@ void drawSettingsWindow() {
                 mesh.parentIndex = newParent;
                 writeJson(current_window->model,
                           current_window->model.path + "/info.json");
+        current_window->unsaved_change_count = 0;
               }
             }
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip(
+                          WrappedTooltip(
                   "Attach this mesh to a parent part (e.g., stick).");
             ImGui::PopID();
           } else {
@@ -2607,8 +3419,7 @@ void drawSettingsWindow() {
           if (hasMesh) {
             ImGui::PushID(i + 3000);
             ImGui::Checkbox("##visible", &mesh.visible);
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Show/hide this mesh in the 3D view.");
+                          WrappedTooltip("Show/hide this mesh in the 3D view.");
             ImGui::PopID();
           } else {
             ImGui::TextDisabled(" ");
@@ -2619,8 +3430,7 @@ void drawSettingsWindow() {
           if (hasMesh) {
             ImGui::PushID(i + 4000);
             ImGui::Checkbox("##invert", &mesh.invert);
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip(
+                          WrappedTooltip(
                   "Invert the input (button press or axis direction).");
             ImGui::PopID();
           } else {
@@ -2675,6 +3485,7 @@ void drawSettingsWindow() {
             // Update info.json immediately
             writeJson(current_window->model,
                       current_window->model.path + "/info.json");
+        current_window->unsaved_change_count = 0;
 
             // Adjust selection if needed
             if (selected_mesh == mesh_to_delete) {
@@ -2720,11 +3531,11 @@ void drawSettingsWindow() {
             } else {
               writeJson(current_window->model,
                         current_window->model.path + "/info.json");
+        current_window->unsaved_change_count = 0;
               spdlog::info("Model saved to {}", current_window->model.path);
             }
           }
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Write current settings to info.json.");
+                      WrappedTooltip("Write current settings to info.json.");
 
           // ---- Position Section (collapsible) ----
           if (ShadedTreeNode("Position",
@@ -2732,16 +3543,13 @@ void drawSettingsWindow() {
             BeginShadedGroup();
             ImGui::InputFloat("X Position", &selectedMesh.position[0], 0.01f,
                               1.0f, "%.3f");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Move the mesh along the X axis.");
+                          WrappedTooltip("Move the mesh along the X axis.");
             ImGui::InputFloat("Y Position", &selectedMesh.position[1], 0.01f,
                               1.0f, "%.3f");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Move the mesh along the Y axis.");
+                          WrappedTooltip("Move the mesh along the Y axis.");
             ImGui::InputFloat("Z Position", &selectedMesh.position[2], 0.01f,
                               1.0f, "%.3f");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Move the mesh along the Z axis.");
+                          WrappedTooltip("Move the mesh along the Z axis.");
             EndShadedGroup(ShadeColor(0.20f, 0.40f, 0.62f),
                            ShadeBorder(0.20f, 0.40f, 0.62f));
             ImGui::TreePop();
@@ -2757,18 +3565,15 @@ void drawSettingsWindow() {
                 "current position.");
             ImGui::InputFloat("Pivot X", &selectedMesh.pivot_offset[0], 0.01f,
                               1.0f, "%.3f");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip(
+                          WrappedTooltip(
                   "Offset of the pivot from the mesh origin (X).");
             ImGui::InputFloat("Pivot Y", &selectedMesh.pivot_offset[1], 0.01f,
                               1.0f, "%.3f");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip(
+                          WrappedTooltip(
                   "Offset of the pivot from the mesh origin (Y).");
             ImGui::InputFloat("Pivot Z", &selectedMesh.pivot_offset[2], 0.01f,
                               1.0f, "%.3f");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip(
+                          WrappedTooltip(
                   "Offset of the pivot from the mesh origin (Z).");
 
             // ---- Auto-center buttons ----
@@ -2782,8 +3587,7 @@ void drawSettingsWindow() {
                 selectedMesh.pivot_offset[1] = center.y;
                 selectedMesh.pivot_offset[2] = center.z;
               }
-              if (ImGui::IsItemHovered())
-                ImGui::SetTooltip(
+                              WrappedTooltip(
                     "Sets the pivot to the geometric centre of the mesh.");
               ImGui::SameLine();
               if (selectedMesh.assignedPart == 5 ||
@@ -2798,8 +3602,7 @@ void drawSettingsWindow() {
                   selectedMesh.pivot_offset[1] = py;
                   selectedMesh.pivot_offset[2] = pz;
                 }
-                if (ImGui::IsItemHovered())
-                  ImGui::SetTooltip(
+                                  WrappedTooltip(
                       "Sets the pivot to the bottom‑centre of the stick mesh. "
                       "This makes the stick rotate like a real joystick.");
               }
@@ -2818,16 +3621,13 @@ void drawSettingsWindow() {
             BeginShadedGroup();
             ImGui::InputFloat("Rot X (deg)", &selectedMesh.rotation[0], 0.1f,
                               1.0f, "%.1f");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Euler rotation around the X axis (degrees).");
+                          WrappedTooltip("Euler rotation around the X axis (degrees).");
             ImGui::InputFloat("Rot Y (deg)", &selectedMesh.rotation[1], 0.1f,
                               1.0f, "%.1f");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Euler rotation around the Y axis (degrees).");
+                          WrappedTooltip("Euler rotation around the Y axis (degrees).");
             ImGui::InputFloat("Rot Z (deg)", &selectedMesh.rotation[2], 0.1f,
                               1.0f, "%.1f");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Euler rotation around the Z axis (degrees).");
+                          WrappedTooltip("Euler rotation around the Z axis (degrees).");
             EndShadedGroup(ShadeColor(0.22f, 0.52f, 0.30f),
                            ShadeBorder(0.22f, 0.52f, 0.30f));
             ImGui::TreePop();
@@ -2853,8 +3653,7 @@ void drawSettingsWindow() {
                               1.0f, "%.1f");
             ImGui::InputFloat("Rot Z", &selectedMesh.travel_rotation[2], 0.1f,
                               1.0f, "%.1f");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Movement when the button is pressed.");
+                          WrappedTooltip("Movement when the button is pressed.");
 
             if (isAnalogTravelMesh(selectedMesh)) {
               ImGui::TextDisabled(
@@ -2866,8 +3665,7 @@ void drawSettingsWindow() {
             } else {
               ImGui::Checkbox("Smooth Travel Animation",
                               &selectedMesh.smooth_travel_enabled);
-              if (ImGui::IsItemHovered())
-                ImGui::SetTooltip(
+                              WrappedTooltip(
                     "Ease the travel/travel rotation above toward its "
                     "target over time instead of snapping instantly, so a "
                     "press (and release) reads as a smooth motion.");
@@ -2875,8 +3673,7 @@ void drawSettingsWindow() {
                 ImGui::SliderFloat("Duration (s)",
                                    &selectedMesh.smooth_travel_duration,
                                    0.02f, 0.6f, "%.2f");
-                if (ImGui::IsItemHovered())
-                  ImGui::SetTooltip(
+                                  WrappedTooltip(
                       "Roughly how long the press/release animation takes "
                       "to settle. Lower is snappier, higher is softer/"
                       "slower.");
@@ -2895,8 +3692,7 @@ void drawSettingsWindow() {
                               "non-analog mesh(es).",
                               selectedMesh.smooth_travel_duration, applied);
                 }
-                if (ImGui::IsItemHovered())
-                  ImGui::SetTooltip(
+                                  WrappedTooltip(
                       "Applies this enabled state and duration to every "
                       "other button-type mesh on this controller. Stick "
                       "and trigger meshes are skipped automatically, since "
@@ -2916,8 +3712,7 @@ void drawSettingsWindow() {
                               "mesh(es).",
                               cleared);
                 }
-                if (ImGui::IsItemHovered())
-                  ImGui::SetTooltip(
+                                  WrappedTooltip(
                       "Turns Smooth Travel Animation back off on every "
                       "other button-type mesh on this controller, without "
                       "touching its duration setting - so re-enabling it "
@@ -2928,35 +3723,28 @@ void drawSettingsWindow() {
             ImGui::Separator();
             ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.8f, 1.0f),
                                "Popup (bumper/paddle)");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip(
+                          WrappedTooltip(
                   "Make this mesh pop out when its input is triggered.");
             ImGui::Checkbox("Is Bumper", &selectedMesh.isBumper);
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("This mesh acts as a bumper – it will pop when "
+                          WrappedTooltip("This mesh acts as a bumper – it will pop when "
                                 "'Popup Bumpers' is enabled.");
             ImGui::SameLine();
             ImGui::Checkbox("Is Trigger", &selectedMesh.isTrigger);
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("This mesh acts as a trigger – it will pop "
+                          WrappedTooltip("This mesh acts as a trigger – it will pop "
                                 "when 'Popup Triggers' is enabled.");
             ImGui::SameLine();
             ImGui::Checkbox("Is Paddle", &selectedMesh.isPaddle);
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("This mesh acts as a paddle – it will pop when "
+                          WrappedTooltip("This mesh acts as a paddle – it will pop when "
                                 "'Popup Paddles' is enabled.");
             ImGui::InputFloat("Popup Offset X", &selectedMesh.popup_offset[0],
                               0.01f, 1.0f, "%.3f");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Vertical offset when the part 'pops up'.");
+                          WrappedTooltip("Vertical offset when the part 'pops up'.");
             ImGui::InputFloat("Popup Offset Y", &selectedMesh.popup_offset[1],
                               0.01f, 1.0f, "%.3f");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Depth offset when the part 'pops up'.");
+                          WrappedTooltip("Depth offset when the part 'pops up'.");
             ImGui::InputFloat("Popup Offset Z", &selectedMesh.popup_offset[2],
                               0.01f, 1.0f, "%.3f");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Horizontal offset when the part 'pops up'.");
+                          WrappedTooltip("Horizontal offset when the part 'pops up'.");
             draggableFloatAngle("Popup Yaw", &selectedMesh.popup_rotation[1],
                                 /*is_radians=*/true, 0.1f, -180.0f, 180.0f);
             DraggableTooltip("Yaw rotation when the part 'pops up' (e.g. a "
@@ -3032,6 +3820,31 @@ void drawSettingsWindow() {
                   "For joystick axes, the mesh will highlight in the positive "
                   "color when the axis is positive, and the negative color "
                   "when negative.");
+
+              // Flags the exact mismatch that caused travel/rotation to
+              // only ever show its positive half (0 to +90 instead of
+              // -90 to +90, e.g.) - a binding captured with a +/- suffix
+              // is a one-directional threshold response by design (see
+              // the isDirection branch in controller_window.cpp), which
+              // silently discards whichever half of the axis's range
+              // doesn't match that suffix. Capturing a new binding for
+              // this mesh no longer produces this (it now captures the
+              // plain, bidirectional binding instead when Dual Highlight
+              // is on) - this just catches a binding saved before that
+              // fix, or one set by hand.
+              if (!selectedMesh.inputBinding.empty() &&
+                  (selectedMesh.inputBinding.back() == '+' ||
+                  selectedMesh.inputBinding.back() == '-')) {
+                ImGui::TextColored(
+                    ImVec4(1.0f, 0.7f, 0.2f, 1.0f),
+                    "This mesh's input binding ('%s') only responds to one "
+                    "direction of the axis - that's why travel/rotation "
+                    "only ever shows one half of its range instead of "
+                    "swinging fully negative-to-positive. Re-capture this "
+                    "binding, or pick the plain axis (no +/- suffix) from "
+                    "Manual Selection instead.",
+                    selectedMesh.inputBinding.c_str());
+              }
             }
 
             EndShadedGroup(ShadeColor(0.58f, 0.16f, 0.16f),
@@ -3097,8 +3910,7 @@ void drawSettingsWindow() {
                 g_shader_resource_target = shaderNames[current_shader_idx];
                 shader_resource_dialog.Open();
               }
-              if (ImGui::IsItemHovered())
-                ImGui::SetTooltip(
+                              WrappedTooltip(
                     "Add an image as a channel texture (iChannel0-3) for "
                     "this shader - useful for ShaderToy-style shaders "
                     "that expect a noise or gradient texture. Filled "
@@ -3130,8 +3942,7 @@ void drawSettingsWindow() {
             selectedMesh.trigger_max = 0.0f;
             selectedMesh.stick_max = 0.0f;
           }
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Reset all transform values (position, pivot, "
+                      WrappedTooltip("Reset all transform values (position, pivot, "
                               "rotation, travel, popup) to zero.");
 
           // ---- Legacy Highlight checkbox (now replaced by override) ----
@@ -3194,8 +4005,7 @@ void drawSettingsWindow() {
                 }
                 spdlog::info("Reset touchpoint to origin of touchpad.");
               }
-              if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Set this touch point's position to (0,0,0) "
+                              WrappedTooltip("Set this touch point's position to (0,0,0) "
                                   "relative to its parent touchpad.");
             } else {
               ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f),
@@ -3221,8 +4031,7 @@ void drawSettingsWindow() {
                                "a touchpad first.");
                 }
               }
-              if (ImGui::IsItemHovered())
-                ImGui::SetTooltip(
+                              WrappedTooltip(
                     "Find the first mesh marked as a touchpad and set this as "
                     "its child with position (0,0,0).");
             }
@@ -3242,13 +4051,11 @@ void drawSettingsWindow() {
                 selectedMesh.touch_height = 1.0f;
             }
           }
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Mark this mesh as a touchpad surface. This "
+                      WrappedTooltip("Mark this mesh as a touchpad surface. This "
                               "enables touch area controls.");
           ImGui::SameLine();
           ImGui::Checkbox("Is Touchpoint", &selectedMesh.isTouchpoint);
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Mark this mesh as a touchpoint (moves with "
+                      WrappedTooltip("Mark this mesh as a touchpoint (moves with "
                               "mouse/touch input).");
           if (selectedMesh.isTouchpad) {
             ImGui::DragFloat("Touch Area Width", &selectedMesh.touch_width,
@@ -3333,8 +4140,7 @@ void drawSettingsWindow() {
                               "%.2f");
             ImGui::InputFloat("Scale Z", &selectedMesh.scale[2], 0.01f, 1.0f,
                               "%.2f");
-            if (ImGui::IsItemHovered())
-              ImGui::SetTooltip("Custom scale for this mesh.");
+                          WrappedTooltip("Custom scale for this mesh.");
           }
 
           ImGui::Separator();
@@ -3387,8 +4193,7 @@ void drawSettingsWindow() {
       if (has_gyro && current_window->gyro_enabled) {
         ImGui::DragFloat("Gyro Sensitivity", &current_window->gyro_sensitivity,
                          0.1f, 0.1f, 10.0f, "%.1f");
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip(
+                  WrappedTooltip(
               "Sensitivity multiplier (internally scaled by 0.1). "
               "Range 0-10 gives effective sensitivity 0-1.0.");
         ImGui::DragInt("Gyro Correction", &current_window->gyro_correction, 1,
@@ -3580,6 +4385,461 @@ void drawSettingsWindow() {
     }
 
     // ============================================================
+    // INPUT HISTORY (1.2.0)
+    // ============================================================
+    if (ImGui::CollapsingHeader("Input History")) {
+      ImGui::TextWrapped(
+          "A separate always-on-top window showing recent button/key "
+          "presses for this controller - similar to a fighting game's "
+          "input display. Independent per window, like Network.");
+      ImGui::Separator();
+
+      bool enabled = current_window->input_history_enabled;
+      if (ImGui::Checkbox("Enable Input History", &enabled)) {
+        setInputHistoryEnabled(*current_window, enabled);
+      }
+              WrappedTooltip(
+            "Opens a separate window (like the controller window itself) "
+            "showing recent presses. Closing that window's native close "
+            "button turns this off too.");
+
+      // ---- Display style ----
+      {
+        int styleCount = 2 + inputHistoryGlyphStyleCount();
+        std::string preview =
+            inputHistoryDisplayStyleName(current_window->input_history_display_style);
+        if (ImGui::BeginCombo("Display Style", preview.c_str())) {
+          for (int i = 0; i < styleCount; ++i) {
+            bool selected = (current_window->input_history_display_style == i);
+            std::string label = inputHistoryDisplayStyleName(i);
+            if (ImGui::Selectable(label.c_str(), selected))
+              current_window->input_history_display_style = i;
+            if (selected)
+              ImGui::SetItemDefaultFocus();
+          }
+          ImGui::EndCombo();
+        }
+                  WrappedTooltip(
+              "Raw: plain text labels. Fighting-Game Notation: numpad "
+              "direction digits + button letters with the ms between "
+              "inputs, Street Fighter/Tekken training-mode style. The "
+              "rest are icon packs (Xbox/PlayStation/Switch/Steam Deck) "
+              "- buttons show as icons, with a text fallback for inputs "
+              "that pack doesn't have art for.");
+      }
+
+      // ---- Glyph mapping creator ----
+      if (ImGui::Button("New Glyph Mapping...")) {
+        resetGlyphMappingEditor();
+        setGlyphMappingEditorOpen(true);
+      }
+              WrappedTooltip(
+            "Opens the Glyph Mapping Editor in its own window - one row "
+            "per input, each mapped to whatever image you want (an "
+            "existing glyph, or your own picture, converted/resized "
+            "automatically). Works exactly like the built-in styles "
+            "once saved.");
+      ImGui::SameLine();
+      {
+        const auto &styles = listGlyphStyles();
+        if (ImGui::BeginCombo("Edit Existing Mapping", "(choose one)")) {
+          for (auto &s : styles) {
+            if (ImGui::Selectable(s.displayName.c_str())) {
+              loadGlyphMappingIntoEditor(s.folderName);
+              setGlyphMappingEditorOpen(true);
+            }
+          }
+          ImGui::EndCombo();
+        }
+      }
+
+      // ---- History length ----
+      ImGui::InputInt("History Length", &current_window->input_history_length,
+                      1, 5);
+      if (current_window->input_history_length < 1)
+        current_window->input_history_length = 1;
+      if (current_window->input_history_length > 500)
+        current_window->input_history_length = 500;
+              WrappedTooltip(
+            "How many recent entries the live window keeps/shows. This "
+            "only limits the live display - every captured input is "
+            "still written in full to the persistent log file below "
+            "regardless of this number.");
+
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.8f, 1.0f), "Capture");
+      ImGui::Checkbox("Gamepad/Joystick",
+                      &current_window->input_history_capture_gamepad);
+      ImGui::SameLine();
+      ImGui::Checkbox("Keyboard", &current_window->input_history_capture_keyboard);
+      ImGui::SameLine();
+      ImGui::Checkbox("Mouse", &current_window->input_history_capture_mouse);
+              WrappedTooltip(
+            "Which device types this window's Input History captures - "
+            "independent of what's actually bound to this model's "
+            "meshes, since the point is showing everything you pressed, "
+            "not just what happens to have a visible part.");
+
+      ImGui::Checkbox("Merge Simultaneous Presses",
+                      &current_window->input_history_merge_simultaneous);
+              WrappedTooltip(
+            "When several inputs land within the window below, group "
+            "them into one entry (e.g. \"A+B\") instead of a separate "
+            "line each. Turn this on for fighting games, where "
+            "simultaneous presses matter (throws, macros, plinks) - "
+            "leave it off for most other games, where you just want a "
+            "clean one-input-per-line list.");
+      if (current_window->input_history_merge_simultaneous) {
+        ImGui::SliderInt("Simultaneous Window (ms)",
+                         &current_window->input_history_simultaneous_window_ms,
+                         5, 200, "%d ms");
+                  WrappedTooltip(
+              "How close together two inputs need to land to count as "
+              "\"simultaneous\". A human press of two buttons \"at once\" "
+              "is routinely 30-80ms apart, not literally the same "
+              "instant - tune this to match how forgiving you want that "
+              "to be.");
+      }
+
+      ImGui::Checkbox("Show Return to Neutral",
+                      &current_window->input_history_show_neutral_direction);
+              WrappedTooltip(
+            "Off (default): letting go of the stick/D-pad (returning to "
+            "neutral, digit 5) doesn't get its own entry - only the "
+            "direction that actually mattered does. On: every return to "
+            "neutral is logged too, for anyone who wants the complete "
+            "picture.");
+
+      ImGui::Checkbox("Show Holds", &current_window->input_history_show_holds);
+      WrappedTooltip(
+          "Shows a live 'Hold X.Xs' timer next to a button's glyph "
+          "while it's held past the threshold below, pinned at the "
+          "newest-entry end (so it's never scrolled out of view) "
+          "until released. Multiple simultaneous holds each get their "
+          "own entry.");
+      if (current_window->input_history_show_holds) {
+        ImGui::SliderInt("Hold Threshold (ms)",
+                         &current_window->input_history_hold_threshold_ms, 30,
+                         1000, "%d ms");
+        WrappedTooltip(
+            "How long a press has to be held before it counts as a "
+            "hold rather than a tap. 150ms is a commonly-used rough "
+            "threshold in games for this distinction.");
+      }
+
+      // ---- Direction source ----
+      {
+        const char *dirNames[] = {"Auto (D-Pad or Left Stick)", "D-Pad",
+                                  "Left Stick", "Right Stick"};
+        int dirIdx = current_window->input_history_direction_source;
+        if (dirIdx < 0 || dirIdx > 3)
+          dirIdx = 0;
+        if (ImGui::BeginCombo("Direction Source", dirNames[dirIdx])) {
+          for (int i = 0; i < 4; ++i) {
+            bool selected = (dirIdx == i);
+            if (ImGui::Selectable(dirNames[i], selected))
+              current_window->input_history_direction_source = i;
+            if (selected)
+              ImGui::SetItemDefaultFocus();
+          }
+          ImGui::EndCombo();
+        }
+                  WrappedTooltip(
+              "Which input drives the numpad direction digit (used by "
+              "Fighting-Game Notation, and shown alongside icons in the "
+              "glyph styles too). Auto uses whichever of D-Pad/Left "
+              "Stick is actually deflected - override this if your "
+              "'movement' isn't D-Pad-or-left-stick (e.g. a lefty "
+              "setup using the right stick to move).");
+      }
+
+      ImGui::SliderInt("Motion Timeout (ms)",
+                       &current_window->input_history_motion_timeout_ms, 50,
+                       600, "%d ms");
+      WrappedTooltip(
+          "How much time a compound motion (quarter-circle, dragon "
+          "punch, 360, etc.) has to complete, calibrated to a "
+          "2-step quarter-circle like 236/214 - longer motions "
+          "(half-circles, 360s) automatically get proportionally "
+          "more time, the same way real games scale theirs.\n\n"
+          "The default (220ms) is close to Street Fighter 6's own "
+          "quarter-circle window (~183ms/11f at 60fps; SF6's "
+          "half-circles get ~200ms/12f, and 360s ~533ms/32f - "
+          "already accounted for here by the automatic scaling).\n\n"
+          "For comparison: Tekken 8's motion inputs run on a "
+          "similar order of magnitude (its regular attack buffer "
+          "is 8 frames/~133ms, with motion-specific windows "
+          "measured as extending further, into the 15-22 frame/"
+          "250-370ms range for some bufferable transitions). "
+          "Guilty Gear Strive is known for being stricter about "
+          "motions than most - it generally wants the actual "
+          "diagonal steps rather than tolerating a rolled-through "
+          "shortcut - so a lower value here reads closer to how "
+            "it feels, though its exact frame window isn't publicly "
+            "documented the way SF6's and Tekken's are.");
+
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.8f, 1.0f), "Timing");
+      ImGui::Checkbox("Show Input Timing", &current_window->input_history_show_timing);
+              WrappedTooltip(
+            "Adds a Timing column showing the time since the previous "
+            "input - works for any display style (Raw, Notation, or a "
+            "glyph pack) and any input type, not just gamepad directions.");
+      if (current_window->input_history_show_timing) {
+        ImGui::Checkbox("Show as Frames (60fps)",
+                        &current_window->input_history_timing_in_frames);
+                  WrappedTooltip(
+              "Off: milliseconds. On: frames, against a fixed 60fps "
+              "reference - the standard fighting-game frame-data "
+              "convention, regardless of the game's actual render rate.");
+        ImGui::SliderInt("Reset After (ms)",
+                         &current_window->input_history_timing_reset_ms, 200,
+                         10000, "%d ms");
+                  WrappedTooltip(
+              "A gap longer than this doesn't count as measured timing - "
+              "it just means you paused. Shown as \"--\" instead of a "
+              "real-looking number. Default 3000ms (3 seconds).");
+      }
+
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.8f, 1.0f), "Triggers");
+      {
+        // input_history_trigger_threshold is stored 0-1 (compared
+        // directly against the normalized trigger axis value in
+        // captureInputHistory()), but reads far more naturally as a
+        // percentage in the UI - converted here for display/editing
+        // only, not changing the underlying storage.
+        float thresholdPercent = current_window->input_history_trigger_threshold * 100.0f;
+        if (ImGui::SliderFloat("Trigger Press Threshold", &thresholdPercent,
+                               2.0f, 90.0f, "%.0f%%")) {
+          current_window->input_history_trigger_threshold = thresholdPercent / 100.0f;
+        }
+      }
+              WrappedTooltip(
+            "How far a trigger needs to be pulled before it registers as "
+            "a press in the history. Triggers are analog - there's no "
+            "natural on/off point the way a button has one.");
+
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.8f, 1.0f), "Gyro");
+      ImGui::Checkbox("Capture Gyro (Flicks)",
+                      &current_window->input_history_capture_gyro);
+              WrappedTooltip(
+            "Gyro is continuous, not a button - so instead of logging "
+            "every small motion (which would flood the history and "
+            "bury real presses), this only logs a \"flick\": a fast, "
+            "deliberate rotation past the thresholds below, in "
+            "whichever direction (Left/Right/Up/Down) it happened. "
+            "Requires Gyro enabled for this window (see the Gyro tab).");
+      if (current_window->input_history_capture_gyro) {
+        ImGui::SliderFloat("Motion Sensitivity",
+                           &current_window->input_history_gyro_threshold,
+                           5.0f, 300.0f, "%.0f deg/s");
+                  WrappedTooltip(
+              "Rotation slower than this is ignored entirely - filters "
+              "out hand tremor and idle drift so it doesn't register as "
+              "input at all. Higher = less sensitive.");
+        ImGui::SliderFloat("Flick Threshold",
+                           &current_window->input_history_gyro_flick_threshold,
+                           5.0f, 90.0f, "%.0f deg");
+                  WrappedTooltip(
+              "Total rotation (accumulated over the window below) "
+              "needed to count as a flick, once motion is already past "
+              "the sensitivity threshold above.");
+        ImGui::SliderInt("Flick Window (ms)",
+                         &current_window->input_history_gyro_flick_window_ms,
+                         50, 500);
+                  WrappedTooltip(
+              "How long a rotation has to accumulate the Flick "
+              "Threshold within to count as one fast, deliberate "
+              "motion rather than slow panning.");
+        ImGui::SliderInt("Flick Cooldown (ms)",
+                         &current_window->input_history_gyro_flick_cooldown_ms,
+                         100, 2000);
+                  WrappedTooltip(
+              "Minimum time between two flick entries, so one "
+              "continued motion doesn't spam the history with "
+              "repeated flicks.");
+      }
+
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.8f, 1.0f), "Appearance");
+      ImGui::SliderFloat("Background Opacity", &current_window->input_history_opacity,
+                         0.0f, 1.0f, "%.2f");
+      ImGui::SliderFloat("Content Opacity",
+                         &current_window->input_history_content_opacity, 0.0f,
+                         1.0f, "%.2f");
+              WrappedTooltip(
+            "Background and content (text/glyphs) are independent - e.g. "
+            "a 70%% black background with fully opaque icons, or the "
+            "reverse, whatever reads best over your footage.");
+      ImGui::SliderInt("Glyph Size", &current_window->input_history_glyph_size,
+                       12, 64, "%d px");
+              WrappedTooltip(
+            "Icon size for glyph display styles. Text-fallback labels "
+            "(for inputs a style has no icon for) scale to match.");
+      ImGui::SliderInt("Raw/Notation Font Size",
+                       &current_window->input_history_font_size, 8, 48,
+                       "%d px");
+              WrappedTooltip(
+            "Text size for the Raw and Fighting-Game Notation display "
+            "styles - independent of Glyph Size above.");
+      // 2-column layout, matching the controller window's own
+      // "WindowOptionsColumns" table - with Always on Top added below,
+      // this reached 8 checkboxes, which read as an unsightly single
+      // column stacked well past the fold; laid out 2-per-row instead.
+      if (ImGui::BeginTable("InputHistoryOptionsColumns", 2,
+                            ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableNextColumn();
+        ImGui::Checkbox("Show Date/Time",
+                        &current_window->input_history_show_timestamp);
+                  WrappedTooltip(
+              "Adds a Time column (leftmost) showing the real wall-clock "
+              "time each entry was captured - for whatever reason you "
+              "want to know exactly when a button was pressed, not just "
+              "how long since the last one.");
+
+        ImGui::TableNextColumn();
+        ImGui::Checkbox("Newest Entry On Top",
+                        &current_window->input_history_newest_on_top);
+                  WrappedTooltip(
+              "Off (default): newest entry at the bottom, scrolling up as "
+              "new inputs arrive, like a terminal. On: newest entry at "
+              "the top instead, so the latest input is always the first "
+              "thing visible without needing to scroll.");
+
+        ImGui::TableNextColumn();
+        ImGui::Checkbox("Alternating Row Colors",
+                        &current_window->input_history_alternating_rows);
+                  WrappedTooltip(
+              "Turn off for a fully transparent background (0%% Background "
+              "Opacity) to show only the glyphs/text with nothing else "
+              "rendered - with this on, the alternating row shading is "
+              "still visible even at 0%% background opacity, since it's a "
+              "separate layer from the window background itself.");
+
+        ImGui::TableNextColumn();
+        if (ImGui::Checkbox("Click-Through",
+                            &current_window->input_history_click_through)) {
+          // setWindowClickThrough() is the single source of truth for
+          // click-through (see its definition in controller_window.cpp)
+          // - the checkbox alone only updates the stored setting, it
+          // doesn't apply anything live on its own. Only meaningful once
+          // the window actually exists (input_history_enabled); if it's
+          // off, the setting is still saved and gets applied the next
+          // time the window is created (see ensureInputHistoryWindowCreated()).
+          if (current_window->input_history_glfw_window) {
+            setWindowClickThrough(current_window->input_history_glfw_window,
+                                  current_window->input_history_click_through);
+          }
+        }
+                  WrappedTooltip(
+              "Mouse clicks pass through the Input History window to "
+              "whatever's behind it - same idea as a controller window's "
+              "own click-through, useful since this window usually sits "
+              "on top of gameplay footage.");
+
+        ImGui::TableNextColumn();
+        // "##InputHistory" - same ID-collision reasoning as the other
+        // widgets in this section that share a label with the
+        // controller window's own equivalent checkbox.
+        ImGui::Checkbox("Drag to Move##InputHistory",
+                        &current_window->input_history_drag_to_move);
+                  WrappedTooltip(
+              "Left-click drag to move the window - only works while "
+              "Click-Through above is off (with it on, clicks never "
+              "reach this window at all).");
+
+        ImGui::TableNextColumn();
+        ImGui::Checkbox("Scroll to Resize##InputHistory",
+                        &current_window->input_history_scroll_to_resize);
+                  WrappedTooltip(
+              "Scroll the mouse wheel over the window to resize it - "
+              "same as Click-Through above, only works while it's off.");
+
+        ImGui::TableNextColumn();
+        ImGui::Checkbox("Log to File",
+                        &current_window->input_history_log_to_file);
+                  WrappedTooltip(
+              "Writes every captured input to its own timestamped log "
+              "file (logs/input_history_logs/ in the data directory), "
+              "independent of History Length above - so you can scroll "
+              "back through everything you actually pressed later (e.g. "
+              "frame-checking a speedrun attempt), not just what's "
+              "currently visible in the live window.");
+
+        ImGui::TableNextColumn();
+        // "##InputHistory" - same reasoning as the Width/Height
+        // sliders below: this checkbox's label is identical to the
+        // controller window's own "Always on Top" checkbox elsewhere
+        // in this same settings panel, which would otherwise give them
+        // the same ImGui ID.
+        if (ImGui::Checkbox("Always on Top##InputHistory",
+                            &current_window->input_history_always_on_top)) {
+          if (current_window->input_history_glfw_window) {
+            glfwSetWindowAttrib(current_window->input_history_glfw_window,
+                                GLFW_FLOATING,
+                                current_window->input_history_always_on_top);
+          }
+        }
+                  WrappedTooltip(
+              "Keep the Input History window above all others - on by "
+              "default, since it's usually meant to sit on top of "
+              "whatever it's overlaying.");
+
+        ImGui::EndTable();
+      }
+
+      ImGui::NewLine();
+      // Same Width/Height sliders a controller window has, for
+      // exactly-defining this window's size instead of only being
+      // able to eyeball it via Scroll to Resize or a manual drag.
+      if (current_window->input_history_glfw_window) {
+        int ihw = 0, ihh = 0;
+        glfwGetWindowSize(current_window->input_history_glfw_window, &ihw,
+                          &ihh);
+        // "##InputHistory" gives these a distinct internal ID from the
+        // controller window's own "Width"/"Height" sliders further up
+        // this same settings panel - ImGui IDs widgets by their label
+        // text by default, so two identically-labeled DragInts here
+        // would otherwise collide onto the very same ID. That wasn't
+        // just the "2 visible items with conflicting ID" warning -
+        // dragging either one was actually driving both sliders' drag
+        // state at once, which is why the controller window was
+        // visibly resizing too. The "##..." suffix is hidden from the
+        // displayed label (both still just show "Width"/"Height") but
+        // is included in the ID, so they're fully independent widgets
+        // now.
+        if (ImGui::DragInt("Width##InputHistory", &ihw, 1.0f, 50,
+                           vid_mode->width, "%d px")) {
+          if (ihw < 50)
+            ihw = 50;
+          if (ihw > vid_mode->width)
+            ihw = vid_mode->width;
+          glfwSetWindowSize(current_window->input_history_glfw_window, ihw,
+                            ihh);
+        }
+        if (ImGui::IsItemHovered())
+          DraggableTooltip("Input History window width in pixels.");
+
+        if (ImGui::DragInt("Height##InputHistory", &ihh, 1.0f, 50,
+                           vid_mode->height, "%d px")) {
+          if (ihh < 50)
+            ihh = 50;
+          if (ihh > vid_mode->height)
+            ihh = vid_mode->height;
+          glfwSetWindowSize(current_window->input_history_glfw_window, ihw,
+                            ihh);
+        }
+        if (ImGui::IsItemHovered())
+          DraggableTooltip("Input History window height in pixels.");
+      }
+      if (!current_window->input_history_log_path.empty()) {
+        ImGui::TextDisabled("%s", current_window->input_history_log_path.c_str());
+      }
+    }
+
+    // ============================================================
     // LIGHTING
     // ============================================================
     if (ImGui::CollapsingHeader("Lighting")) {
@@ -3601,8 +4861,7 @@ void drawSettingsWindow() {
           }
           ImGui::EndCombo();
         }
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Select a directional light to edit.");
+                  WrappedTooltip("Select a directional light to edit.");
 
         // New light button
         if (current_window->direct_lights.size() < 16) {
@@ -3631,8 +4890,7 @@ void drawSettingsWindow() {
             current_window->direct_lights.push_back(new_dir_light);
             current_dir_light = current_window->direct_lights.size() - 1;
           }
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Create a new directional light.");
+                      WrappedTooltip("Create a new directional light.");
         }
 
         // Delete and edit – only if we have lights
@@ -3650,8 +4908,7 @@ void drawSettingsWindow() {
             // If we deleted the only light, skip the rest of the editing UI
             // by using a goto or by re-checking the size.
           }
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Delete the selected directional light.");
+                      WrappedTooltip("Delete the selected directional light.");
         }
 
         // ---- Editing controls (only if we still have lights) ----
@@ -3672,8 +4929,7 @@ void drawSettingsWindow() {
             if (!exists)
               d->name = std::string(name);
           }
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Rename the light.");
+                      WrappedTooltip("Rename the light.");
           ImGui::DragFloat("X Direction", &d->direction.x, 0.01f, -1, 1);
           if (ImGui::IsItemHovered())
             DraggableTooltip("Light direction X.");
@@ -3710,8 +4966,7 @@ void drawSettingsWindow() {
           }
           ImGui::EndCombo();
         }
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Select a point light to edit.");
+                  WrappedTooltip("Select a point light to edit.");
 
         // New light button
         if (current_window->point_lights.size() < 16) {
@@ -3743,8 +4998,7 @@ void drawSettingsWindow() {
             current_window->point_lights.push_back(new_point_light);
             current_point_light = current_window->point_lights.size() - 1;
           }
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Create a new point light.");
+                      WrappedTooltip("Create a new point light.");
         }
 
         // Delete button
@@ -3759,8 +5013,7 @@ void drawSettingsWindow() {
                 current_point_light = 0;
             }
           }
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Delete the selected point light.");
+                      WrappedTooltip("Delete the selected point light.");
         }
 
         // ---- Editing controls (only if we still have lights) ----
@@ -3781,11 +5034,9 @@ void drawSettingsWindow() {
             if (!exists)
               p->name = std::string(name);
           }
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Rename the light.");
+                      WrappedTooltip("Rename the light.");
           ImGui::Checkbox("Hide Source", &p->hide);
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Hide the light bulb visual.");
+                      WrappedTooltip("Hide the light bulb visual.");
           ImGui::DragFloat("X Position", &p->position.x, 0.1f, -10, 10);
           if (ImGui::IsItemHovered())
             DraggableTooltip("Light position X.");
@@ -3835,8 +5086,7 @@ void drawSettingsWindow() {
           }
           ImGui::EndCombo();
         }
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Select a spot light to edit.");
+                  WrappedTooltip("Select a spot light to edit.");
 
         // New light button
         if (current_window->spot_lights.size() < 16) {
@@ -3868,8 +5118,7 @@ void drawSettingsWindow() {
             current_window->spot_lights.push_back(new_spot_light);
             current_spot_light = current_window->spot_lights.size() - 1;
           }
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Create a new spot light.");
+                      WrappedTooltip("Create a new spot light.");
         }
 
         // Delete button
@@ -3884,8 +5133,7 @@ void drawSettingsWindow() {
                 current_spot_light = 0;
             }
           }
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Delete the selected spot light.");
+                      WrappedTooltip("Delete the selected spot light.");
         }
 
         // ---- Editing controls (only if we still have lights) ----
@@ -3906,11 +5154,9 @@ void drawSettingsWindow() {
             if (!exists)
               s->name = std::string(name);
           }
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Rename the light.");
+                      WrappedTooltip("Rename the light.");
           ImGui::Checkbox("Hide Source", &s->hide);
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Hide the light bulb visual.");
+                      WrappedTooltip("Hide the light bulb visual.");
           ImGui::DragFloat("X Position", &s->position.x, 0.1f, -10, 10);
           if (ImGui::IsItemHovered())
             DraggableTooltip("Light position X.");
@@ -3965,6 +5211,33 @@ void drawSettingsWindow() {
     }
 
     // ============================================================
+    // THEME
+    // ============================================================
+    if (ImGui::CollapsingHeader("Theme")) {
+      ImGui::TextWrapped(
+          "The three colors behind every purple accent in this app - "
+          "buttons, section headers, sliders, tabs, input field "
+          "backgrounds - all across Settings and every window it "
+          "opens (Log, Glyph Mapping Editor, Input History). Changes "
+          "apply immediately and are saved like any other setting.");
+      ImGui::Separator();
+      ImGui::ColorEdit3("Primary", (float *)&g_theme_primary);
+      WrappedTooltip("The main accent color - buttons, section "
+                     "headers, sliders, active tabs.");
+      ImGui::ColorEdit3("Primary (Light)", (float *)&g_theme_primary_light);
+      WrappedTooltip("Used for hover/highlighted states.");
+      ImGui::ColorEdit3("Primary (Dark)", (float *)&g_theme_primary_dark);
+      WrappedTooltip("Used for pressed/active states and input field "
+                     "backgrounds.");
+      ImGui::Spacing();
+      if (ImGui::Button("Reset to Default")) {
+        g_theme_primary = kDefaultThemePrimary;
+        g_theme_primary_light = kDefaultThemePrimaryLight;
+        g_theme_primary_dark = kDefaultThemePrimaryDark;
+      }
+    }
+
+    // ============================================================
     // HELP
     // ============================================================
     if (ImGui::CollapsingHeader("Help")) {
@@ -3985,7 +5258,7 @@ void drawSettingsWindow() {
       ImGui::TextColored(ImVec4(0.8f, 0.4f, 1.0f, 1.0f),
                          "3D Controller Overlay +");
       ImGui::SameLine();
-      ImGui::TextDisabled("v1.0.0");
+      ImGui::TextDisabled("v1.2.0");
 
       ImGui::NewLine();
       ImGui::Text("A feature-rich fork of the original 3D Controller Overlay.");
@@ -4078,6 +5351,10 @@ void drawSettingsWindow() {
   texture_dialog.Display();
   model_dialog.Display();
   shader_resource_dialog.Display();
+  // glyph_mapping_image_dialog is now handled inside
+  // drawGlyphMappingEditorWindow() (main.cpp's Draw()), not here -
+  // the editor is its own window/context now, not embedded in
+  // Settings, so its file dialog needs to render in that same context.
 
   if (shader_resource_dialog.HasSelected()) {
     std::string destDir = getShaderResourceDirectory(g_shader_resource_target);
@@ -4152,6 +5429,7 @@ void drawSettingsWindow() {
           std::to_string(ctrl->model.meshes[texture_mesh].textures.size() + 1) +
           ": " + t.path;
       ctrl->model.meshes[texture_mesh].textures.push_back(t);
+      ctrl->unsaved_change_count++;
       glfwMakeContextCurrent(glfw_settings_window);
       texture_dialog.ClearSelected();
     }
@@ -4182,6 +5460,7 @@ void drawSettingsWindow() {
       glfwMakeContextCurrent(glfw_settings_window);
 
       writeJson(ctrl_win->model, ctrl_win->model.path + "/info.json");
+      ctrl_win->unsaved_change_count = 0;
     }
     model_dialog.ClearSelected();
   }
@@ -4190,11 +5469,27 @@ void drawSettingsWindow() {
   if (import_model_dialog.HasSelected()) {
     std::string filepath = import_model_dialog.GetSelected().string();
     spdlog::info("Importing model: {}", filepath);
+    g_lastImportError.clear();
 
     Model temp_model;
     importModelFile(temp_model, filepath);
     if (temp_model.imported_meshes.empty()) {
       spdlog::error("Failed to import model: no meshes found.");
+      std::string ext = std::filesystem::path(filepath).extension().string();
+      for (auto &c : ext)
+        c = (char)tolower((unsigned char)c);
+      if (ext == ".blend") {
+        g_lastImportError =
+            "Import failed - .blend import is unreliable for many "
+            "Blender files (a long-standing Assimp limitation, not "
+            "specific to this file). Try exporting from Blender as "
+            "OBJ, FBX, or glTF instead and importing that. See the "
+            "log for the underlying error.";
+      } else {
+        g_lastImportError =
+            "Import failed - no usable meshes found. See the log for "
+            "details.";
+      }
       import_model_dialog.ClearSelected();
     } else {
       std::string preview_title =
@@ -4361,9 +5656,7 @@ void DrawImportPreviewControls(controller_window &w) {
                   assign.max_angle;
           }
         }
-        if (ImGui::IsItemHovered()) {
-          ImGui::SetTooltip("Maximum rotation/pull angle in degrees.");
-        }
+                  WrappedTooltip("Maximum rotation/pull angle in degrees.");
         ImGui::PopID();
       } else {
         ImGui::TextDisabled("N/A");
@@ -4380,9 +5673,7 @@ void DrawImportPreviewControls(controller_window &w) {
         if (ImGui::Combo("##parent", &current_parent, parent_names, 36)) {
           assign.parent_part = current_parent - 1;
         }
-        if (ImGui::IsItemHovered()) {
-          ImGui::SetTooltip("Attach this mesh to a parent part (e.g., stick).");
-        }
+                  WrappedTooltip("Attach this mesh to a parent part (e.g., stick).");
         ImGui::PopID();
       } else {
         ImGui::TextDisabled("N/A");
@@ -4430,8 +5721,7 @@ void DrawImportPreviewControls(controller_window &w) {
                 assign.touch_height;
           }
         }
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Touch area height (world units). Adjust to match "
+                  WrappedTooltip("Touch area height (world units). Adjust to match "
                             "your physical controller.");
         ImGui::PopID();
       } else {
@@ -4443,13 +5733,11 @@ void DrawImportPreviewControls(controller_window &w) {
       if (ImGui::Button("Highlight")) {
         w.import_preview.selected_mesh_index = i;
       }
-      if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Highlight this mesh in the 3D view.");
+              WrappedTooltip("Highlight this mesh in the 3D view.");
       if (assign.assigned_part == -1) {
         ImGui::SameLine();
         ImGui::TextDisabled("(?)");
-        if (ImGui::IsItemHovered())
-          ImGui::SetTooltip("Unassigned meshes are saved as separate OBJ files "
+                  WrappedTooltip("Unassigned meshes are saved as separate OBJ files "
                             "in the model folder.");
       }
       ImGui::PopID();
@@ -4462,21 +5750,18 @@ void DrawImportPreviewControls(controller_window &w) {
   if (ImGui::InputText("Model Name", save_name, 64)) {
     w.import_preview.save_name = save_name;
   }
-  if (ImGui::IsItemHovered())
-    ImGui::SetTooltip("Name for the new model folder.");
+      WrappedTooltip("Name for the new model folder.");
 
   if (ImGui::Button("Save Model")) {
     SaveImportedModel(w);
   }
-  if (ImGui::IsItemHovered())
-    ImGui::SetTooltip("Save the imported model with current assignments.");
+      WrappedTooltip("Save the imported model with current assignments.");
   ImGui::SameLine();
   if (ImGui::Button("Cancel")) {
     w.import_preview.is_open = false;
     glfwSetWindowShouldClose(w.glfw_window, true);
   }
-  if (ImGui::IsItemHovered())
-    ImGui::SetTooltip("Close the preview without saving.");
+      WrappedTooltip("Close the preview without saving.");
 }
 
 // Forward declaration of writeJson (defined in model.cpp)
@@ -4658,6 +5943,7 @@ void SaveImportedModel(controller_window &w) {
   w.model.path = new_model_path;
   try {
     writeJson(w.model, new_model_path + "/info.json");
+    w.unsaved_change_count = 0;
   } catch (const std::exception &e) {
     spdlog::error("Failed to write JSON: {}", e.what());
     return;
@@ -4784,6 +6070,8 @@ static void saveGlobalSettings() {
     tab["wireframe"] = w->wireframe;
     tab["transparent_bg"] = w->transparent_bg;
     tab["click_through"] = w->click_through;
+    tab["mouse_sensitivity"] = w->mouse_sensitivity;
+    tab["touchpoint_recenter_seconds"] = w->touchpoint_recenter_seconds;
 
     int ww, hh;
     glfwGetWindowSize(w->glfw_window, &ww, &hh);
@@ -4809,6 +6097,14 @@ static void saveGlobalSettings() {
     tab["camera_yaw"] = w->camera_yaw;
     tab["camera_pitch"] = w->camera_pitch;
     tab["camera_roll"] = w->camera_roll;
+    // Pan X/Y - the actual independently user-set camera position
+    // (unlike camera_position itself, a glm::vec3 that's purely
+    // *derived* from distance/yaw/pitch every frame and so never
+    // needed its own persistence - this offset is the thing that was
+    // actually missing, and losing it on reload is what "camera
+    // position isn't saved" was really describing).
+    tab["camera_offset_x"] = w->camera_offset_x;
+    tab["camera_offset_y"] = w->camera_offset_y;
     tab["move_speed"] = w->move_speed;
     tab["turn_speed"] = w->turn_speed;
     tab["freelook_yaw"] = w->freelook_yaw;
@@ -4854,6 +6150,53 @@ static void saveGlobalSettings() {
     tab["network_port"] = w->network_port;
     tab["network_protocol"] = w->network_protocol;
     tab["network_send_rate"] = w->network_send_rate;
+
+    // Input History (1.2.0) - input_history_enabled now saved/restored
+    // like every other setting (see loadTabs() below) - previously
+    // deliberately excluded on the theory that an always-on-top
+    // overlay shouldn't pop open unrequested on launch, but the
+    // actual goal is "opening and closing the app feels like picking
+    // up where you left off", same as everything else that's saved.
+    tab["input_history_enabled"] = w->input_history_enabled;
+    tab["input_history_display_style"] = w->input_history_display_style;
+    tab["input_history_length"] = w->input_history_length;
+    tab["input_history_capture_gamepad"] = w->input_history_capture_gamepad;
+    tab["input_history_capture_keyboard"] = w->input_history_capture_keyboard;
+    tab["input_history_capture_mouse"] = w->input_history_capture_mouse;
+    tab["input_history_merge_simultaneous"] =
+        w->input_history_merge_simultaneous;
+    tab["input_history_simultaneous_window_ms"] =
+        w->input_history_simultaneous_window_ms;
+    tab["input_history_show_neutral_direction"] =
+        w->input_history_show_neutral_direction;
+    tab["input_history_direction_source"] = w->input_history_direction_source;
+    tab["input_history_opacity"] = w->input_history_opacity;
+    tab["input_history_content_opacity"] = w->input_history_content_opacity;
+    tab["input_history_log_to_file"] = w->input_history_log_to_file;
+    tab["input_history_click_through"] = w->input_history_click_through;
+    tab["input_history_always_on_top"] = w->input_history_always_on_top;
+    tab["input_history_drag_to_move"] = w->input_history_drag_to_move;
+    tab["input_history_scroll_to_resize"] = w->input_history_scroll_to_resize;
+    tab["input_history_newest_on_top"] = w->input_history_newest_on_top;
+    tab["input_history_alternating_rows"] = w->input_history_alternating_rows;
+    tab["input_history_show_timing"] = w->input_history_show_timing;
+    tab["input_history_timing_reset_ms"] = w->input_history_timing_reset_ms;
+    tab["input_history_motion_timeout_ms"] = w->input_history_motion_timeout_ms;
+    tab["input_history_show_holds"] = w->input_history_show_holds;
+    tab["input_history_hold_threshold_ms"] = w->input_history_hold_threshold_ms;
+    tab["input_history_timing_in_frames"] = w->input_history_timing_in_frames;
+    tab["input_history_glyph_size"] = w->input_history_glyph_size;
+    tab["input_history_font_size"] = w->input_history_font_size;
+    tab["input_history_show_timestamp"] = w->input_history_show_timestamp;
+    tab["input_history_trigger_threshold"] = w->input_history_trigger_threshold;
+    tab["input_history_capture_gyro"] = w->input_history_capture_gyro;
+    tab["input_history_gyro_threshold"] = w->input_history_gyro_threshold;
+    tab["input_history_gyro_flick_threshold"] =
+        w->input_history_gyro_flick_threshold;
+    tab["input_history_gyro_flick_window_ms"] =
+        w->input_history_gyro_flick_window_ms;
+    tab["input_history_gyro_flick_cooldown_ms"] =
+        w->input_history_gyro_flick_cooldown_ms;
 
     // ---- Per-mesh data (highlight override etc.) ----
     json meshes = json::array();
@@ -4924,6 +6267,14 @@ static void saveGlobalSettings() {
   app_settings["input_poll_interval_ms"] = GlobalKeyboard::getPollIntervalMs();
   app_settings["tray_enabled"] = g_tray_enabled;
   app_settings["debug_mode_enabled"] = g_debug_mode_enabled;
+  app_settings["theme_primary"] = {g_theme_primary.x, g_theme_primary.y,
+                                   g_theme_primary.z, g_theme_primary.w};
+  app_settings["theme_primary_light"] = {
+      g_theme_primary_light.x, g_theme_primary_light.y,
+      g_theme_primary_light.z, g_theme_primary_light.w};
+  app_settings["theme_primary_dark"] = {
+      g_theme_primary_dark.x, g_theme_primary_dark.y, g_theme_primary_dark.z,
+      g_theme_primary_dark.w};
   root[kAppSettingsKey] = app_settings;
 
   std::ofstream f(getSettingsFilePath());
@@ -4981,6 +6332,18 @@ static void loadGlobalSettings() {
       g_tray_enabled = false; // never true on a platform that can't show it
     }
     setDebugModeEnabled(app_settings.value("debug_mode_enabled", false));
+
+    auto readColor = [&](const char *key, const ImVec4 &fallback) {
+      auto arr = app_settings.value(
+          key, std::array<float, 4>{fallback.x, fallback.y, fallback.z,
+                                    fallback.w});
+      return ImVec4(arr[0], arr[1], arr[2], arr[3]);
+    };
+    g_theme_primary = readColor("theme_primary", kDefaultThemePrimary);
+    g_theme_primary_light =
+        readColor("theme_primary_light", kDefaultThemePrimaryLight);
+    g_theme_primary_dark =
+        readColor("theme_primary_dark", kDefaultThemePrimaryDark);
   }
 
   // We'll create tabs in the order they appear in the JSON
@@ -5021,6 +6384,75 @@ static void loadGlobalSettings() {
     w->network_port = tab.value("network_port", 5000);
     w->network_protocol = tab.value("network_protocol", 0);
     w->network_send_rate = tab.value("network_send_rate", 60);
+
+    // Input History (1.2.0) - see saveTabs()'s comment on why
+    // input_history_enabled itself isn't restored from disk.
+    w->input_history_display_style = tab.value("input_history_display_style", 0);
+    w->input_history_length = tab.value("input_history_length", 20);
+    w->input_history_capture_gamepad =
+        tab.value("input_history_capture_gamepad", true);
+    w->input_history_capture_keyboard =
+        tab.value("input_history_capture_keyboard", false);
+    w->input_history_capture_mouse =
+        tab.value("input_history_capture_mouse", false);
+    w->input_history_merge_simultaneous =
+        tab.value("input_history_merge_simultaneous", false);
+    w->input_history_simultaneous_window_ms =
+        tab.value("input_history_simultaneous_window_ms", 50);
+    w->input_history_show_neutral_direction =
+        tab.value("input_history_show_neutral_direction", false);
+    w->input_history_direction_source =
+        tab.value("input_history_direction_source", 0);
+    w->input_history_opacity = tab.value("input_history_opacity", 0.85f);
+    w->input_history_content_opacity =
+        tab.value("input_history_content_opacity", 1.0f);
+    w->input_history_log_to_file = tab.value("input_history_log_to_file", true);
+    w->input_history_click_through =
+        tab.value("input_history_click_through", true);
+    w->input_history_always_on_top =
+        tab.value("input_history_always_on_top", true);
+    w->input_history_drag_to_move =
+        tab.value("input_history_drag_to_move", false);
+    w->input_history_scroll_to_resize =
+        tab.value("input_history_scroll_to_resize", false);
+    w->input_history_newest_on_top =
+        tab.value("input_history_newest_on_top", false);
+    w->input_history_alternating_rows =
+        tab.value("input_history_alternating_rows", true);
+    w->input_history_show_timing = tab.value("input_history_show_timing", false);
+    w->input_history_timing_reset_ms =
+        tab.value("input_history_timing_reset_ms", 3000);
+    w->input_history_motion_timeout_ms =
+        tab.value("input_history_motion_timeout_ms", 220);
+    w->input_history_show_holds = tab.value("input_history_show_holds", false);
+    w->input_history_hold_threshold_ms =
+        tab.value("input_history_hold_threshold_ms", 150);
+    w->input_history_timing_in_frames =
+        tab.value("input_history_timing_in_frames", false);
+    w->input_history_glyph_size = tab.value("input_history_glyph_size", 28);
+    w->input_history_font_size = tab.value("input_history_font_size", 16);
+    w->input_history_show_timestamp =
+        tab.value("input_history_show_timestamp", false);
+    w->input_history_trigger_threshold =
+        tab.value("input_history_trigger_threshold", 0.1f);
+    w->input_history_capture_gyro = tab.value("input_history_capture_gyro", false);
+    w->input_history_gyro_threshold =
+        tab.value("input_history_gyro_threshold", 50.0f);
+    w->input_history_gyro_flick_threshold =
+        tab.value("input_history_gyro_flick_threshold", 25.0f);
+    w->input_history_gyro_flick_window_ms =
+        tab.value("input_history_gyro_flick_window_ms", 150);
+    w->input_history_gyro_flick_cooldown_ms =
+        tab.value("input_history_gyro_flick_cooldown_ms", 400);
+    // Restored after every other input_history_* setting above, so
+    // the window comes back exactly as it was left, not with defaults
+    // that then get overwritten a moment later - setInputHistoryEnabled()
+    // itself is safe to call here (no GL/GLFW work happens in it; the
+    // actual window is created lazily on the next drawInputHistoryWindows()
+    // call, well after a valid GL context exists).
+    if (tab.value("input_history_enabled", false)) {
+      setInputHistoryEnabled(*w, true);
+    }
 
     if (w->network_enabled) {
       initNetwork(*w);
@@ -5284,6 +6716,9 @@ static void loadGlobalSettings() {
     w->borderless = tab.value("borderless", false);
     w->transparent_bg = tab.value("transparent_bg", false);
     w->click_through = tab.value("click_through", w->transparent_bg);
+    w->mouse_sensitivity = tab.value("mouse_sensitivity", 0.5f);
+    w->touchpoint_recenter_seconds =
+        tab.value("touchpoint_recenter_seconds", 3.0f);
 
     w->drag_to_move = tab.value("drag_to_move", false);
     w->scroll_to_resize = tab.value("scroll_to_resize", false);
@@ -5330,6 +6765,8 @@ static void loadGlobalSettings() {
     w->camera_yaw = tab.value("camera_yaw", 0.0f);
     w->camera_pitch = tab.value("camera_pitch", 89.999f);
     w->camera_roll = tab.value("camera_roll", 0.0f);
+    w->camera_offset_x = tab.value("camera_offset_x", 0.0f);
+    w->camera_offset_y = tab.value("camera_offset_y", 0.0f);
     w->move_speed = tab.value("move_speed", 5);
     w->turn_speed = tab.value("turn_speed", 5);
     w->freelook_yaw = tab.value("freelook_yaw", 180.0f);

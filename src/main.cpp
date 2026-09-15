@@ -2,6 +2,7 @@
 #include "log_window.h"
 #include "settings.h"
 #include "settings_window.h"
+#include "input_history_glyphs.h"
 #include "tray_icon.h"
 #include <SDL3/SDL_joystick.h>
 #include <filesystem>
@@ -237,6 +238,12 @@ void InitializeProgram() {
     }
   });
 
+  // Self-heals any standard glyph style folder that's missing or
+  // incomplete (someone deleted it, an interrupted first-run
+  // extraction, etc.) before anything tries to load a texture from
+  // it - see ensureStandardGlyphStylesPresent()'s doc comment.
+  ensureStandardGlyphStylesPresent();
+
   loadTabs();
 }
 
@@ -262,6 +269,13 @@ void Draw() {
   // windows, though GLFW_FLOATING is what actually keeps it there across
   // frames/clicks, not draw order.
   drawLogWindow();
+  // One per controller window with Input History enabled - same
+  // "own GLFW window + own ImGui context" pattern as the log window,
+  // see input_history.cpp.
+  drawInputHistoryWindows();
+  // Own window too now (previously embedded in Settings) - see
+  // drawGlyphMappingEditorWindow()'s comment in settings_window.cpp.
+  drawGlyphMappingEditorWindow();
 }
 
 void MainLoop() {

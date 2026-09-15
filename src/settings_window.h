@@ -6,7 +6,6 @@
 // clang-format off
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include <GLFW/glfw3native.h>
 #include <SDL3/SDL.h>
 
 #include "imfilebrowser.h"
@@ -31,6 +30,12 @@ typedef struct my_tab {
 // Function declarations
 // ----------------------------------------------------------------------------
 void createSettingsWindow();
+// Applies the app's custom purple color scheme - call once per ImGui
+// context, right after that context's own ImGui::StyleColorsDark(),
+// in every window that creates its own separate context (see its doc
+// comment in settings_window.cpp for why this needs to be everywhere,
+// not just the main Settings window).
+void applyCustomImGuiTheme();
 GLFWwindow *getSettingsWindow();
 void close_window(unsigned ID);
 void removeTab(unsigned tab);
@@ -38,6 +43,10 @@ void saveTabs();
 void loadTabs();
 void removeSettingsWindow();
 void drawSettingsWindow();
+// The Glyph Mapping Editor's own window - own GLFW window/ImGui
+// context, separate from Settings (see settings_window.cpp for why).
+// Called once per frame from main.cpp's Draw(), same as drawLogWindow().
+void drawGlyphMappingEditorWindow();
 void settings_window_input(bool &quit);
 void settings_sdl_events(SDL_Event *event);
 void settings_framebuffer_size_callback(GLFWwindow *window, int width,

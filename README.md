@@ -11,6 +11,22 @@ This is a **fork, not a replacement**. It exists as an homage to the original to
 
 The **`+`** in the name means exactly that: **improvements and extra features** layered on top of the original — more controllers, more rendering features, more input paths, more build tooling — while keeping the same "point it at your input device and it just works" spirit. It's also a personal passion project: a way for me to see what I'm actually capable of building and maintaining with AI as a collaborator rather than a crutch.
 
+## What's new in 1.2.0
+
+- **Input History window.** A separate always-on-top overlay per controller/keyboard/mouse window showing recent presses, fighting-game style — Raw text, ms/frame-annotated Notation, or a fully data-driven set of icon packs (Xbox/PlayStation/Switch/Steam Deck/Keyboard&Mouse, or your own — see [Input History](#input-history) for the full settings list: gyro flick detection, per-trigger analog depth, independent timing/opacity controls, and more).
+- **Custom Glyph Mappings.** Build your own icon set the same way you'd map a custom controller model — an empty table, one row per input, pick or upload an image for each, optionally fall back to another style for anything you don't define yourself. Shows up as a Display Style choice immediately.
+- **Fixed: texture assignments weren't being saved.** Adding a texture to a mesh worked in the moment but was silently lost the instant the model reloaded or the app restarted, since it only ever existed in memory. Now persists correctly.
+- **UV mapping diagnostics.** Loading a mesh now detects and warns when it has no meaningful UV variation — almost always a missing/degenerate UV unwrap in the source file (common after mesh optimization tools that don't preserve one), the actual cause behind a texture rendering as one flat color. 3dco+ has always used the mesh's own standard UV coordinates (never object-space/triplanar/normal-based mapping) — see [Textures & UV Mapping](#textures--uv-mapping).
+- **Better `.blend` import errors.** Direct `.blend` import is unreliable for many files (a long-standing Assimp library limitation) — a failed import now says so directly in Settings and points at exporting as OBJ/FBX/glTF instead, rather than a silent failure or a cryptic log-only error.
+- **Fixed: camera pan wasn't saved.** Panning a window's camera (Pan X/Y) reset to center on every reload.
+- **Fixed: axis capture couldn't produce a bidirectional binding.** Capturing an input for a Dual Highlight axis always baked in a one-directional response tied to whichever way you happened to move the stick during capture — travel/rotation would only ever swing through half its configured range (e.g. 0–90° instead of -90–90°) no matter which way you actually moved the stick afterward. Capturing now produces the correct bidirectional binding when the mesh has Dual Highlight enabled.
+- **Real compound-motion detection.** Quarter-circles, dragon-punch motions, half-circles, and full 360s are now actually recognized as you input them, not just displayable via manual glyph mapping — see [Input History](#input-history)'s Motion Timeout setting for the (configurable, auto-scaling) timing window, with a tooltip comparing it against Street Fighter 6, Tekken 8, and Guilty Gear Strive.
+- **Theme.** A new Settings section (before Help) for customizing the app's three accent colors, with a one-click reset to the defaults — applies immediately across Settings and every window it opens (Log, Glyph Mapping Editor, Input History), and is saved like any other setting.
+- **Texture Flip X/Y**, alongside the existing Offset/Scale/Rotation controls — for source images that read mirrored on a mesh with no way to fix that by editing the image itself without breaking its UV alignment. Texture Type/X Wrap/Y Wrap are now proper dropdowns instead of drag-sliders with only 2-4 valid values.
+- **Unsaved-changes indicator.** The Model section header shows "Changes made without saving" after a texture add/remove/edit, mesh add/remove/duplicate, or model import, until the model's next save (several actions save automatically, not just one explicit button).
+- **Fixed: D-Pad showed both its direction digit and a separate button entry** in Input History for the same press (e.g. both "2" and "D-Pad Down", or both a glyph and a number) — D-Pad presses are now represented once, via direction, the same way a stick's direction already was.
+- Plus a round of smaller Input History and window-management fixes: the mapping editor is now its own resizable, properly-decorated window instead of embedded in Settings; Input History windows support the same drag-to-move/scroll-to-resize controls as controller windows; the main Settings window's scrollbar works again when content is taller than the window (an `ImGuiWindowFlags_NoDecoration` flag was silently disabling it); and every subwindow now consistently uses the app's theme instead of ImGui's generic default.
+
 ## What's new in 1.1.1
 
 - **Smooth Travel Animation.** Buttons, bumpers, and paddles can now ease into a press instead of snapping instantly — per-mesh toggle plus a duration slider, with **Copy to All Buttons**/**Unassign from All Buttons** to apply it across the whole controller in one click. Deliberately not available on sticks, triggers, or touchpads/touchpoints, since those track a live physical position every frame and easing them would just look like input lag.
@@ -56,6 +72,7 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 
 - [What stayed the same](#what-stayed-the-same)
 - [What's new in the `+`](#whats-new-in-the-)
+- [What's new in 1.2.0](#whats-new-in-120)
 - [What's new in 1.1.1](#whats-new-in-111)
 - [What's new in 1.1.0](#whats-new-in-110)
 - [What's new in 1.0.0](#whats-new-in-100)
@@ -66,6 +83,9 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 - [Supported input](#supported-input)
 - [Network functionality](#network-functionality)
 - [Shader effects](#shader-effects)
+- [Textures & UV Mapping](#textures--uv-mapping)
+- [Input History](#input-history)
+- [Theme](#theme)
 - [Manual mapping](#manual-mapping-for-unrecognized-devices)
 - [Controller showcase](#controller-showcase)
 - [Work in progress / known bugs](#work-in-progress--known-bugs)
@@ -240,6 +260,63 @@ A note on results: these shaders were tuned against a handful of controllers, no
 
 Shader files live under `shaders/<name>/` in your [data directory](#where-your-data-lives) — `fragment.glsl` plus any `channel0`–`channel3` image files — so you can also edit or drop resources in by hand if you'd rather not use the file picker.
 
+## Textures & UV Mapping
+
+![Texture mapping demo placeholder](images/placeholder-textures-uv.webp)
+_(Video coming soon)_
+
+3dco+ always uses a mesh's own UV coordinates — standard OBJ `vt` data, or the equivalent channel from whatever format you imported — never object-space, triplanar, or normal-based mapping. Add a texture via a mesh's **Materials/Textures** section (Type: Diffuse/Specular/Emissive, plus Offset/Scale/Rotation, and Flip X/Flip Y for source images that read mirrored on the mesh) and it follows the mesh's existing UV unwrap exactly. A newly-added texture starts with Flip Y on and Offset Y at 1 - the combination that lines up correctly for most images exported the ordinary way; an existing texture loaded from a saved model always keeps whatever it was actually saved with, so this doesn't change anything already correctly configured.
+
+If a texture looks wrong (one flat color, smeared, misaligned), that's almost always the mesh's own UV data, not a setting here — most commonly a missing or degenerate UV unwrap from an export/optimization workflow that didn't preserve one. Loading a mesh with no meaningful UV variation now logs a warning explaining exactly that, rather than leaving you to guess. Direct `.blend` import is unreliable for many files (a long-standing Assimp library limitation) — export from Blender as OBJ/FBX/glTF instead for a reliable result.
+
+## Input History
+
+![Input History demo placeholder](images/placeholder-input-history.webp)
+_(Video coming soon)_
+
+A separate always-on-top window per controller/keyboard/mouse window, showing a scrolling list of recent presses — the input-display style fighting games like Street Fighter and Tekken use, equally handy for tutorials. It's an independent overlay window (own transparency/click-through/opacity, same as a controller window), toggled per-window from that window's **Input History** section in Settings.
+
+**Display style** — one dropdown, three families:
+
+- **Raw** – plain text labels (`A`, `LB`, `W`, `Left Click`).
+- **Fighting-Game Notation** – numpad direction digits (5 = neutral, 1-9 8-way) plus button labels.
+- **Icon packs** – the bundled styles (Xbox 360/One/Series, PlayStation 3/4/5, Switch, Steam Deck, Keyboard & Mouse in Dark or Light, FGC Motion combined with either PS5 or Xbox as a starting point), or any mapping you've built yourself (see **Custom Glyph Mappings** below) — all discovered the same way, live, from the `glyphs/` folder. A button a style has no art for falls back to its text label rather than a blank space.
+
+**Other settings, all per window:**
+
+| Setting | What it does |
+| --- | --- |
+| **History Length** | How many entries the live window keeps/shows. Doesn't limit the persistent log file below — that keeps everything regardless. |
+| **Capture** (Gamepad/Joystick, Keyboard, Mouse) | Which device types this window records — independent of what's actually bound to the model's meshes, since the point is showing everything you pressed, not just what has a visible part. |
+| **Capture Gyro (Flicks)** | Logs a fast, deliberate rotation ("Left Flick", "Up Flick", etc.) instead of every small motion, which would flood the history and bury real presses. **Motion Sensitivity** filters out slow drift/tremor entirely; **Flick Threshold** + **Flick Window** control how much rotation within how long counts as one flick; **Flick Cooldown** stops one continued motion from spamming repeated entries. Requires Gyro enabled for the window. |
+| **Merge Simultaneous Presses** | Groups inputs landing within **Simultaneous Window (ms)** of each other into one entry (`A+B`) instead of a line each — a real, tunable time gap (default 50ms) rather than requiring the exact same frame. Matters for fighting games (throws, macros, plinks); leave off for a clean one-input-per-line list in most other games. |
+| **Show Return to Neutral** | Off by default: letting go of the stick/D-pad doesn't get its own entry, only the direction that actually mattered does. Turn on to log every return to center too. |
+| **Direction Source** | Which input drives the notation direction digit: Auto (whichever of D-Pad/Left Stick is actually deflected), or an explicit D-Pad/Left Stick/Right Stick override for lefty or unusual control setups. |
+| **Motion Timeout** | How much time a compound motion (quarter-circle, dragon punch, 360, etc.) has to complete, calibrated to a 2-step quarter-circle (236/214) — longer motions automatically get proportionally more time, the same way real games scale theirs. Default (220ms) sits close to Street Fighter 6's own quarter-circle window; the setting's tooltip compares it against Tekken 8 and Guilty Gear Strive too. |
+| **Trigger Press Threshold** | How far a trigger needs to be pulled to register at all — triggers are analog and show their depth as a percentage next to the icon (e.g. `RT 67%`), not just an on/off press. |
+| **Show Input Timing** | Independent of display style (works with Raw/Notation/any glyph pack) — adds a Timing column showing ms or frames since the previous input. **Reset After** sets the gap that stops counting as measured timing (shown as `--`) rather than just meaning you paused. |
+| **Show Date/Time** | Adds a Time column (leftmost) with the real wall-clock time each entry was captured, for whenever you want to know exactly when, not just how long since the last one. |
+| **Background Opacity / Content Opacity** | Independent transparency for the window background vs. the text/glyphs themselves — a 70% black background with fully opaque icons, or the reverse. |
+| **Glyph Size / Font Size** | Icon size for glyph display styles, and text size for every column (Time/Input/Timing) — independent of each other. |
+| **Alternating Row Colors** | On by default. Turn off for a fully transparent background (0% Background Opacity) to show only the glyphs/text with nothing else rendered - the row shading is a separate layer from the background itself, so it's otherwise still visible even at 0% opacity. |
+| **Newest Entry On Top** | Off (default): newest at the bottom, scrolling up like a terminal. On: newest at the top, always the first thing visible without scrolling. |
+| **Click-Through** | Same idea as a controller window's own click-through. |
+| **Drag to Move / Scroll to Resize** | Same controls as a controller window's own — only meaningful while Click-Through is off, since with it on this window never receives mouse events at all. |
+| **Log to File** | Writes every captured input to its own timestamped file under `input_history_logs/` in your [data directory](#where-your-data-lives), independent of History Length — useful for reviewing exactly what you pressed after the fact (e.g. checking a speedrun attempt frame by frame), not just what's currently visible live. |
+
+**Custom Glyph Mappings** — its own window (**New Glyph Mapping...** or **Edit Existing Mapping**), working the same way you'd map a custom controller model: an empty table where each row picks an input (Gamepad Button, D-Pad Direction, Gamepad Motion, Trigger, Keyboard, or Mouse) and an image (existing glyph or your own picture, auto-converted/resized) in the last two columns. **Gamepad Motion** is a fixed dropdown of the compound sequences the bundled FGC Motion art covers (`236`, `623`, `360`, etc.) - these motions are actually detected during play (see Input History's Motion Timeout setting), so this is about which glyph represents each one, not whether it's recognized. Optionally set **Combine With** another style as a fallback for anything you don't define yourself (with an option to exclude specific input types from that fallback, e.g. FGC Motion excludes D-Pad glyphs since it already represents direction its own way). **Save** and it shows up as a Display Style choice immediately, for any window — any standard style that goes missing gets silently restored from the bundled pack on next launch. The bundled icon packs are the CC0-licensed Xelu prompt pack — see [Credits](#credits).
+
+## Theme
+
+A Settings section of its own (just before Help) for the three accent colors used everywhere in the app — buttons, section headers, sliders, active tabs, and input field backgrounds — across Settings and every window it opens (Log, Glyph Mapping Editor, Input History):
+
+- **Primary** — the main accent color.
+- **Primary (Light)** — hover/highlighted states.
+- **Primary (Dark)** — pressed/active states and input field backgrounds.
+- **Reset to Default** — one click back to the shipped purple scheme.
+
+Changes apply immediately everywhere, not just in Settings, and save the same way as every other setting — app-wide rather than per-window, since there's only one theme.
+
 ## Manual mapping for unrecognized devices
 
 If your controller or input device isn't automatically detected, you can manually map its buttons and axes using the **Mapping** panel in the settings window. Here's how:
@@ -358,6 +435,7 @@ Bug reports and pull requests are welcome. Please open an issue first to discuss
 ## Credits
 
 - **Original creator & engine**: [Larf](https://github.com/larfingshnew) — [3D Controller Overlay](https://github.com/larfingshnew/3d-controller-overlay). Please go star/support the original.
+- **Controller/keyboard prompt icons** (Input History's glyph display styles): Nicolae "Xelu" Berbece / Those Awesome Guys — released free under CC0 (public domain), commercial use included. Not affiliated with this project; credited here because it's the right thing to do, not because the license requires it.
 - **This fork**: designed, built, and maintained by me as a homage/continuation and a personal test of what I can build with AI-assisted coding — all architecture, debugging, and feature decisions are mine.
 - Third-party libraries: GLFW, glad, SDL3, GLM, Dear ImGui, stb_image, Assimp, spdlog/fmt, nlohmann_json, miniz, libdbus (Linux tray icon).
 

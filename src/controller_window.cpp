@@ -50,6 +50,7 @@ extern GLFWwindow *glfw_settings_window;
 extern std::vector<controller_window> windows;
 
 #if defined(_WIN32)
+#define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 #include <windows.h>
 #include <windowsx.h>
@@ -88,7 +89,7 @@ void logNetworkMessage(controller_window &w, const std::string &direction,
 //
 // So on Windows, click-through never touches the GLFW window's own
 // WS_EX_TRANSPARENT at all anymore: the layered companion window (see
-// createTransparentOverlay(), now created unconditionally for every
+// createCompanionWindow(), now created unconditionally for every
 // controller window - see createControllerWindow()) is what's actually
 // visible and receiving input, and this applies WS_EX_TRANSPARENT to
 // THAT window instead, via plain SetWindowLongPtr (it isn't a GLFW
@@ -104,8 +105,19 @@ void logNetworkMessage(controller_window &w, const std::string &direction,
 void setWindowClickThrough(GLFWwindow *window, bool enable) {
 #if defined(_WIN32)
   for (auto &w : windows) {
-    if (w.glfw_window == window && w.transparent_overlay_hwnd) {
-      HWND hwnd = (HWND)w.transparent_overlay_hwnd;
+    HWND hwnd = nullptr;
+    if (w.glfw_window == window && w.transparent_overlay.hwnd) {
+      hwnd = (HWND)w.transparent_overlay.hwnd;
+    } else if (w.input_history_glfw_window == window &&
+              w.input_history_overlay.hwnd) {
+      // Same idea, for the Input History window's own companion -
+      // without this, toggling its Click-Through setting would only
+      // ever affect the hidden GLFW window underneath, never the
+      // companion HWND that's actually visible/clickable once the
+      // companion exists.
+      hwnd = (HWND)w.input_history_overlay.hwnd;
+    }
+    if (hwnd) {
       LONG_PTR ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
       if (enable)
         ex_style |= WS_EX_TRANSPARENT;
@@ -1130,31 +1142,64 @@ void logNetworkMessage(controller_window &w, const std::string &direction,
 #if defined(_WIN32)
 namespace {
 
-const wchar_t *kOverlayClassName = L"3dcoPlusTransparentOverlay";
-bool g_overlay_class_registered = false;
+const wchar_t *kCompanionClassName = L"3dcoPlusCompanionWindow";
+bool g_companion_class_registered = false;
 
 // Forwards mouse/keyboard input to the real (hidden) GLFW window so all
 // existing input handling (drag-to-move, scroll-to-resize, part
 // highlighting, pivot dragging, freelook's shift-key check, etc.) keeps
 // working completely unmodified - it just reaches the GLFW window
 // through this relay instead of directly. Client-area coordinates line
-// up because this window is kept the same size and position as the GLFW
-// window every frame (see updateTransparentOverlay()). See
-// createTransparentOverlay()'s comment below for why this window exists.
-LRESULT CALLBACK OverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam,
-                                LPARAM lParam) {
+// up because this window is kept the same size and position as the
+// source GLFW window every frame (see updateCompanionWindow()).
+//
+// Looks up which controller_window (and which of its two possible
+// companion types - the main transparent overlay, or Input History's
+// own) this message belongs to by searching the CURRENT windows list
+// every time, NOT by caching a pointer into vector-managed memory.
+//
+// An earlier version of this cached a CompanionWindow* via
+// GWLP_USERDATA for O(1) lookup instead of this linear scan - that
+// was a real, serious bug: the pointer given to GWLP_USERDATA pointed
+// into a std::vector<controller_window> element, and std::vector can
+// reallocate its entire backing storage whenever ANY element is later
+// added (via push_back on windows), silently invalidating every
+// previously-taken address into it - not just the newest one. The
+// very next mouse-move message delivered to an existing companion
+// window after a new controller was created would dereference a
+// dangling pointer into freed/moved memory - an access violation on
+// real hardware, invisible in this codebase's own dev/test
+// environment. That crash bypasses the try/catch in main.cpp's loop
+// entirely (it's a native fault, not a C++ exception), which is why
+// it produced no log output at all.
+//
+// A fresh linear search every message is the safe, correct trade:
+// slightly more CPU per message (negligible - this list is small and
+// message volume is low) in exchange for never reading through a
+// pointer that vector reallocation could have invalidated out from
+// under it.
+LRESULT CALLBACK CompanionWndProc(HWND hwnd, UINT msg, WPARAM wParam,
+                                  LPARAM lParam) {
+  GLFWwindow *source_window = nullptr;
+  bool *click_through = nullptr;
+  for (auto &w : windows) {
+    if (w.transparent_overlay.hwnd == (void *)hwnd) {
+      source_window = w.glfw_window;
+      click_through = &w.click_through;
+      break;
+    }
+    if (w.input_history_overlay.hwnd == (void *)hwnd) {
+      source_window = w.input_history_glfw_window;
+      click_through = &w.input_history_click_through;
+      break;
+    }
+  }
+
   switch (msg) {
   case WM_NCHITTEST: {
-    controller_window *cw = nullptr;
-    for (auto &w : windows) {
-      if (w.transparent_overlay_hwnd == (void *)hwnd) {
-        cw = &w;
-        break;
-      }
-    }
     // Click-through takes priority over resize - see the comment below
     // on why this returns HTTRANSPARENT uniformly.
-    if (cw && cw->click_through)
+    if (click_through && *click_through)
       return HTTRANSPARENT;
 
     // Custom resize borders. This window deliberately has no
@@ -1167,7 +1212,7 @@ LRESULT CALLBACK OverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam,
     // there - correct cursor icons, screen-edge snapping, etc., with no
     // visible frame added at all. GetWindowRect and lParam are both in
     // screen coordinates here, so they compare directly.
-    if (cw) {
+    if (source_window) {
       RECT rect;
       GetWindowRect(hwnd, &rect);
       const int kMargin = 8;
@@ -1199,7 +1244,7 @@ LRESULT CALLBACK OverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam,
   case WM_GETMINMAXINFO: {
     // Keep native edge-resize from shrinking the window into something
     // degenerate (a 0- or near-0-sized framebuffer would break
-    // rendering and the PBO readback in updateTransparentOverlay()).
+    // rendering and the PBO readback in updateCompanionWindow()).
     MINMAXINFO *mmi = reinterpret_cast<MINMAXINFO *>(lParam);
     mmi->ptMinTrackSize.x = 100;
     mmi->ptMinTrackSize.y = 100;
@@ -1207,55 +1252,44 @@ LRESULT CALLBACK OverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam,
   }
   case WM_SIZE: {
     // A native resize-drag (triggered by the WM_NCHITTEST handling
-    // above) only changes this window's own size - the actual 3D
-    // content is rendered by the separate, hidden GLFW window (see
-    // createTransparentOverlay()'s comment), which has no idea this
-    // happened. Push the new size onto it here so the next frame
-    // actually renders at the new size instead of stretching/clipping
-    // whatever was already there. Skip SIZE_MINIMIZED - that reports a
-    // degenerate 0x0 size, which isn't a real content size to apply;
-    // minimizing is instead handled explicitly via glfwIconifyWindow()
-    // (see the Minimize button in settings_window.cpp) and
-    // updateTransparentOverlay() hiding this window / skipping the
-    // readback entirely while iconified.
-    if (wParam != SIZE_MINIMIZED) {
+    // above) only changes this window's own size - the actual content
+    // is rendered by the separate, hidden source GLFW window, which
+    // has no idea this happened. Push the new size onto it here so the
+    // next frame actually renders at the new size instead of
+    // stretching/clipping whatever was already there. Skip
+    // SIZE_MINIMIZED - that reports a degenerate 0x0 size, which isn't
+    // a real content size to apply; minimizing is instead handled
+    // explicitly (see CompanionWindow::minimized's doc comment).
+    if (wParam != SIZE_MINIMIZED && source_window) {
       int new_w = LOWORD(lParam);
       int new_h = HIWORD(lParam);
-      for (auto &w : windows) {
-        if (w.transparent_overlay_hwnd == (void *)hwnd) {
-          glfwSetWindowSize(w.glfw_window, new_w, new_h);
-          break;
-        }
-      }
+      glfwSetWindowSize(source_window, new_w, new_h);
     }
     break;
   }
   case WM_MOVE: {
     // Resizing from the left or top edge moves this window's top-left
     // corner natively, same reasoning as WM_SIZE above - push it onto
-    // the GLFW window so position tracking (drag-to-move, saved
-    // tab layout, etc.) stays correct instead of silently drifting out
-    // of sync with what's actually on screen.
-    int new_x = GET_X_LPARAM(lParam);
-    int new_y = GET_Y_LPARAM(lParam);
-    for (auto &w : windows) {
-      if (w.transparent_overlay_hwnd == (void *)hwnd) {
-        glfwSetWindowPos(w.glfw_window, new_x, new_y);
-        break;
-      }
+    // the GLFW window so position tracking (drag-to-move, saved tab
+    // layout, etc.) stays correct instead of silently drifting out of
+    // sync with what's actually on screen.
+    if (source_window) {
+      int new_x = GET_X_LPARAM(lParam);
+      int new_y = GET_Y_LPARAM(lParam);
+      glfwSetWindowPos(source_window, new_x, new_y);
     }
     break;
   }
   case WM_LBUTTONDOWN:
     // Capture the mouse for the duration of the drag: without this, a
     // fast drag can move the cursor outside this window's current
-    // bounds before the window catches up (especially relevant now that
-    // Drag to Move actually repositions the window - see
-    // controller_window_input()), and WM_MOUSEMOVE would then go to
-    // whatever's now under the cursor instead of here, making the drag
-    // feel like it "lets go" partway through. SetCapture keeps mouse
-    // messages coming to this window regardless of where the cursor
-    // physically is until ReleaseCapture (on WM_LBUTTONUP below).
+    // bounds before the window catches up (especially relevant since
+    // Drag to Move actually repositions the window), and WM_MOUSEMOVE
+    // would then go to whatever's now under the cursor instead of
+    // here, making the drag feel like it "lets go" partway through.
+    // SetCapture keeps mouse messages coming to this window regardless
+    // of where the cursor physically is until ReleaseCapture (on
+    // WM_LBUTTONUP below).
     SetCapture(hwnd);
     goto forward_input_message;
   case WM_LBUTTONUP:
@@ -1274,13 +1308,10 @@ LRESULT CALLBACK OverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam,
   case WM_SYSKEYUP:
   case WM_CHAR: {
   forward_input_message:
-    for (auto &w : windows) {
-      if (w.transparent_overlay_hwnd == (void *)hwnd) {
-        HWND glfw_hwnd = glfwGetWin32Window(w.glfw_window);
-        if (glfw_hwnd)
-          SendMessageW(glfw_hwnd, msg, wParam, lParam);
-        break;
-      }
+    if (source_window) {
+      HWND target_hwnd = glfwGetWin32Window(source_window);
+      if (target_hwnd)
+        SendMessageW(target_hwnd, msg, wParam, lParam);
     }
     break;
   }
@@ -1291,7 +1322,7 @@ LRESULT CALLBACK OverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam,
     return 1;
   case WM_CLOSE:
   case WM_DESTROY:
-    // Lifecycle is owned entirely by destroyTransparentOverlay(); this
+    // Lifecycle is owned entirely by destroyCompanionWindow(); this
     // window has no close button/system menu for the user to trigger
     // these from directly, but ignore them defensively either way.
     return 0;
@@ -1301,13 +1332,13 @@ LRESULT CALLBACK OverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam,
   return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
 
-void ensureOverlayClassRegistered() {
-  if (g_overlay_class_registered)
+void ensureCompanionClassRegistered() {
+  if (g_companion_class_registered)
     return;
   WNDCLASSW wc = {};
-  wc.lpfnWndProc = OverlayWndProc;
+  wc.lpfnWndProc = CompanionWndProc;
   wc.hInstance = GetModuleHandleW(nullptr);
-  wc.lpszClassName = kOverlayClassName;
+  wc.lpszClassName = kCompanionClassName;
   // IDC_ARROW expands to the ANSI (LPSTR) macro form here since this
   // project doesn't define UNICODE/_UNICODE, but LoadCursorW needs a
   // wide string - MAKEINTRESOURCEW(32512) is IDC_ARROW's actual resource
@@ -1315,10 +1346,10 @@ void ensureOverlayClassRegistered() {
   wc.hCursor = LoadCursorW(nullptr, MAKEINTRESOURCEW(32512));
   // Deliberately NOT CS_OWNDC (unlike GLFW's own window class) - that
   // restriction is the whole reason this window exists. See
-  // createTransparentOverlay()'s comment below.
+  // createCompanionWindow()'s comment below.
   wc.style = CS_HREDRAW | CS_VREDRAW;
   RegisterClassW(&wc);
-  g_overlay_class_registered = true;
+  g_companion_class_registered = true;
 }
 
 } // namespace
@@ -1347,98 +1378,105 @@ void ensureOverlayClassRegistered() {
 // path involved at all), it's reliable on every GPU vendor rather than
 // depending on driver behavior we don't control.
 //
-// The GLFW window keeps existing and rendering exactly as before - it's
-// just hidden. Every frame, updateTransparentOverlay() reads back its
-// rendered pixels and blits them into this companion window instead of
-// calling glfwSwapBuffers(). OverlayWndProc (above) forwards input
-// received here back to the hidden GLFW window, so every existing
-// mouse/keyboard-driven feature in this file keeps working unmodified.
+// The source GLFW window keeps existing and rendering exactly as
+// before - it's just hidden. Every frame, updateCompanionWindow() reads
+// back its rendered pixels and blits them into this companion window
+// instead of calling glfwSwapBuffers(). CompanionWndProc (above)
+// forwards input received here back to the hidden GLFW window, so every
+// existing mouse/keyboard-driven feature keeps working unmodified.
+//
+// Shared by controller windows and Input History windows (previously
+// duplicated separately for each - see CompanionWindow's doc comment in
+// controller_window.h for why that turned out to be a mistake).
 // ------------------------------------------------------------------
-void createTransparentOverlay(controller_window &w) {
-  if (w.transparent_overlay_hwnd)
+void createCompanionWindow(CompanionWindow &cw, GLFWwindow *source_window,
+                           bool *click_through_field,
+                           const std::string &window_title) {
+  if (cw.hwnd)
     return; // already created
 
-  ensureOverlayClassRegistered();
+  ensureCompanionClassRegistered();
 
   int x = 0, y = 0, width = 0, height = 0;
-  glfwGetWindowPos(w.glfw_window, &x, &y);
-  glfwGetWindowSize(w.glfw_window, &width, &height);
+  glfwGetWindowPos(source_window, &x, &y);
+  glfwGetWindowSize(source_window, &width, &height);
   if (width <= 0)
     width = 1;
   if (height <= 0)
     height = 1;
 
-  // WS_EX_NOACTIVATE: clicking this window shouldn't steal foreground
-  // focus from whatever game is running underneath - input still
-  // reaches it (and gets forwarded), it just doesn't become the
-  // active/foreground window on click, matching how an overlay should
-  // behave.
-  //
-  // Title: read back from the (still-existing, just hidden) GLFW
-  // window rather than left empty. This companion window is the one
-  // actually visible on screen once transparency is active - the GLFW
-  // window itself gets hidden a few lines down - so capture tools like
-  // OBS's Window Capture source enumerate *this* HWND, and previously
-  // saw an empty title (shown by OBS as a bare "null") instead of the
-  // controller's actual name (e.g. "Mouse", "FlightStick R").
-  wchar_t title_buf[256] = L"";
-  GetWindowTextW(glfwGetWin32Window(w.glfw_window), title_buf,
-                 static_cast<int>(sizeof(title_buf) / sizeof(title_buf[0])));
+  // Title: capture tools like OBS's Window Capture source enumerate
+  // this HWND (the one actually visible on screen once transparency is
+  // active - the source GLFW window itself gets hidden a few lines
+  // down), so an identifying title matters here, not just cosmetics.
+  std::wstring wtitle(window_title.begin(), window_title.end());
 
+  // WS_EX_NOACTIVATE: clicking this window shouldn't steal foreground
+  // focus from whatever's running underneath - input still reaches it
+  // (and gets forwarded), it just doesn't become the active/foreground
+  // window on click, matching how an overlay should behave.
   HWND hwnd = CreateWindowExW(
-      WS_EX_LAYERED | WS_EX_NOACTIVATE, kOverlayClassName, title_buf,
+      WS_EX_LAYERED | WS_EX_NOACTIVATE, kCompanionClassName, wtitle.c_str(),
       WS_POPUP, x, y, width, height, nullptr, nullptr,
       GetModuleHandleW(nullptr), nullptr);
 
   if (!hwnd) {
     spdlog::error(
-        "createTransparentOverlay: CreateWindowExW failed (GetLastError={})",
+        "createCompanionWindow: CreateWindowExW failed (GetLastError={})",
         GetLastError());
     return;
   }
 
-  w.transparent_overlay_hwnd = (void *)hwnd;
+  cw.hwnd = (void *)hwnd;
+  cw.source_window = source_window;
+  cw.click_through = click_through_field;
+  // No longer stashed via SetWindowLongPtrW/GWLP_USERDATA - the WndProc
+  // now looks up its owning window fresh from the windows list on every
+  // message instead (see CompanionWndProc's own doc comment for why a
+  // cached pointer here was a real, serious bug). These two fields are
+  // still used, safely, by updateCompanionWindow() below - that's a
+  // synchronous, same-frame call with a fresh reference each time, not
+  // a value cached across callbacks/frames the way GWLP_USERDATA was.
 
   ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-  SetWindowPos(hwnd, w.always_on_top ? HWND_TOPMOST : HWND_NOTOPMOST, x, y,
-               width, height, SWP_NOACTIVATE);
-  glfwHideWindow(w.glfw_window); // still renders, just not shown directly
+  SetWindowPos(hwnd, HWND_NOTOPMOST, x, y, width, height, SWP_NOACTIVATE);
+  glfwHideWindow(source_window); // still renders, just not shown directly
 
-  spdlog::info("Created transparent overlay window ({}x{} at {},{})", width,
-               height, x, y);
+  spdlog::info("Created companion window '{}' ({}x{} at {},{})",
+              window_title, width, height, x, y);
 }
 
-void destroyTransparentOverlay(controller_window &w) {
-  if (!w.transparent_overlay_hwnd)
+void destroyCompanionWindow(CompanionWindow &cw) {
+  if (!cw.hwnd)
     return;
-  glfwMakeContextCurrent(w.glfw_window);
+  glfwMakeContextCurrent(cw.source_window);
   for (int i = 0; i < 2; ++i) {
-    if (w.overlay_fence[i]) {
-      glDeleteSync(w.overlay_fence[i]);
-      w.overlay_fence[i] = nullptr;
+    if (cw.fence[i]) {
+      glDeleteSync(cw.fence[i]);
+      cw.fence[i] = nullptr;
     }
-    w.overlay_pbo_pending[i] = false;
+    cw.pbo_pending[i] = false;
   }
-  if (w.overlay_pbo[0] != 0) {
-    glDeleteBuffers(2, w.overlay_pbo);
-    w.overlay_pbo[0] = w.overlay_pbo[1] = 0;
+  if (cw.pbo[0] != 0) {
+    glDeleteBuffers(2, cw.pbo);
+    cw.pbo[0] = cw.pbo[1] = 0;
   }
-  w.overlay_pbo_write_index = 0;
+  cw.pbo_write_index = 0;
 
-  DestroyWindow((HWND)w.transparent_overlay_hwnd);
-  w.transparent_overlay_hwnd = nullptr;
-  glfwShowWindow(w.glfw_window);
-  spdlog::info("Destroyed transparent overlay window");
+  DestroyWindow((HWND)cw.hwnd);
+  cw.hwnd = nullptr;
+  glfwShowWindow(cw.source_window);
+  spdlog::info("Destroyed companion window");
 }
 
-namespace {
 // Converts one BGRA, bottom-up, straight-alpha frame (what OpenGL
 // produces) into what UpdateLayeredWindow needs (top-down, premultiplied
-// alpha) and blits it. Called from updateTransparentOverlay() once a
+// alpha) and blits it. Called from updateCompanionWindow() once a
 // pending PBO read's fence confirms the data is actually ready - never
 // from a context where the caller is still waiting on the GPU.
-void blitOverlayFrame(HWND hwnd, int width, int height,
+void blitOverlayFrame(void *hwndVoid, int width, int height,
                       const unsigned char *src) {
+  HWND hwnd = (HWND)hwndVoid;
   static std::vector<unsigned char> dst_pixels;
   dst_pixels.resize((size_t)width * height * 4);
 
@@ -1497,36 +1535,29 @@ void blitOverlayFrame(HWND hwnd, int width, int height,
   DeleteDC(mem_dc);
   ReleaseDC(nullptr, screen_dc);
 }
-} // namespace
 
-void updateTransparentOverlay(controller_window &w) {
-  if (!w.transparent_overlay_hwnd)
+void updateCompanionWindow(CompanionWindow &cw, bool always_on_top,
+                           double update_interval) {
+  if (!cw.hwnd)
     return;
-  HWND hwnd = (HWND)w.transparent_overlay_hwnd;
+  HWND hwnd = (HWND)cw.hwnd;
 
-  // Defensive safety net: the real GLFW window must never be visible
+  // Defensive safety net: the source GLFW window must never be visible
   // while its companion is active - it's undecorated-transparency-free,
   // so if it ever becomes visible (GLFW's Win32 maximize/restore
   // implementations appear to call ShowWindow() as a side effect of the
-  // state transition, undoing glfwHideWindow() - see
-  // maximizeControllerWindow()'s comment above), it shows up as a solid
-  // black, decorated window on top of/instead of the companion.
-  // Checking every frame catches this regardless of which code path
-  // caused it, not just the wrapper functions that call
-  // glfwHideWindow() explicitly right after the transition.
-  if (glfwGetWindowAttrib(w.glfw_window, GLFW_VISIBLE)) {
-    glfwHideWindow(w.glfw_window);
+  // state transition, undoing glfwHideWindow()), it shows up as a solid
+  // black, decorated window on top of/instead of the companion. Checking
+  // every frame catches this regardless of which code path caused it.
+  if (glfwGetWindowAttrib(cw.source_window, GLFW_VISIBLE)) {
+    glfwHideWindow(cw.source_window);
   }
 
-  if (w.overlay_minimized) {
-    // Uses our own flag rather than GLFW_ICONIFIED - see
-    // controller_window::overlay_minimized's declaration in
-    // controller_window.h for why GLFW's own iconified tracking
-    // couldn't be trusted here. Actually hide the companion window
-    // while minimized, rather than just skipping the readback below and
-    // leaving it on screen frozen on its last rendered frame.
-    // IsWindowVisible check avoids a redundant ShowWindow call every
-    // single frame while minimized.
+  if (cw.minimized) {
+    // Actually hide the companion window while minimized, rather than
+    // just skipping the readback below and leaving it on screen frozen
+    // on its last rendered frame. IsWindowVisible check avoids a
+    // redundant ShowWindow call every single frame while minimized.
     if (IsWindowVisible(hwnd))
       ShowWindow(hwnd, SW_HIDE);
     return;
@@ -1536,52 +1567,53 @@ void updateTransparentOverlay(controller_window &w) {
 
   // Throttle overlay updates to reduce DWM load
   double now = glfwGetTime();
-  if (now - w.last_overlay_update_time < w.overlay_update_interval)
+  if (now - cw.last_update_time < update_interval)
     return;
-  w.last_overlay_update_time = now;
+  cw.last_update_time = now;
 
   int width = 0, height = 0;
-  glfwGetFramebufferSize(w.glfw_window, &width, &height);
+  glfwGetFramebufferSize(cw.source_window, &width, &height);
   if (width <= 0 || height <= 0)
     return;
 
-  // The GLFW window remains the single source of truth for position,
-  // size, and always-on-top state - every existing drag/resize/settings
-  // path already writes to it exactly as before. This window is purely
-  // a visible, clickable mirror, kept in sync every frame.
+  // The source GLFW window remains the single source of truth for
+  // position, size, and always-on-top state - every existing drag/
+  // resize/settings path already writes to it exactly as before. This
+  // window is purely a visible, clickable mirror, kept in sync every
+  // frame.
   int wx = 0, wy = 0, ww = 0, wh = 0;
-  glfwGetWindowPos(w.glfw_window, &wx, &wy);
-  glfwGetWindowSize(w.glfw_window, &ww, &wh);
-  SetWindowPos(hwnd, w.always_on_top ? HWND_TOPMOST : HWND_NOTOPMOST, wx, wy,
+  glfwGetWindowPos(cw.source_window, &wx, &wy);
+  glfwGetWindowSize(cw.source_window, &ww, &wh);
+  SetWindowPos(hwnd, always_on_top ? HWND_TOPMOST : HWND_NOTOPMOST, wx, wy,
                ww, wh, SWP_NOACTIVATE);
 
-  glfwMakeContextCurrent(w.glfw_window);
+  glfwMakeContextCurrent(cw.source_window);
 
-  if (w.overlay_pbo[0] == 0)
-    glGenBuffers(2, w.overlay_pbo);
+  if (cw.pbo[0] == 0)
+    glGenBuffers(2, cw.pbo);
 
   // ---- Consume a previously issued read, if it's ready ----
-  // See controller_window::overlay_pbo's declaration in controller_window.h
-  // for why this exists at all (short version: NVIDIA can stall a plain
-  // glReadPixels into client memory badly enough to freeze the whole app
-  // while a fullscreen game has GPU priority - this never blocks).
-  int read_index = 1 - w.overlay_pbo_write_index;
-  if (w.overlay_pbo_pending[read_index]) {
+  // See CompanionWindow::pbo's doc comment in controller_window.h for
+  // why this exists at all (short version: NVIDIA can stall a plain
+  // glReadPixels into client memory badly enough to freeze the whole
+  // app while a fullscreen game has GPU priority - this never blocks).
+  int read_index = 1 - cw.pbo_write_index;
+  if (cw.pbo_pending[read_index]) {
     GLenum wait_result =
-        glClientWaitSync(w.overlay_fence[read_index], 0, 0 /* no wait */);
+        glClientWaitSync(cw.fence[read_index], 0, 0 /* no wait */);
     if (wait_result == GL_ALREADY_SIGNALED ||
         wait_result == GL_CONDITION_SATISFIED) {
       // Use the width/height THIS SLOT was actually allocated for (set
       // below, in the issue phase, at the time its glBufferData ran) -
       // not the current frame's width/height. The window can be resized
-      // between a slot's read being issued and it being consumed here;
-      // mapping a range larger than what was actually allocated for
-      // that specific buffer fails glMapBufferRange's range validation,
-      // which is exactly the "glMapBufferRange failed" warning seen
-      // while resizing.
-      int slot_w = w.overlay_pbo_width[read_index];
-      int slot_h = w.overlay_pbo_height[read_index];
-      glBindBuffer(GL_PIXEL_PACK_BUFFER, w.overlay_pbo[read_index]);
+      // between a slot's read being issued and it later being consumed
+      // here; mapping a range larger than what was actually allocated
+      // for that specific buffer fails glMapBufferRange's range
+      // validation, which is exactly the "glMapBufferRange failed"
+      // warning seen while resizing.
+      int slot_w = cw.pbo_width[read_index];
+      int slot_h = cw.pbo_height[read_index];
+      glBindBuffer(GL_PIXEL_PACK_BUFFER, cw.pbo[read_index]);
       void *mapped =
           glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, (size_t)slot_w * slot_h * 4,
                            GL_MAP_READ_BIT);
@@ -1590,14 +1622,14 @@ void updateTransparentOverlay(controller_window &w) {
                          static_cast<const unsigned char *>(mapped));
         glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
       } else {
-        spdlog::warn("updateTransparentOverlay: glMapBufferRange failed "
+        spdlog::warn("updateCompanionWindow: glMapBufferRange failed "
                      "(slot {}x{})",
                      slot_w, slot_h);
       }
       glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-      glDeleteSync(w.overlay_fence[read_index]);
-      w.overlay_fence[read_index] = nullptr;
-      w.overlay_pbo_pending[read_index] = false;
+      glDeleteSync(cw.fence[read_index]);
+      cw.fence[read_index] = nullptr;
+      cw.pbo_pending[read_index] = false;
     }
     // Not ready yet: leave it pending and check again next frame. The
     // overlay window simply keeps showing whatever it last displayed -
@@ -1607,9 +1639,8 @@ void updateTransparentOverlay(controller_window &w) {
   }
 
   // ---- Issue this frame's read, if that slot is free ----
-  if (!w.overlay_pbo_pending[w.overlay_pbo_write_index]) {
-    glBindBuffer(GL_PIXEL_PACK_BUFFER,
-                 w.overlay_pbo[w.overlay_pbo_write_index]);
+  if (!cw.pbo_pending[cw.pbo_write_index]) {
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, cw.pbo[cw.pbo_write_index]);
     // Re-specifying storage every time (rather than reusing a fixed
     // allocation) lets the driver orphan the previous buffer instead of
     // waiting for its contents to be fully consumed first - the normal
@@ -1620,18 +1651,18 @@ void updateTransparentOverlay(controller_window &w) {
     // Record exactly what this slot was allocated for, so the consume
     // phase above uses the right size even if width/height have since
     // changed (see the comment there).
-    w.overlay_pbo_width[w.overlay_pbo_write_index] = width;
-    w.overlay_pbo_height[w.overlay_pbo_write_index] = height;
+    cw.pbo_width[cw.pbo_write_index] = width;
+    cw.pbo_height[cw.pbo_write_index] = height;
     // GL_BGRA matches what UpdateLayeredWindow/GDI expects, avoiding a
     // channel swap later. The final nullptr means "read into whatever
     // buffer is bound to GL_PIXEL_PACK_BUFFER", not client memory - this
     // is what makes the call non-blocking.
     glReadPixels(0, 0, width, height, GL_BGRA, GL_UNSIGNED_BYTE, nullptr);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-    w.overlay_fence[w.overlay_pbo_write_index] =
+    cw.fence[cw.pbo_write_index] =
         glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-    w.overlay_pbo_pending[w.overlay_pbo_write_index] = true;
-    w.overlay_pbo_write_index = 1 - w.overlay_pbo_write_index;
+    cw.pbo_pending[cw.pbo_write_index] = true;
+    cw.pbo_write_index = 1 - cw.pbo_write_index;
   }
   // Else: both slots are still backlogged (the GPU is very far behind) -
   // skip issuing a new read too rather than piling up more in-flight
@@ -2177,7 +2208,7 @@ void createControllerWindow(std::string title, std::string model_path) {
     // clear-color/alpha juggling in our draw call will fix it — the
     // driver/display server never granted an alpha-capable surface.
     // (On Windows this no longer matters for Transparent Background
-    // itself - see createTransparentOverlay() - but is still relevant on
+    // itself - see createCompanionWindow() - but is still relevant on
     // Linux/macOS, which use GLFW's native transparent framebuffer.)
     w.transparency_supported = (transparent_attrib == GLFW_TRUE);
     if (!w.transparency_supported) {
@@ -2402,7 +2433,8 @@ void createControllerWindow(std::string title, std::string model_path) {
   }
 
 #if defined(_WIN32)
-  createTransparentOverlay(w);
+  createCompanionWindow(w.transparent_overlay, w.glfw_window, &w.click_through,
+                        w.window_title);
 #endif
 
   windows.push_back(w);
@@ -2428,12 +2460,12 @@ void recreateControllerWindow(controller_window *w) {
   // The companion window is now the Windows default (see
   // createControllerWindow()), so had_transparent_overlay will normally
   // always be true here - this flag mainly guards the rare case where
-  // creation originally failed and left transparent_overlay_hwnd null,
+  // creation originally failed and left transparent_overlay.hwnd null,
   // in which case there's nothing to tear down/recreate and the GLFW
   // window is shown directly as a fallback either way.
-  bool had_transparent_overlay = (w->transparent_overlay_hwnd != nullptr);
+  bool had_transparent_overlay = (w->transparent_overlay.hwnd != nullptr);
   if (had_transparent_overlay)
-    destroyTransparentOverlay(*w);
+    destroyCompanionWindow(w->transparent_overlay);
 #endif
 
   // Destroy old window (free resources)
@@ -2454,7 +2486,7 @@ void recreateControllerWindow(controller_window *w) {
   // Borderless controls GLFW_DECORATED, Always on Top controls
   // GLFW_FLOATING. Neither is affected by Transparent Background - on
   // Windows that's handled entirely by the layered companion window
-  // (see createTransparentOverlay()), which is always borderless by
+  // (see createCompanionWindow()), which is always borderless by
   // construction; on Linux/macOS it's GLFW's native transparent
   // framebuffer, which doesn't require undecorated either.
   glfwSetWindowAttrib(w->glfw_window, GLFW_FLOATING, was_always_on_top);
@@ -2466,7 +2498,8 @@ void recreateControllerWindow(controller_window *w) {
 
 #if defined(_WIN32)
   if (had_transparent_overlay)
-    createTransparentOverlay(*w);
+    createCompanionWindow(w->transparent_overlay, w->glfw_window,
+                          &w->click_through, w->window_title);
 #endif
 
   // Apply click-through after all attributes. setWindowClickThrough() is
@@ -2509,6 +2542,45 @@ void recreateControllerWindow(controller_window *w) {
   // pointer)
   spdlog::info("Recreated window with transparent background = {}",
                w->transparent_bg);
+}
+
+// Corrects a touchpoint mesh's parenting so it sits exactly at its
+// touchpad's own origin (parentIndex pointing at the touchpad,
+// position zeroed) rather than wherever it happened to be positioned/
+// parented in the model file. Without this, a touch-position offset
+// of exactly zero (touch_X/Y = 0.5, i.e. "centered") would still land
+// wherever this mesh's own leftover position/parenting puts it -
+// which has no guaranteed relationship to the touchpad's actual
+// center at all. Previously only ever ran for real hardware
+// touchscreen input; mouse-bound touchpoints never got this same
+// correction, so a mouse-driven touchpoint's "centered" position was
+// only ever centered by coincidence, not by construction. Silently
+// does nothing if this mesh has no touchpad ancestor to anchor to
+// (also no ordinary touchpad mesh exists anywhere in the model) -
+// there's nothing meaningful to correct toward in that case.
+void anchorTouchpointToTouchpad(controller_window &w, int meshIdx) {
+  Mesh &mesh = w.model.meshes[meshIdx];
+  int touchpadIdxFound = getTouchpadAncestor(w.model, meshIdx);
+  if (touchpadIdxFound == -1) {
+    for (int i = 0; i < (int)w.model.meshes.size(); ++i) {
+      if (i != meshIdx && w.model.meshes[i].isTouchpad) {
+        touchpadIdxFound = i;
+        break;
+      }
+    }
+  }
+  if (touchpadIdxFound == -1 || touchpadIdxFound == meshIdx)
+    return;
+  if (mesh.parentIndex != touchpadIdxFound || mesh.position[0] != 0.0f ||
+      mesh.position[1] != 0.0f || mesh.position[2] != 0.0f) {
+    mesh.parentIndex = touchpadIdxFound;
+    mesh.position[0] = 0.0f;
+    mesh.position[1] = 0.0f;
+    mesh.position[2] = 0.0f;
+    mesh.useCustomScale = false;
+    spdlog::info("Anchored touchpoint '{}' to touchpad '{}'", mesh.name,
+                w.model.meshes[touchpadIdxFound].name);
+  }
 }
 
 void applyMappingToMeshes(controller_window &w, float globalMouseDx,
@@ -2750,29 +2822,7 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
                   mesh.glow_intensity = 1.0f;
 
                   int part = mesh.assignedPart;
-                  int touchpadIdxFound = getTouchpadAncestor(w.model, meshIdx);
-                  if (touchpadIdxFound == -1) {
-                    for (int i = 0; i < (int)w.model.meshes.size(); ++i) {
-                      if (i != meshIdx && w.model.meshes[i].isTouchpad) {
-                        touchpadIdxFound = i;
-                        break;
-                      }
-                    }
-                  }
-                  if (touchpadIdxFound != -1 && touchpadIdxFound != meshIdx) {
-                    if (mesh.parentIndex != touchpadIdxFound ||
-                        mesh.position[0] != 0.0f || mesh.position[1] != 0.0f ||
-                        mesh.position[2] != 0.0f) {
-                      mesh.parentIndex = touchpadIdxFound;
-                      mesh.position[0] = 0.0f;
-                      mesh.position[1] = 0.0f;
-                      mesh.position[2] = 0.0f;
-                      mesh.useCustomScale = false;
-                      spdlog::info("Anchored touchpoint '{}' to touchpad '{}'",
-                                   mesh.name,
-                                   w.model.meshes[touchpadIdxFound].name);
-                    }
-                  }
+                  anchorTouchpointToTouchpad(w, meshIdx);
                 } else {
                   mesh.touch_state = 0;
                   mesh.glow_intensity = 0.0f;
@@ -2807,29 +2857,7 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
                   mesh.glow_intensity = 1.0f;
 
                   int part = mesh.assignedPart;
-                  int touchpadIdxFound = getTouchpadAncestor(w.model, meshIdx);
-                  if (touchpadIdxFound == -1) {
-                    for (int i = 0; i < (int)w.model.meshes.size(); ++i) {
-                      if (i != meshIdx && w.model.meshes[i].isTouchpad) {
-                        touchpadIdxFound = i;
-                        break;
-                      }
-                    }
-                  }
-                  if (touchpadIdxFound != -1 && touchpadIdxFound != meshIdx) {
-                    if (mesh.parentIndex != touchpadIdxFound ||
-                        mesh.position[0] != 0.0f || mesh.position[1] != 0.0f ||
-                        mesh.position[2] != 0.0f) {
-                      mesh.parentIndex = touchpadIdxFound;
-                      mesh.position[0] = 0.0f;
-                      mesh.position[1] = 0.0f;
-                      mesh.position[2] = 0.0f;
-                      mesh.useCustomScale = false;
-                      spdlog::info("Anchored touchpoint '{}' to touchpad '{}'",
-                                   mesh.name,
-                                   w.model.meshes[touchpadIdxFound].name);
-                    }
-                  }
+                  anchorTouchpointToTouchpad(w, meshIdx);
                 } else {
                   mesh.touch_state = 0;
                   mesh.glow_intensity = 0.0f;
@@ -2870,19 +2898,22 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
             // binding uses.
             //
             // Scroll events are discrete per-tick deltas rather than
-            // a held value, so w.scroll_accum_magnitude here is reused
-            // purely as a short decaying "lit recently" flag (see the
-            // decay step further down) rather than an actual
-            // accumulated position - without it, a single scroll tick
-            // would flash for one frame and be easy to miss.
+            // a held value, so a scroll tick sets a clean "stay lit
+            // until this timestamp" deadline (see
+            // scroll_highlight_until's doc comment) rather than an
+            // actual accumulated position - without it, a single
+            // scroll tick would flash for one frame and be easy to
+            // miss. This is an instant on/instant off timer, not a
+            // fade, so it reads exactly like any other button's press.
             bool scrolledX =
                 value != "mouse_scroll_y" && fabs(globalScrollDx) > 0.001f;
             bool scrolledY =
                 value != "mouse_scroll_x" && fabs(globalScrollDy) > 0.001f;
             if (scrolledX || scrolledY)
-              w.scroll_accum_magnitude = 1.0f;
+              w.scroll_highlight_until =
+                  glfwGetTime() + (double)w.scroll_highlight_duration_ms / 1000.0;
 
-            bool lit = w.scroll_accum_magnitude > 0.05f;
+            bool lit = glfwGetTime() < w.scroll_highlight_until;
             mesh.press = lit ? 1.0f : 0.0f;
             mesh.highlight_value = lit ? 1.0f : 0.0f;
             continue;
@@ -2897,7 +2928,14 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
             mesh.touch_Y += dy;
             mesh.touch_X = std::max(0.0f, std::min(1.0f, mesh.touch_X));
             mesh.touch_Y = std::max(0.0f, std::min(1.0f, mesh.touch_Y));
-            if (fabs(dx) > 0.0001f || fabs(dy) > 0.0001f)
+            // Threshold deliberately well above sensor-noise level
+            // (was 0.0001, tight enough that ordinary mouse jitter
+            // could keep exceeding it and continuously refresh this
+            // timestamp, meaning idle time - and therefore the
+            // recenter-after-idle feature below - would rarely if
+            // ever actually accumulate in real use, even though the
+            // recenter logic itself is correct once genuinely idle).
+            if (fabs(dx) > 0.001f || fabs(dy) > 0.001f)
               w.touchpoint_last_move_time[meshIdx] = glfwGetTime();
             mesh.touch_state = 1;
             mesh.glow_intensity = 1.0f;
@@ -2905,6 +2943,13 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
             mesh.stick_Y = 0.0f;
             mesh.highlight_value =
                 (fabs(dx) > 0.01f || fabs(dy) > 0.01f) ? 1.0f : 0.0f;
+            // Mouse-bound touchpoints never got the same self-healing
+            // parent/position correction real touchscreen input
+            // already had (see anchorTouchpointToTouchpad()'s own doc
+            // comment) - without this, a "centered" touch offset would
+            // only land at the touchpad's true center by coincidence,
+            // not by construction.
+            anchorTouchpointToTouchpad(w, meshIdx);
           } else {
             dx = std::max(-1.0f, std::min(1.0f, dx));
             dy = std::max(-1.0f, std::min(1.0f, dy));
@@ -2928,11 +2973,12 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
               val = -val;
             mesh.touch_X += val;
             mesh.touch_X = std::max(0.0f, std::min(1.0f, mesh.touch_X));
-            if (fabs(val) > 0.0001f)
+            if (fabs(val) > 0.001f) // see the dx/dy threshold's comment above
               w.touchpoint_last_move_time[meshIdx] = glfwGetTime();
             mesh.touch_state = 1;
             mesh.glow_intensity = 1.0f;
             mesh.highlight_value = fabs(val) > 0.01f ? 1.0f : 0.0f;
+            anchorTouchpointToTouchpad(w, meshIdx);
           } else {
             val = std::max(-1.0f, std::min(1.0f, val));
             if (mesh.invert)
@@ -2950,11 +2996,12 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
               val = -val;
             mesh.touch_Y += val;
             mesh.touch_Y = std::max(0.0f, std::min(1.0f, mesh.touch_Y));
-            if (fabs(val) > 0.0001f)
+            if (fabs(val) > 0.001f) // see the dx/dy threshold's comment above
               w.touchpoint_last_move_time[meshIdx] = glfwGetTime();
             mesh.touch_state = 1;
             mesh.glow_intensity = 1.0f;
             mesh.highlight_value = fabs(val) > 0.01f ? 1.0f : 0.0f;
+            anchorTouchpointToTouchpad(w, meshIdx);
           } else {
             val = std::max(-1.0f, std::min(1.0f, val));
             if (mesh.invert)
@@ -3369,6 +3416,15 @@ void controller_window_input() {
           }
         }
 
+        // Input History capture (1.2.0) - independent of the
+        // g_log_controller/keyboard/mouse debug-logging flags above
+        // (those gate spdlog output; this gates a per-window feature),
+        // hence its own per-window state arrays rather than reusing
+        // w.last_button_values/last_joy_button_values, which only get
+        // updated when g_log_controller happens to be on. See
+        // input_history.cpp.
+        captureInputHistory(w);
+
         // Fill network input snapshot
         if (w.network_enabled && w.network_mode == 0) {
           // Gamepad
@@ -3404,9 +3460,8 @@ void controller_window_input() {
 
         // ---- Handle touchpoint idle timeout ----
         // Only check every 60 frames to reduce overhead
-        static int frame_counter = 0;
-        frame_counter++;
-        if (frame_counter % 60 ==
+        w.touchpoint_check_frame_counter++;
+        if (w.touchpoint_check_frame_counter % 60 ==
             0) { // Check every 60 frames (~1 second at 60fps)
           double current_time = glfwGetTime();
           for (int meshIdx = 0; meshIdx < (int)w.model.meshes.size();
@@ -3417,35 +3472,105 @@ void controller_window_input() {
             bool isTouchPoint = mesh.isTouchpoint;
             if (!isTouchPoint)
               continue;
+            if (g_debug_mode_enabled) {
+              int tpAncestor = getTouchpadAncestor(w.model, meshIdx);
+              bool hasEntry =
+                  w.touchpoint_last_move_time.find(meshIdx) !=
+                  w.touchpoint_last_move_time.end();
+              spdlog::info(
+                  "[touchpoint recenter] window='{}' mesh {} ('{}') isTouchpoint=true "
+                  "touchpadAncestor={} hasMoveTimeEntry={} touch=({:.3f},{:.3f}) "
+                  "touch_state={}",
+                  w.window_title, meshIdx, mesh.name, tpAncestor, hasEntry, mesh.touch_X,
+                  mesh.touch_Y, (int)mesh.touch_state);
+            }
             auto it = w.touchpoint_last_move_time.find(meshIdx);
             if (it == w.touchpoint_last_move_time.end())
               continue;
-            // Only reset after 5 seconds of inactivity
-            if (current_time - it->second > 5.0) {
-              // Reset to center
+            if (g_debug_mode_enabled) {
+              spdlog::info(
+                  "[touchpoint recenter] mesh {} elapsed={:.2f}s threshold={:.2f}s",
+                  meshIdx, current_time - it->second,
+                  (double)w.touchpoint_recenter_seconds);
+            }
+            // Reset to center after this many seconds of inactivity -
+            // see touchpoint_recenter_seconds's doc comment. Gives it
+            // a fresh glow pulse (like a real touch) rather than
+            // leaving it invisible - the per-frame glow-decay system
+            // elsewhere already fades a touchpoint to invisible within
+            // a fraction of a second of the last real touch (glow
+            // decays by ~87%/frame at 60fps), which is many seconds
+            // before this timeout typically fires - so without this,
+            // the position genuinely does reset (verified directly),
+            // but nobody ever SEES it happen, since it's been
+            // invisible for seconds already by the time it does.
+            if (current_time - it->second > (double)w.touchpoint_recenter_seconds) {
+              // "No touchpad to go back to" case: do nothing at all,
+              // exactly as described - not just leaving position/
+              // touch_state alone, but skipping the glow
+              // pulse/visibility change too, since there's nothing
+              // meaningful to show a recenter toward.
+              int touchpadAncestor = getTouchpadAncestor(w.model, meshIdx);
+              if (touchpadAncestor == -1) {
+                bool anyTouchpadExists = false;
+                for (auto &m2 : w.model.meshes)
+                  if (m2.isTouchpad) {
+                    anyTouchpadExists = true;
+                    break;
+                  }
+                if (!anyTouchpadExists) {
+                  if (g_debug_mode_enabled)
+                    spdlog::info(
+                        "[touchpoint recenter] mesh {} ('{}') has no touchpad "
+                        "anywhere in this model - doing nothing",
+                        meshIdx, mesh.name);
+                  continue;
+                }
+              }
+              if (g_debug_mode_enabled) {
+                spdlog::info("[touchpoint recenter] FIRING for mesh {} ('{}') - "
+                            "setting touch=(0.5,0.5) touch_state=1",
+                            meshIdx, mesh.name);
+              }
+              // Reset to center - touch_state deliberately stays at 1
+              // (not reset to 0) so the touchpad-offset transform in
+              // model.cpp keeps actively computing a position from
+              // touch_X/touch_Y (which the math below guarantees comes
+              // out to exactly zero offset when they're 0.5 - centered
+              // by construction, regardless of whatever this mesh's own
+              // independent base position/pivot happens to be).
+              // touch_state=0 skips that whole calculation entirely,
+              // falling back to the mesh's own untouched base
+              // transform - which is what a real touchpad's "finger
+              // lifted" case intentionally does elsewhere, but there's
+              // no guarantee that base position happens to coincide
+              // with the touchpad's actual center, so it's the wrong
+              // choice specifically for "snap to center".
               mesh.touch_X = 0.5f;
               mesh.touch_Y = 0.5f;
-              mesh.touch_state = 0;
-              mesh.glow_intensity = 0.0f;
-              mesh.highlight_value = 0.0f;
-              mesh.visible = false;
+              mesh.touch_state = 1;
+              mesh.glow_intensity = 1.0f;
+              mesh.highlight_value = 1.0f;
+              mesh.visible = true;
+              // Also re-anchors parenting/position, same self-healing
+              // every other touch event now gets (see
+              // anchorTouchpointToTouchpad()'s doc comment) - belt and
+              // suspenders alongside the touch_X/Y reset above, so a
+              // stray non-zero mesh.position can't throw off "center"
+              // even here.
+              anchorTouchpointToTouchpad(w, meshIdx);
+              // Push the deadline forward so this doesn't re-fire (and
+              // re-pulse the glow) every single check from here on -
+              // only once per genuine idle period, the same as it
+              // only fires once per idle period conceptually meant to.
+              it->second = current_time;
             }
           }
         }
 
-        // ---- Decay the scroll-wheel "lit recently" flag ----
-        // w.scroll_accum_magnitude is now just a short decaying pulse
-        // set to 1.0 the instant a scroll tick is detected above, not
-        // an accumulated position - see the mouse_scroll_* handling
-        // above for why. scroll_accum_x/y are unused now that scroll
-        // bindings behave like a plain button instead of a stick.
-        static const float SCROLL_HIGHLIGHT_DECAY = 0.85f;
-        static const float SCROLL_EPSILON = 0.001f;
-        if (w.scroll_accum_magnitude > SCROLL_EPSILON) {
-          w.scroll_accum_magnitude *= SCROLL_HIGHLIGHT_DECAY;
-          if (w.scroll_accum_magnitude < SCROLL_EPSILON)
-            w.scroll_accum_magnitude = 0.0f;
-        }
+        // Scroll-wheel highlight is now a clean instant on/off timer
+        // (see scroll_highlight_until's doc comment and its own
+        // handling above) - no per-frame decay to apply here anymore.
 
         // Propagate stick motion
         for (int stickPart : {5, 6}) {
@@ -3937,7 +4062,7 @@ void update_camera(controller_window &w, GLuint &shader, int window_width,
 bool isControllerWindowMinimized(const controller_window &w) {
   bool minimized = glfwGetWindowAttrib(w.glfw_window, GLFW_ICONIFIED);
 #if defined(_WIN32)
-  minimized = minimized || w.overlay_minimized;
+  minimized = minimized || w.transparent_overlay.minimized;
 #endif
   return minimized;
 }
@@ -3946,6 +4071,12 @@ void drawControllerWindows() {
   for (controller_window &w : windows) {
     if (glfwWindowShouldClose(w.glfw_window))
       continue;
+#if defined(_WIN32)
+    if (w.companion_first_frame_pending) {
+      w.companion_first_frame_pending = false;
+      continue;
+    }
+#endif
     if (!isControllerWindowMinimized(w)) {
       glfwMakeContextCurrent(w.glfw_window);
       // vsync (glfwSwapInterval) is never used for controller windows -
@@ -4368,15 +4499,16 @@ void drawControllerWindows() {
 
       glUseProgram(0);
 #if defined(_WIN32)
-      if (w.transparent_overlay_hwnd) {
+      if (w.transparent_overlay.hwnd) {
         // The companion window is what's actually visible - copy this
         // frame into it instead of presenting to the (hidden) GLFW
-        // window. See createTransparentOverlay()'s comment for why this
-        // exists. glReadPixels (inside updateTransparentOverlay) must
+        // window. See CompanionWindow's doc comment for why this
+        // exists. glReadPixels (inside updateCompanionWindow) must
         // run before the swap: it reads the back buffer that was just
         // rendered into, and swapping first would leave it reading
         // stale/undefined content instead.
-        updateTransparentOverlay(w);
+        updateCompanionWindow(w.transparent_overlay, w.always_on_top,
+                              w.overlay_update_interval);
       }
 #endif
       glfwSwapBuffers(w.glfw_window);
@@ -4402,10 +4534,15 @@ void drawControllerWindows() {
 // (user-initiated close) and destroyWindows() (app exit).
 static void releaseControllerWindowResources(controller_window &w) {
   shutdownNetwork(w);
+  // Closes the log file and destroys the Input History window's own
+  // GLFW window/ImGui context (if any) - independent of this window's
+  // own glfw_window/context below, so this must not be skipped by the
+  // `if (!w.glfw_window) return;` guard further down.
+  cleanupInputHistory(w);
 #if defined(_WIN32)
   // Must happen before the GLFW window is destroyed below -
-  // destroyTransparentOverlay() calls glfwShowWindow() on it.
-  destroyTransparentOverlay(w);
+  // destroyCompanionWindow() calls glfwShowWindow() on it.
+  destroyCompanionWindow(w.transparent_overlay);
 #endif
   if (w.sdl_controller) {
     SDL_CloseGamepad(w.sdl_controller);
@@ -4495,17 +4632,17 @@ unsigned getFrameCapHz() {
 void minimizeControllerWindow(controller_window &w) {
 #if defined(_WIN32)
   // Deliberately does NOT call glfwIconifyWindow() when a companion
-  // window is active - see controller_window::overlay_minimized's
+  // window is active - see CompanionWindow::minimized's
   // declaration in controller_window.h for why that combination
   // corrupts GLFW's own iconified tracking. The real GLFW window is
-  // already hidden (see createTransparentOverlay()) and has no taskbar
+  // already hidden (see createCompanionWindow()) and has no taskbar
   // presence to iconify anyway; all "minimize" actually needs to do is
   // hide the companion (the only visible window) and let
-  // updateTransparentOverlay() skip its work while overlay_minimized is
+  // updateCompanionWindow() skip its work while overlay_minimized is
   // set, which it already checks instead of GLFW_ICONIFIED.
-  if (w.transparent_overlay_hwnd) {
-    w.overlay_minimized = true;
-    ShowWindow((HWND)w.transparent_overlay_hwnd, SW_HIDE);
+  if (w.transparent_overlay.hwnd) {
+    w.transparent_overlay.minimized = true;
+    ShowWindow((HWND)w.transparent_overlay.hwnd, SW_HIDE);
     return;
   }
 #endif
@@ -4515,7 +4652,7 @@ void minimizeControllerWindow(controller_window &w) {
 void maximizeControllerWindow(controller_window &w) {
   glfwMaximizeWindow(w.glfw_window);
 #if defined(_WIN32)
-  if (w.transparent_overlay_hwnd)
+  if (w.transparent_overlay.hwnd)
     glfwHideWindow(w.glfw_window);
 #endif
 }
@@ -4526,15 +4663,15 @@ void restoreControllerWindow(controller_window &w) {
   // window's visibility at all (it was never shown), so there's no
   // decoration flash here the way there briefly is coming back from a
   // real glfwMaximizeWindow()/glfwRestoreWindow() cycle below.
-  if (w.transparent_overlay_hwnd && w.overlay_minimized) {
-    w.overlay_minimized = false;
-    ShowWindow((HWND)w.transparent_overlay_hwnd, SW_SHOWNOACTIVATE);
+  if (w.transparent_overlay.hwnd && w.transparent_overlay.minimized) {
+    w.transparent_overlay.minimized = false;
+    ShowWindow((HWND)w.transparent_overlay.hwnd, SW_SHOWNOACTIVATE);
     return;
   }
 #endif
   glfwRestoreWindow(w.glfw_window);
 #if defined(_WIN32)
-  if (w.transparent_overlay_hwnd)
+  if (w.transparent_overlay.hwnd)
     glfwHideWindow(w.glfw_window);
 #endif
 }

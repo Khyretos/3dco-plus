@@ -146,6 +146,32 @@ add_custom_command(
 )
 set_source_files_properties(${SHADER_HEADER} PROPERTIES GENERATED TRUE)
 
+# ------------------------------------------------------------------
+# Generate glyphs_zip_data.h from assets/glyphs folder (the Xelu Free
+# Controller & Key Prompts pack, CC0 - used by the Input History
+# window's glyph display styles; see input_history.cpp)
+# ------------------------------------------------------------------
+set(GLYPHS_SCRIPT "${CMAKE_SOURCE_DIR}/tools/generate_glyphs_zip.py")
+set(GLYPHS_HEADER "${CMAKE_SOURCE_DIR}/src/glyphs_zip_data.h")
+set(GLYPHS_SOURCE_DIR "${CMAKE_SOURCE_DIR}/assets/glyphs")
+
+set(GLYPHS_DEPENDS "${GLYPHS_SCRIPT}")
+if(EXISTS "${GLYPHS_SOURCE_DIR}")
+    list(APPEND GLYPHS_DEPENDS "${GLYPHS_SOURCE_DIR}")
+else()
+    message(WARNING "assets/glyphs not found — building without embedded "
+                    "Input History glyphs. See tools/generate_glyphs_zip.py.")
+endif()
+
+add_custom_command(
+    OUTPUT ${GLYPHS_HEADER}
+    COMMAND python3 ${GLYPHS_SCRIPT}
+    DEPENDS ${GLYPHS_DEPENDS}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Generating glyphs_zip_data.h from assets/glyphs"
+)
+set_source_files_properties(${GLYPHS_HEADER} PROPERTIES GENERATED TRUE)
+
 
 # ============================================================
 # ImGuiFileBrowser – locate the header locally
@@ -189,7 +215,7 @@ endif()
 # CMake still generates the right WinMain-calling-main() entry point
 # shim automatically, so no code changes were needed for this.
 # ------------------------------------------------------------------
-add_executable(3dco+ WIN32 ${SRC_FILES} ${GEN_HEADER} ${DB_HEADER} ${ICON_HEADER} ${SHADER_HEADER})
+add_executable(3dco+ WIN32 ${SRC_FILES} ${GEN_HEADER} ${DB_HEADER} ${ICON_HEADER} ${SHADER_HEADER} ${GLYPHS_HEADER})
 
 # Include directories
 target_include_directories(3dco+ PRIVATE

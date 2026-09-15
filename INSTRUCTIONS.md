@@ -2,28 +2,51 @@
 
 ## Table of Contents
 
-1. [What's New in 1.1.1](#whats-new-in-111)
-2. [What's New in 1.1.0](#whats-new-in-110)
-3. [First Launch](#first-launch)
-4. [Opening a Controller Window](#opening-a-controller-window)
-5. [Mapping Inputs](#mapping-inputs)
-6. [Gyro Support](#gyro-support)
-7. [Touchpads](#touchpads)
-8. [Highlighting & Press Feedback](#highlighting--press-feedback)
-9. [Smooth Travel Animation](#smooth-travel-animation)
-10. [Importing a Custom Model](#importing-a-custom-model)
-11. [Lighting](#lighting)
-12. [Window & Camera Settings](#window--camera-settings)
-13. [Network Functionality](#network-functionality)
-14. [Shader Effects](#shader-effects)
-15. [The Log Window](#the-log-window)
-16. [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode)
-17. [Data Directory & Backups](#data-directory--backups)
-18. [Troubleshooting](#troubleshooting)
+1. [What's New in 1.2.0](#whats-new-in-120)
+2. [What's New in 1.1.1](#whats-new-in-111)
+3. [What's New in 1.1.0](#whats-new-in-110)
+4. [First Launch](#first-launch)
+5. [Opening a Controller Window](#opening-a-controller-window)
+6. [Mapping Inputs](#mapping-inputs)
+7. [Gyro Support](#gyro-support)
+8. [Touchpads](#touchpads)
+9. [Highlighting & Press Feedback](#highlighting--press-feedback)
+10. [Smooth Travel Animation](#smooth-travel-animation)
+11. [Importing a Custom Model](#importing-a-custom-model)
+12. [Textures & UV Mapping](#textures--uv-mapping)
+13. [Lighting](#lighting)
+14. [Window & Camera Settings](#window--camera-settings)
+15. [Network Functionality](#network-functionality)
+16. [Shader Effects](#shader-effects)
+17. [Input History](#input-history)
+18. [The Log Window](#the-log-window)
+19. [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode)
+20. [Theme](#theme)
+21. [Data Directory & Backups](#data-directory--backups)
+22. [Troubleshooting](#troubleshooting)
 
 ---
 
 ![Demo](images/demo.webp)
+
+## What's New in 1.2.0
+
+![New features walkthrough placeholder](images/placeholder-1.2.0-walkthrough.webp)
+_(Video coming soon)_
+
+Quick tour of what's new this release:
+
+- [Input History](#input-history) – a separate always-on-top window per controller/keyboard/mouse showing recent presses, fighting-game-style. Raw text, ms/frame-annotated notation, or a fully data-driven set of icon packs you can also build your own versions of (see **Custom Glyph Mappings**) — plus gyro flick detection, per-trigger analog depth, and a persistent log file so you can scroll back through everything you pressed.
+- [Textures & UV Mapping](#textures--uv-mapping) – new section explaining how texture mapping actually works, plus: texture assignments now actually save with the model (previously lost on reload), mesh loading warns about missing/degenerate UV data, clearer guidance when a `.blend` import fails, and Flip X/Y controls alongside the existing Offset/Scale/Rotation for source images that read mirrored on a mesh.
+- Fixed: camera pan (Pan X/Y) wasn't saved and reset to center on every reload.
+- Fixed: capturing an input for a Dual Highlight axis always produced a one-directional binding, so travel/rotation could only ever swing through half its range (e.g. 0–90° instead of -90–90°) regardless of which way you moved the stick. See [Dual Highlighting](#highlighting--press-feedback).
+- Real compound-motion detection – quarter-circles, dragon-punch motions, half-circles, and full 360s are now actually recognized as you input them (previously, motion glyphs could only ever be assigned manually, never triggered by play). See Input History's Motion Timeout setting.
+- New **Theme** section in Settings (just before Help) for customizing the app's accent colors, with a one-click reset - applies instantly everywhere, including Log/Glyph Mapping Editor/Input History windows, and saves like any other setting.
+- Fixed: the main Settings window's scrollbar didn't appear when a section's content was taller than the window - content was there, just unreachable.
+- Fixed: D-Pad presses showed up twice in Input History (both a direction digit/glyph and a separate button entry) for the same press.
+- The Glyph Mapping Editor is now its own resizable window instead of embedded in Settings, and Input History windows support the same drag-to-move/scroll-to-resize controls as controller windows.
+
+---
 
 ## What's New in 1.1.1
 
@@ -131,7 +154,8 @@ By default, pressing a button glows the mesh in a global highlight colour.
 
 ## Smooth Travel Animation
 
-![Smooth vs instant travel placeholder](images/key_smooth.webp)
+![Smooth vs instant travel placeholder](images/placeholder-smooth-travel.webp)
+_(GIF coming soon)_
 
 By default, a button's Travel (its press offset/rotation, set under **Movement & Animation**) snaps instantly between pressed and released. Smooth Travel Animation eases it instead, so a press reads as a smooth motion rather than a single-frame jump — the GIF above shows the same button with it off vs. on, side by side.
 
@@ -167,6 +191,26 @@ You can bring in your own 3D model (common formats like FBX, glTF, OBJ, etc.) in
 >
 > If you export a single unified mesh (e.g., the entire controller as one object), you **will not** be able to assign different inputs or highlight colours to different buttons – the whole model will behave as a single part.  
 > **Tip:** Name your meshes clearly (e.g., `touchpad`, `left_bumper`, `start_button`) – the app will show these names in the assignment list, making it easier to map correctly.
+
+---
+
+## Textures & UV Mapping
+
+![Texture mapping placeholder](images/placeholder-textures-uv.webp)
+_(Video coming soon)_
+
+**How texture mapping works:** 3dco+ always uses the mesh's own UV coordinates — the standard `vt` texture-coordinate data from an OBJ file, or the equivalent channel from whatever format you imported (FBX, glTF, etc.). It never uses object-space, triplanar, or normal-based mapping. If a mesh already has a proper UV unwrap from whatever 3D tool you made or exported it in, a texture applied here will follow that unwrap exactly.
+
+**Adding a texture to a mesh:**
+
+1. Select the mesh in the Mesh List.
+2. Open its **Materials/Textures** section and click **Add Texture**.
+3. Pick an image file (PNG/JPG). It's added with a **Type** (Diffuse/Specular/Emissive), plus **Offset**, **Scale**, and **Rotation** controls for fine-tuning how it sits on the UV unwrap.
+4. Texture assignments now save with the model (`info.json`) and reload correctly — this used to only exist in memory for the current session and would silently disappear the moment the model reloaded or the app restarted, which could easily look like "texturing isn't working" even though it always was.
+
+**If a texture looks wrong (smeared, one flat color, or not lining up):** this is almost always a property of the _mesh's own UV data_, not a setting in this app. The most common cause is a missing or degenerate UV unwrap — some export/optimization workflows drop or never generate one unless you explicitly tell the tool to preserve/create it. 3dco+ now detects this automatically: if a loaded mesh has no meaningful UV variation, a warning appears in the [log](#the-log-window) explaining exactly that, rather than leaving you guessing whether it's a texture-mapping bug. Re-export the mesh with a proper UV unwrap (most 3D tools have a "UV unwrap" or "smart UV project" operation) to fix it.
+
+**A note on `.blend` files specifically:** importing a `.blend` file directly is unreliable for many Blender files — this is a long-standing limitation in the underlying Assimp library's own Blender parser (not something specific to your file), and it can fail outright rather than producing a usable model. If a `.blend` import fails, export from Blender as **OBJ, FBX, or glTF** instead (File → Export in Blender) and import that — those formats are handled reliably and are what this app's own built-in models use.
 
 ---
 
@@ -222,6 +266,48 @@ Shader files live in your [data directory](#data-directory--backups), under `sha
 
 ---
 
+## Input History
+
+![Input History demo placeholder](images/placeholder-input-history.webp)
+_(Video coming soon)_
+
+A separate always-on-top window per controller/keyboard/mouse window, showing a scrolling list of recent presses — the input-display style fighting games like Street Fighter and Tekken use, equally handy for tutorials. Toggle it per-window from that window's **Input History** section in Settings.
+
+**Display style** (one dropdown, three families):
+
+1. **Raw** – plain text labels.
+2. **Fighting-Game Notation** – numpad direction digits (5 = neutral, 1-9 8-way) plus button labels.
+3. **Icon packs** – Xbox 360/One/Series, PlayStation 3/4/5, Switch, Steam Deck, Keyboard & Mouse (Dark) or (Light), FGC Motion combined with either PS5 or Xbox — or a mapping you built yourself (see **Custom Glyph Mappings** below). A button a pack has no art for falls back to its text label.
+
+**Capture**, all independent per window:
+
+- **Gamepad/Joystick, Keyboard, Mouse** – which device types this window records, independent of what's bound to the model's meshes.
+- **Gyro (Flicks)** – logs a fast, deliberate rotation ("Left Flick", "Up Flick", etc.) rather than every small motion, which would flood the history. Two thresholds control this: **Motion Sensitivity** filters out slow drift/tremor entirely, and **Flick Threshold** is how much rotation has to accumulate (within the **Flick Window**) to count as one flick, with a **Flick Cooldown** so a single continued motion doesn't spam repeated entries. Requires Gyro enabled for this window (see [Gyro Support](#gyro-support)).
+- **Merge Simultaneous Presses** – groups inputs landing within **Simultaneous Window (ms)** of each other (default 50ms, adjustable) into one entry (`A+B`). Matters for fighting games; leave off for a clean one-input-per-line list otherwise.
+- **Show Return to Neutral** – off by default: letting go of the stick/D-pad doesn't log its own entry, only the direction that actually mattered does. Turn on to log every return to center too.
+- **Motion Timeout** – how much time a compound motion (quarter-circle, dragon punch, 360, etc.) has to complete, calibrated to a 2-step quarter-circle (236/214) - longer motions automatically get proportionally more time. Default (220ms) sits close to Street Fighter 6's own quarter-circle window; the setting's own tooltip compares it against Tekken 8 and Guilty Gear Strive too. Motions are actually detected during play now, not just displayable via manual glyph mapping.
+
+**Timing** – an independent **Show Input Timing** toggle (works with any display style, not just Notation) adds a Timing column showing milliseconds or frames (60fps reference) since the previous input. A gap longer than **Reset After** doesn't count as measured timing — it just means you paused — and shows as `--` instead of a misleading number. **Show Date/Time** adds a separate leftmost column with the real wall-clock time each entry was captured.
+
+**Triggers** analog depth is shown as a percentage next to the icon (e.g. `RT 67%`); **Trigger Press Threshold** sets how far a trigger needs to be pulled to register at all.
+
+**Appearance:** independent **Background Opacity** and **Content Opacity** (so a mostly-transparent background can still have fully-opaque icons, or vice versa), **Glyph Size** and **Font Size** (the latter now applies to every column - Time/Input/Timing - not just Raw/Notation text), **Alternating Row Colors** (on by default - turn off alongside 0% Background Opacity for a fully transparent window showing only glyphs/text), **Newest Entry On Top** (or bottom, scrolling like a terminal), **Click-Through**, and **Drag to Move**/**Scroll to Resize** (same controls as a controller window's own, only active while Click-Through is off).
+
+**Log to File** writes every captured input to its own timestamped file under `input_history_logs/` in your [data directory](#data-directory--backups) — independent of the live window's history length, so you can review exactly what you pressed after the fact (checking a speedrun attempt frame by frame, for example).
+
+### Custom Glyph Mappings
+
+Build your own icon set instead of (or alongside) the bundled ones, in its own window — works the same way as mapping a custom controller model:
+
+1. In the Display Style area, click **New Glyph Mapping...** and enter a name, or pick **Edit Existing Mapping** to modify one of the bundled styles (or one you made earlier) — this opens the Glyph Mapping Editor in its own window, separate from Settings.
+2. An empty table appears. Click **Add Row** for each input you want to map: choose its type (Gamepad Button, D-Pad Direction, Gamepad Motion, Trigger, Keyboard, or Mouse), the specific input, then **Browse...** (the last column) to assign an image — either an existing glyph from the `glyphs/` folder or your own picture, which gets automatically converted and resized. **Gamepad Motion** is a fixed dropdown of the compound sequences the bundled FGC Motion art has icons for (`236`, `623`, `360`, and similar) — worth being clear-eyed about what this is: there's no actual runtime detection of a player performing a multi-direction motion to match against, so this only lets you assign a glyph to one of those known strings for whatever other use, not a claim the app recognizes them during play.
+3. Optionally set **Combine With** to another style, so anything you don't define yourself falls back to that style's glyphs instead of a bare text label — a mapping can also exclude specific input types from that fallback (FGC Motion does this for D-Pad glyphs, since it already represents direction its own way).
+4. **Save Mapping** — it's written to its own folder under `glyphs/` and immediately shows up as a Display Style choice, for any window. If a standard bundled style's folder ever goes missing (deleted by accident, an interrupted install), it's silently restored from the bundled pack the next time you launch.
+
+---
+
+k
+
 ## The Log Window
 
 ![Log window](images/logging.webp)
@@ -238,6 +324,19 @@ Next to each other in a controller window's **Window** section:
 
 - **Enable Taskbar Icon** – adds a system tray icon (Windows and Linux) showing the app's own icon. Click it to minimize/restore the main window; right-click for a menu with per-controller minimize/restore, network status, and Quit. Not yet available on macOS.
 - **Enable Debug Mode** – turns on more verbose diagnostic logging (e.g. a line per mesh loaded). Off by default, since it adds a small delay when loading models with a lot of parts — turn it on before opening the Log Window if you're reporting a bug.
+
+---
+
+## Theme
+
+A Settings section of its own (just before Help) for customizing the three accent colors used everywhere in the app - buttons, section headers, sliders, active tabs, and input field backgrounds, across Settings and every window it opens (Log, Glyph Mapping Editor, Input History):
+
+- **Primary** – the main accent color: buttons, section headers, sliders, active tabs.
+- **Primary (Light)** – hover/highlighted states.
+- **Primary (Dark)** – pressed/active states and input field backgrounds.
+- **Reset to Default** – one click back to the shipped purple scheme.
+
+Changes apply immediately, everywhere, not just in Settings - open a controller window's Input History or the Glyph Mapping Editor while adjusting a color and it updates live. Saved the same way as every other setting, this is app-wide rather than per-window (there's only one theme, not one per controller tab).
 
 ---
 
