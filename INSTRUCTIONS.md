@@ -31,9 +31,6 @@
 
 ## What's New in 1.2.0
 
-![New features walkthrough placeholder](images/placeholder-1.2.0-walkthrough.webp)
-_(Video coming soon)_
-
 Quick tour of what's new this release:
 
 - [Input History](#input-history) – a separate always-on-top window per controller/keyboard/mouse showing recent presses, fighting-game-style. Raw text, ms/frame-annotated notation, or a fully data-driven set of icon packs you can also build your own versions of (see **Custom Glyph Mappings**) — plus gyro flick detection, per-trigger analog depth, and a persistent log file so you can scroll back through everything you pressed.
@@ -154,7 +151,7 @@ By default, pressing a button glows the mesh in a global highlight colour.
 
 ## Smooth Travel Animation
 
-![Smooth vs instant travel placeholder](images/placeholder-smooth-travel.webp)
+![Smooth vs instant travel placeholder](images/key_smooth.webp)
 _(GIF coming soon)_
 
 By default, a button's Travel (its press offset/rotation, set under **Movement & Animation**) snaps instantly between pressed and released. Smooth Travel Animation eases it instead, so a press reads as a smooth motion rather than a single-frame jump — the GIF above shows the same button with it off vs. on, side by side.
@@ -196,7 +193,7 @@ You can bring in your own 3D model (common formats like FBX, glTF, OBJ, etc.) in
 
 ## Textures & UV Mapping
 
-![Texture mapping placeholder](images/placeholder-textures-uv.webp)
+![Texture mapping placeholder](images/texture_demo.webp)
 _(Video coming soon)_
 
 **How texture mapping works:** 3dco+ always uses the mesh's own UV coordinates — the standard `vt` texture-coordinate data from an OBJ file, or the equivalent channel from whatever format you imported (FBX, glTF, etc.). It never uses object-space, triplanar, or normal-based mapping. If a mesh already has a proper UV unwrap from whatever 3D tool you made or exported it in, a texture applied here will follow that unwrap exactly.
@@ -268,7 +265,7 @@ Shader files live in your [data directory](#data-directory--backups), under `sha
 
 ## Input History
 
-![Input History demo placeholder](images/placeholder-input-history.webp)
+![Input History demo placeholder](images/input_history_demo.webp)
 _(Video coming soon)_
 
 A separate always-on-top window per controller/keyboard/mouse window, showing a scrolling list of recent presses — the input-display style fighting games like Street Fighter and Tekken use, equally handy for tutorials. Toggle it per-window from that window's **Input History** section in Settings.
@@ -306,8 +303,6 @@ Build your own icon set instead of (or alongside) the bundled ones, in its own w
 
 ---
 
-k
-
 ## The Log Window
 
 ![Log window](images/logging.webp)
@@ -328,6 +323,8 @@ Next to each other in a controller window's **Window** section:
 ---
 
 ## Theme
+
+![theming](images/theme_demo.webp)
 
 A Settings section of its own (just before Help) for customizing the three accent colors used everywhere in the app - buttons, section headers, sliders, active tabs, and input field backgrounds, across Settings and every window it opens (Log, Glyph Mapping Editor, Input History):
 
