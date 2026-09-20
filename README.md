@@ -11,6 +11,19 @@ This is a **fork, not a replacement**. It exists as an homage to the original to
 
 The **`+`** in the name means exactly that: **improvements and extra features** layered on top of the original — more controllers, more rendering features, more input paths, more build tooling — while keeping the same "point it at your input device and it just works" spirit. It's also a personal passion project: a way for me to see what I'm actually capable of building and maintaining with AI as a collaborator rather than a crutch.
 
+## What's new in 1.3.0
+
+- **PBR-style texture maps.** Alongside the existing Diffuse/Specular/Emissive types, a texture can now be a **Normal Map** (adds surface detail — bumps, grain, panel lines — without extra geometry), **Metallic Map**, **Roughness Map**, or **AO Map** (ambient occlusion). This isn't a full physically-based renderer bolted on — it's a practical approximation layered onto the existing lighting model, chosen deliberately over a much larger lighting-engine rewrite. See [Textures & UV Mapping](#textures--uv-mapping).
+- **Global textures and materials.** Set a texture (any type — Diffuse, Normal Map, AO, etc.) or a material (ambient/diffuse/specular/shininess/color) once at the model level instead of on every part individually. A part with its own texture of a given type, or its own custom material, always overrides the global one — global is purely a fallback for parts that don't define their own. See [Materials](#materials).
+- **Right-click menu on controller windows.** Right-click anywhere on the model for a quick menu — **Reset View**, **Enable/Disable Click-Through**, **Enable/Disable Drag to Move** — without digging into Settings for these three actions.
+- **Fully configurable shortcuts.** Click-Through and Drag-to-Move can each be bound to any keyboard key now, not a fixed short list — pick whatever's comfortable and doesn't collide with anything else you use. A single **Enable Shortcut Monitoring** toggle (off by default) turns this on for every window, on every platform, rather than the feature working differently depending on your OS.
+- **Model Description field**, alongside the existing Source URL, for crediting a model's contributors, leaving setup notes, or anything else worth keeping with the model — saves and loads with the model itself and has no effect on how it looks or behaves.
+- **Unsaved-changes confirmation before quitting.** Pressing Escape, closing a controller window, and the tray icon's Quit now all check for pending changes first and offer **Quit Anyway**/**Cancel**, instead of silently discarding an accidental close.
+- **Fixed: Source URL and Description not resetting when switching models.** Switching to a model whose own file doesn't set one of these fields used to leave the *previous* model's value displayed, since the same in-memory model object is reused across a switch rather than rebuilt from scratch — now correctly resets to blank.
+- **Fixed: crashes when adding or removing textures**, including removing the last texture left in a mesh's list.
+- **Fixed: texture GPU memory not being freed** on window close or when switching to a different model — affected both per-part and global textures.
+- **Fixed: repeated Wayland log spam** from a window-position query this app has no way to answer on that platform (a deliberate Wayland restriction, not a bug) — now queried once and skipped afterward instead of every frame.
+
 ## What's new in 1.2.0
 
 - **Input History window.** A separate always-on-top overlay per controller/keyboard/mouse window showing recent presses, fighting-game style — Raw text, ms/frame-annotated Notation, or a fully data-driven set of icon packs (Xbox/PlayStation/Switch/Steam Deck/Keyboard&Mouse, or your own — see [Input History](#input-history) for the full settings list: gyro flick detection, per-trigger analog depth, independent timing/opacity controls, and more).
@@ -72,6 +85,7 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 
 - [What stayed the same](#what-stayed-the-same)
 - [What's new in the `+`](#whats-new-in-the-)
+- [What's new in 1.3.0](#whats-new-in-130)
 - [What's new in 1.2.0](#whats-new-in-120)
 - [What's new in 1.1.1](#whats-new-in-111)
 - [What's new in 1.1.0](#whats-new-in-110)
@@ -84,6 +98,7 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 - [Network functionality](#network-functionality)
 - [Shader effects](#shader-effects)
 - [Textures & UV Mapping](#textures--uv-mapping)
+- [Materials](#materials)
 - [Input History](#input-history)
 - [Theme](#theme)
 - [Manual mapping](#manual-mapping-for-unrecognized-devices)
@@ -264,9 +279,30 @@ Shader files live under `shaders/<name>/` in your [data directory](#where-your-d
 
 ![Texture mapping demo placeholder](images/texture_showcase.webp)
 
-3dco+ always uses a mesh's own UV coordinates — standard OBJ `vt` data, or the equivalent channel from whatever format you imported — never object-space, triplanar, or normal-based mapping. Add a texture via a mesh's **Materials/Textures** section (Type: Diffuse/Specular/Emissive, plus Offset/Scale/Rotation, and Flip X/Flip Y for source images that read mirrored on the mesh) and it follows the mesh's existing UV unwrap exactly. A newly-added texture starts with Flip Y on and Offset Y at 1 - the combination that lines up correctly for most images exported the ordinary way; an existing texture loaded from a saved model always keeps whatever it was actually saved with, so this doesn't change anything already correctly configured.
+3dco+ always uses a mesh's own UV coordinates — standard OBJ `vt` data, or the equivalent channel from whatever format you imported — never object-space, triplanar, or normal-based mapping. Add a texture via a mesh's **Materials/Textures** section and it follows the mesh's existing UV unwrap exactly. Each texture has a **Type**:
+
+- **Diffuse** — the base color image.
+- **Specular** — controls highlight intensity/color.
+- **Emissive** — glows regardless of lighting.
+- **Normal Map** — adds surface detail (bumps, grain, panel lines) without extra geometry. Use an image where flat/undetailed areas are a blue-purple color (roughly RGB 128, 128, 255) — the standard format most 3D tools export normal maps in.
+- **Metallic Map** — a grayscale image; brighter areas read as more metallic.
+- **Roughness Map** — a grayscale image; brighter areas scatter reflections more (rougher/softer), darker areas stay sharp (smoother/glossier).
+- **AO Map** — a grayscale image; darker areas are treated as more occluded (crevices, contact points), brighter areas as more exposed to ambient light.
+
+Alongside Type, every texture has Offset/Scale/Rotation controls plus Flip X/Flip Y for source images that read mirrored on the mesh. A newly-added texture starts with Flip Y on and Offset Y at 1 - the combination that lines up correctly for most images exported the ordinary way; an existing texture loaded from a saved model always keeps whatever it was actually saved with, so this doesn't change anything already correctly configured.
 
 If a texture looks wrong (one flat color, smeared, misaligned), that's almost always the mesh's own UV data, not a setting here — most commonly a missing or degenerate UV unwrap from an export/optimization workflow that didn't preserve one.
+
+Any of the above types can also be set once at the model level instead of per part — see [Materials](#materials) for global textures and how the per-part override works.
+
+## Materials
+
+Set a texture or a material property once at the model level instead of assigning it to every part by hand:
+
+- **Global Textures** — its own section above the per-part texture list. Add a texture there the same way you would for a single part and give it a Type (any of the types listed in [Textures & UV Mapping](#textures--uv-mapping) above). It applies to every part that doesn't already define a texture of that same type itself — a part's own texture of a given type always overrides the global one for that type specifically, so a part can mix its own Diffuse with an inherited global Normal Map, for example.
+- **Global Material** — the same idea for material properties (ambient, diffuse, specular, shininess, color). Set it once at the model level; any part that needs different values can enable **Use Custom Material** on that part and set its own instead.
+
+Neither is an all-or-nothing switch for the whole model — the override is per part, and for textures, per texture type within that part.
 
 ## Input History
 

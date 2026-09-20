@@ -209,7 +209,22 @@ void InitializeProgram() {
   // Wire tray icon menu actions before loadTabs(), since loading a
   // saved "tray_enabled" setting can re-create the tray icon
   // immediately - callbacks should already be in place by then.
-  TrayIcon::setOnQuit([]() { gQuit = true; });
+  TrayIcon::setOnQuit([]() {
+    // Same unsaved-changes protection as the Settings window's ESC/
+    // close and a controller window's own close button (see
+    // anyUnsavedChanges()'s doc comment, controller_window.cpp) -
+    // this is a third, independent way to quit the app and needs the
+    // same guard, not a silent bypass of it.
+    if (anyUnsavedChanges()) {
+      g_pending_quit_confirmation = true;
+      GLFWwindow *sw = getSettingsWindow();
+      glfwRestoreWindow(sw);
+      glfwShowWindow(sw);
+      glfwFocusWindow(sw);
+    } else {
+      gQuit = true;
+    }
+  });
   TrayIcon::setOnShowMainWindow([]() {
     GLFWwindow *sw = getSettingsWindow();
     glfwRestoreWindow(sw);

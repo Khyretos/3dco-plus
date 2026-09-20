@@ -172,6 +172,34 @@ typedef struct controller_window_struct {
   GLFWwindow *glfw_window;
   unsigned ID;
 
+  // A second, separate ImGui context layered on top of this window's
+  // normal 3D rendering (see drawControllerWindows() in
+  // controller_window.cpp) purely for the Middle Mouse Button context
+  // menu (Reset View / Enable Click-Through / Enable Drag to Move) -
+  // this window otherwise has no ImGui presence at all, unlike
+  // Input History or the Settings window, which are ImGui UIs first.
+  // Same per-window-context pattern as input_history_imgui_ctx below,
+  // just hosted on this window's own GLFW window instead of a
+  // separate one, since the menu needs to visually sit over the 3D
+  // scene rather than in its own floating window.
+  ImGuiContext *controller_imgui_ctx = nullptr;
+  bool controller_imgui_backend_ready = false;
+  // Right Mouse Button toggles the context menu (Reset View / Toggle
+  // Click-Through / Toggle Drag to Move) - edge-detected so holding the
+  // button doesn't reopen the menu every frame. Middle Mouse Button is
+  // now reserved for Blender-style panning, so this is a separate edge
+  // tracker from the middle-button one (which no longer opens anything).
+  bool right_button_was_pressed = false;
+  // True for the frames the Middle Mouse Button context menu is open -
+  // opened by a fresh, un-shifted Middle Mouse Button press while
+  // hovering this window, closed by picking an option or clicking
+  // elsewhere. Reset View, Click-Through and Drag-to-Move all used to
+  // fight over Middle Mouse Button directly (see this field's
+  // presence in the project history for the abandoned first attempt)
+  // - routing all three through one menu lets a single button reach
+  // any of them without them ever colliding again.
+  bool middle_click_menu_open = false;
+
   union {
     SDL_Gamepad *sdl_controller = nullptr;
     SDL_Joystick *sdl_joystick;
@@ -255,6 +283,24 @@ typedef struct controller_window_struct {
   bool always_on_top = false;
   bool borderless = false;
   bool drag_to_move = false;
+  // A quick, on-the-fly way to flip Drag to Move without going back to
+  // the main Settings window each time - fires while the mouse is
+  // hovering this window specifically (detected via the mouse's real
+  // desktop position, not ImGui's own per-window hover state, since
+  // that wouldn't see anything while Click-Through is on and events
+  // are passing straight through). 0=Off (no shortcut). 1=Middle Mouse
+  // Button, 6-9=F9-F12: a fresh press flips the stored setting once,
+  // same as clicking the checkbox. 2-5=Meta/Ctrl/Shift/Alt (held):
+  // temporarily flips the *effective* behavior for exactly as long as
+  // the key stays held, without touching the stored setting at all -
+  // release it and it's back to whatever it was. See
+  // isShortcutPhysicallyActive()/updateShortcutToggle() in
+  // controller_window.cpp for the shared logic behind both this and
+  // click_through_shortcut below, used by controller windows and
+  // Input History alike (each window's own hover check is
+  // independent, so a shortcut fired over one never touches another).
+  int drag_to_move_shortcut = 0;
+  bool drag_to_move_shortcut_was_active = false; // edge-detection state
   // ---- Drag-to-move tracking state ----
   // Screen-space (not window-relative) cursor position captured when the
   // drag started, and the window position at that same moment - used to
@@ -391,6 +437,26 @@ typedef struct controller_window_struct {
   // it can be toggled back off independently, e.g. to reposition a
   // transparent window, or turned on for an opaque overlay too.
   bool click_through = false;
+  // Same on-the-fly shortcut mechanism as drag_to_move_shortcut above
+  // - see its doc comment for the full explanation of the numbering
+  // and hold-vs-discrete distinction. click_through additionally
+  // needs setWindowClickThrough() actually called whenever the
+  // effective value changes (it's not just a bool checked each frame
+  // like drag-to-move is) - see controller_window_input()'s use of
+  // this for where that happens. Middle Mouse Button does NOT toggle
+  // Click-Through on a controller window (unlike Input History, which
+  // still has this as a built-in) - that button already has its own,
+  // pre-existing Reset View action here, and the two collided when
+  // Middle Mouse Button tried to do both at once. Click-Through/
+  // Drag-to-Move still reach this window via this dropdown's own
+  // modifier-key options, just not through Middle Mouse Button.
+  int click_through_shortcut = 0;
+  bool click_through_shortcut_was_active = false;
+  // The click-through state actually last applied via
+  // setWindowClickThrough() - compared against the freshly computed
+  // effective value each frame so that call only happens when
+  // something actually changed, not unconditionally every frame.
+  bool click_through_last_applied = false;
   // Set once at window creation from glfwGetWindowAttrib(GLFW_TRANSPARENT_
   // FRAMEBUFFER) — the authoritative signal for whether this GPU driver /
   // display server combo actually granted a transparent framebuffer, as
@@ -550,6 +616,19 @@ typedef struct controller_window_struct {
   float input_history_content_opacity = 1.0f;
   bool input_history_log_to_file = true;
   bool input_history_click_through = true;
+  // Same on-the-fly shortcut mechanism as controller windows' own
+  // click_through_shortcut - see its doc comment on controller windows
+  // above for the full explanation. This window's own hover check is
+  // completely independent of any controller window's, so a shortcut
+  // fired while hovering Input History never touches a controller
+  // window (or vice versa).
+  int input_history_click_through_shortcut = 0;
+  bool input_history_click_through_shortcut_was_active = false;
+  // Same hardcoded, always-on Middle Mouse Button built-in as
+  // controller windows' own click_through_middle_mouse_was_active -
+  // see its doc comment above for the full explanation.
+  bool input_history_click_through_middle_mouse_was_active = false;
+  bool input_history_click_through_last_applied = false;
   // Defaults true, matching the hardcoded always-topmost behavior this
   // setting replaces - existing configurations keep working exactly as
   // before unless someone explicitly turns it off. Unlike a controller
@@ -667,6 +746,8 @@ typedef struct controller_window_struct {
   // window, since click-through means this window never receives
   // mouse events at all.
   bool input_history_drag_to_move = false;
+  int input_history_drag_to_move_shortcut = 0;
+  bool input_history_drag_to_move_shortcut_was_active = false;
   bool input_history_scroll_to_resize = false;
 
   // Runtime-only state (not persisted) - see input_history.cpp
@@ -692,6 +773,20 @@ typedef struct controller_window_struct {
   // Currently-held inputs - see ActiveHold's doc comment in
   // input_history_types.h.
   std::vector<ActiveHold> input_history_active_holds;
+  // How tall the active-holds section actually rendered last frame -
+  // measured directly (see drawActiveHoldsSection()'s own use of this),
+  // not estimated via a formula. The main table needs to reserve
+  // exactly this much space so the holds section - drawn outside the
+  // table, pinned to whichever end is "newest" - never gets cut off or
+  // overlapped, but its real height depends on ImGui's own table
+  // border/padding/spacing math, which a hand-written formula could
+  // only ever approximate. Using last frame's actual measurement
+  // instead is the standard fix for this class of "don't know a
+  // widget's size until after drawing it" problem in immediate-mode
+  // GUI - sizes rarely change dramatically frame to frame, and even
+  // when they do (a hold just started or ended), the worst case is one
+  // frame slightly off before it self-corrects, not a persistent cut.
+  float input_history_holds_section_height = 0.0f;
   Uint64 input_history_last_event_ms = 0;
   // Rolling-window accumulation for gyro flick detection - see
   // input_history_capture_gyro's doc comment above.
@@ -705,6 +800,19 @@ typedef struct controller_window_struct {
   GLFWwindow *input_history_glfw_window = nullptr;
   ImGuiContext *input_history_imgui_ctx = nullptr;
   bool input_history_backend_ready = false;
+  // Last known position/size, kept updated every frame the window
+  // actually exists - unlike a controller window (always created for
+  // the lifetime of the session), this window can be toggled off
+  // (input_history_glfw_window becomes null) at the moment settings
+  // get saved, when there'd be nothing to read a live position/size
+  // from at all. Keeping a running "last known" value means a save
+  // that happens to land while this is disabled still persists
+  // wherever it was last positioned, rather than losing it back to
+  // the default.
+  int input_history_last_x = 100;
+  int input_history_last_y = 100;
+  int input_history_last_width = 420;
+  int input_history_last_height = 260;
   // Drag-to-move tracking - same screen-space-anchor approach as
   // controller windows (see the big comment in controller_window.cpp's
   // drag_to_move handling for why screen space, not window-relative
@@ -745,6 +853,7 @@ extern std::string button_names[21];
 // draw each window's Input History overlay without needing its own
 // separate registry.
 extern std::vector<controller_window> windows;
+bool anyUnsavedChanges();
 
 // Function declarations (unchanged)
 void createControllerWindow(std::string title, std::string model_path);
@@ -776,6 +885,45 @@ void controller_window_iconify_callback(GLFWwindow *window, int iconified);
 void createTouchAreaRect(controller_window &w);
 void recreateControllerWindow(controller_window *w);
 void setWindowClickThrough(GLFWwindow *window, bool enable);
+
+// ------------------------------------------------------------------
+// On-the-fly Click-Through/Drag-to-Move shortcuts - see
+// drag_to_move_shortcut's doc comment above for the full picture.
+// Shared by controller windows and Input History, each window's own
+// hover check completely independent of any other's.
+// ------------------------------------------------------------------
+
+// Whether the mouse's real desktop position currently falls within
+// this window's own screen rect - deliberately not ImGui's own hover
+// state, which requires the window to actually be receiving mouse
+// events. A window with Click-Through on receives none at all, and
+// detecting "hovering this specific window so I can turn Click-
+// Through back off" is the entire point of this feature.
+bool isMouseGloballyHoveringWindow(GLFWwindow *window);
+
+// A shortcut ID's kind: None = shortcut disabled; Hold = shows the
+// effective value differs from the stored setting for exactly as
+// long as the key/button is held (never touches the stored setting
+// itself); Discrete = a fresh press flips the stored setting once,
+// same as clicking the checkbox.
+enum class ShortcutKind { None, Hold, Discrete };
+ShortcutKind getShortcutKind(int shortcutId);
+
+// Whether a shortcut ID's underlying physical key/button is currently
+// held down, globally - not gated on hovering (callers combine this
+// with isMouseGloballyHoveringWindow() themselves).
+bool isShortcutPhysicallyActive(int shortcutId);
+
+// Combines both of the above into the one thing every caller
+// actually wants: given the stored setting, this shortcut's ID, this
+// window, and a small piece of per-toggle edge-detection state,
+// returns the value to actually apply this frame - which, for a Hold
+// shortcut while genuinely held over this window, differs from
+// persistentValue without modifying it; for a Discrete shortcut, this
+// may flip persistentValue itself (on a fresh press) and return the
+// new value.
+bool updateShortcutToggle(bool &persistentValue, bool &wasActiveLastFrame,
+                          int shortcutId, GLFWwindow *window);
 
 // Wrappers for minimize/maximize/restore that behave correctly with the
 // Windows companion window (see controller_window::overlay_minimized's

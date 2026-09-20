@@ -29,6 +29,23 @@ struct StyleData {
   // this style doesn't define them itself - see the big header
   // comment on "exclude_from_combine" for why (FGC Motion + D-pad).
   std::vector<std::string> excludeFromCombine;
+  // Full "type:value" bindings (the same convention used everywhere
+  // else in this app - e.g. "gamepad:b24", "keyboard:key_a",
+  // "mouse:mouse_left") that Input History should never capture at
+  // all while this style is selected - not just "no glyph for it",
+  // genuinely no discrete press entry and no hold tracking either.
+  // Originally just raw gamepad button indices, motivated by a grip
+  // sensor inverted in the Model table so it reads correctly on the
+  // 3D model, but which would otherwise show as permanently held in
+  // Input History for as long as the controller is actually being
+  // held normally - generalized to every input type Input History
+  // actually captures on its own (gamepad, keyboard, mouse), matching
+  // the Model table's own Type + Specific Input picker. "joystick:"
+  // bindings are accepted for UI consistency with that same picker
+  // but never actually match anything - Input History only ever
+  // captures gamepad buttons via SDL's mapped Gamepad API, never a
+  // raw, unmapped joystick's own button state.
+  std::vector<std::string> ignoredInputs;
 };
 
 std::vector<GlyphStyleInfo> g_styleList;
@@ -77,6 +94,22 @@ bool loadStyleData(const std::string &folderName, StyleData &out) {
     for (auto &v : j["exclude_from_combine"])
       if (v.is_string())
         out.excludeFromCombine.push_back(v.get<std::string>());
+  }
+  if (j.contains("ignored_inputs") && j["ignored_inputs"].is_array()) {
+    for (auto &v : j["ignored_inputs"])
+      if (v.is_string())
+        out.ignoredInputs.push_back(v.get<std::string>());
+  }
+  // Migrates the older, gamepad-only "ignored_raw_buttons" int-array
+  // format (a bare button index, e.g. 24) into the current
+  // "type:value" one ("gamepad:b24") - so a style saved before Ignore
+  // Button supported anything but gamepad buttons keeps working
+  // exactly as it did, without needing to be re-set-up by hand.
+  if (j.contains("ignored_raw_buttons") &&
+      j["ignored_raw_buttons"].is_array()) {
+    for (auto &v : j["ignored_raw_buttons"])
+      if (v.is_number_integer())
+        out.ignoredInputs.push_back("gamepad:b" + std::to_string(v.get<int>()));
   }
   if (j.contains("mappings") && j["mappings"].is_object()) {
     for (auto &[key, val] : j["mappings"].items()) {
@@ -297,6 +330,23 @@ GLuint getGlyphTexture(int styleIndex, const std::string &inputKey) {
 
 void invalidateGlyphTextureCache() { g_textureCache.clear(); }
 
+bool isRawButtonIgnored(int styleIndex, int buttonIdx) {
+  return isInputIgnored(styleIndex, "gamepad:b" + std::to_string(buttonIdx));
+}
+
+bool isInputIgnored(int styleIndex, const std::string &binding) {
+  const auto &styles = listGlyphStyles();
+  if (styleIndex < 0 || styleIndex >= (int)styles.size())
+    return false;
+  const StyleData *data = getStyleData(styles[styleIndex].folderName);
+  if (!data)
+    return false;
+  for (const std::string &b : data->ignoredInputs)
+    if (b == binding)
+      return true;
+  return false;
+}
+
 std::string getGlyphStyleDirectory(const std::string &folderName) {
   std::string dir = ensureGlyphsExtracted() + "/" + folderName;
   std::filesystem::create_directories(dir);
@@ -307,7 +357,8 @@ bool saveGlyphStyleMapping(
     const std::string &folderName, const std::string &displayName,
     const std::vector<std::pair<std::string, std::string>> &mappings,
     const std::string &combineWith,
-    const std::vector<std::string> &excludeFromCombine) {
+    const std::vector<std::string> &excludeFromCombine,
+    const std::vector<std::string> &ignoredInputs) {
   std::string dir = getGlyphStyleDirectory(folderName);
 
   json j;
@@ -316,6 +367,8 @@ bool saveGlyphStyleMapping(
     j["combine_with"] = combineWith;
   if (!excludeFromCombine.empty())
     j["exclude_from_combine"] = excludeFromCombine;
+  if (!ignoredInputs.empty())
+    j["ignored_inputs"] = ignoredInputs;
   json m = json::object();
   for (auto &[key, filename] : mappings)
     m[key] = filename;
@@ -354,6 +407,11 @@ getGlyphStyleMappings(const std::string &folderName) {
 std::string getGlyphStyleCombineWith(const std::string &folderName) {
   const StyleData *data = getStyleData(folderName);
   return data ? data->combineWith : "";
+}
+
+std::vector<std::string> getGlyphStyleIgnoredInputs(const std::string &folderName) {
+  const StyleData *data = getStyleData(folderName);
+  return data ? data->ignoredInputs : std::vector<std::string>{};
 }
 
 std::string getGlyphStyleDisplayNameFor(const std::string &folderName) {

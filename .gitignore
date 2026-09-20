@@ -23,6 +23,7 @@ src/gamecontrollerdb_data.h
 src/icon_data.h
 src/shaders_data.h
 src/glyphs_zip_data.h
+src/icon_data.h
 
 # CMake generated files
 CMakeCache.txt

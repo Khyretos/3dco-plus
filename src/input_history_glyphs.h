@@ -115,6 +115,22 @@ GLuint getGlyphTexture(int styleIndex, const std::string &inputKey);
 // to be: a stale ID silently repurposed as something else entirely.
 void invalidateGlyphTextureCache();
 
+// Whether a style has marked this raw gamepad button index (0-31,
+// same range as the Model table's own button dropdown) as one Input
+// History should never capture at all while this style is selected -
+// thin convenience wrapper over isInputIgnored() below for the
+// gamepad-only case. See StyleData::ignoredInputs's own doc comment
+// in input_history_glyphs.cpp for the full explanation and motivating
+// example.
+bool isRawButtonIgnored(int styleIndex, int buttonIdx);
+
+// General form of the above - binding is a full "type:value" string
+// (the same convention used everywhere else in this app, e.g.
+// "gamepad:b24", "keyboard:key_a", "mouse:mouse_left"), covering every
+// input type Input History can actually ignore, not just gamepad
+// buttons.
+bool isInputIgnored(int styleIndex, const std::string &binding);
+
 // Absolute path to a style's own directory (where its info.json and
 // glyph image files live), creating it if needed. Used by the custom
 // mapping creator UI to know where to copy a user-picked image, and by
@@ -130,7 +146,8 @@ bool saveGlyphStyleMapping(
     const std::string &folderName, const std::string &displayName,
     const std::vector<std::pair<std::string, std::string>> &mappings,
     const std::string &combineWith = "",
-    const std::vector<std::string> &excludeFromCombine = {});
+    const std::vector<std::string> &excludeFromCombine = {},
+    const std::vector<std::string> &ignoredInputs = {});
 
 // Raw accessors for the mapping creator UI's "edit an existing style"
 // flow - loads a style's info.json and returns its data as-is (not
@@ -139,6 +156,7 @@ bool saveGlyphStyleMapping(
 std::vector<std::pair<std::string, std::string>>
 getGlyphStyleMappings(const std::string &folderName);
 std::string getGlyphStyleCombineWith(const std::string &folderName);
+std::vector<std::string> getGlyphStyleIgnoredInputs(const std::string &folderName);
 std::string getGlyphStyleDisplayNameFor(const std::string &folderName);
 
 // Ensures the bundled glyph pack has been extracted to the user's data

@@ -2,32 +2,48 @@
 
 ## Table of Contents
 
-1. [What's New in 1.2.0](#whats-new-in-120)
-2. [What's New in 1.1.1](#whats-new-in-111)
-3. [What's New in 1.1.0](#whats-new-in-110)
-4. [First Launch](#first-launch)
-5. [Opening a Controller Window](#opening-a-controller-window)
-6. [Mapping Inputs](#mapping-inputs)
-7. [Gyro Support](#gyro-support)
-8. [Touchpads](#touchpads)
-9. [Highlighting & Press Feedback](#highlighting--press-feedback)
-10. [Smooth Travel Animation](#smooth-travel-animation)
-11. [Importing a Custom Model](#importing-a-custom-model)
-12. [Textures & UV Mapping](#textures--uv-mapping)
-13. [Lighting](#lighting)
-14. [Window & Camera Settings](#window--camera-settings)
-15. [Network Functionality](#network-functionality)
-16. [Shader Effects](#shader-effects)
-17. [Input History](#input-history)
-18. [The Log Window](#the-log-window)
-19. [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode)
-20. [Theme](#theme)
-21. [Data Directory & Backups](#data-directory--backups)
-22. [Troubleshooting](#troubleshooting)
+1. [What's New in 1.3.0](#whats-new-in-130)
+2. [What's New in 1.2.0](#whats-new-in-120)
+3. [What's New in 1.1.1](#whats-new-in-111)
+4. [What's New in 1.1.0](#whats-new-in-110)
+5. [First Launch](#first-launch)
+6. [Opening a Controller Window](#opening-a-controller-window)
+7. [Mapping Inputs](#mapping-inputs)
+8. [Gyro Support](#gyro-support)
+9. [Touchpads](#touchpads)
+10. [Highlighting & Press Feedback](#highlighting--press-feedback)
+11. [Smooth Travel Animation](#smooth-travel-animation)
+12. [Importing a Custom Model](#importing-a-custom-model)
+13. [Textures & UV Mapping](#textures--uv-mapping)
+14. [Materials](#materials)
+15. [Lighting](#lighting)
+16. [Window & Camera Settings](#window--camera-settings)
+17. [Network Functionality](#network-functionality)
+18. [Shader Effects](#shader-effects)
+19. [Input History](#input-history)
+20. [The Log Window](#the-log-window)
+21. [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode)
+22. [Theme](#theme)
+23. [Data Directory & Backups](#data-directory--backups)
+24. [Troubleshooting](#troubleshooting)
 
 ---
 
 ![Demo](images/demo.webp)
+
+## What's New in 1.3.0
+
+Quick tour of what's new this release:
+
+- [Textures & UV Mapping](#textures--uv-mapping) – four new texture types: **Normal Map**, **Metallic Map**, **Roughness Map**, and **AO Map**, alongside the existing Diffuse/Specular/Emissive.
+- [Materials](#materials) – set a texture or material once at the model level instead of on every part, with a per-part override for anything that needs to be different.
+- [Window & Camera Settings](#window--camera-settings) – a new right-click menu on controller windows (Reset View / Click-Through / Drag to Move), and Click-Through/Drag-to-Move shortcuts can now be bound to any keyboard key instead of a fixed short list.
+- A new **Description** field for a model, alongside the existing Source URL — see [Importing a Custom Model](#importing-a-custom-model).
+- A confirmation prompt now appears before quitting with unsaved changes, whether from Escape, closing a controller window, or the tray icon's Quit.
+- Fixed: switching to a model whose own file doesn't set a Source URL or Description used to leave the previous model's value displayed instead of going blank.
+- Fixed crashes when adding/removing textures, and GPU memory leaks around texture handling on window close and model switch.
+
+---
 
 ## What's New in 1.2.0
 
@@ -177,6 +193,8 @@ You can bring in your own 3D model (common formats like FBX, glTF, OBJ, etc.) in
 3. For each mesh, assign it to a controller part (or leave unassigned to hide it), and optionally set a parent part for correct pivoting (e.g. a touch finger indicator parented to its touchpad).
 4. Save — the app converts the imported meshes into a usable model and writes it to your model library.
 
+**Source URL and Description:** once a model is loaded, the Model tab has a **Source URL** field (where it came from) and a **Description** field — a multi-line box for crediting the model's creator/contributors, leaving setup notes, or anything else worth keeping with it. Both save and load with the model itself and have no effect on how it looks or behaves.
+
 > **⚠️ Important – your model must be separated into parts.**  
 > For the app to properly highlight, animate, and map inputs to individual buttons, triggers, sticks, etc., your 3D model file **must contain each interactive element as a separate mesh**.  
 > For example:
@@ -202,12 +220,45 @@ _(Video coming soon)_
 
 1. Select the mesh in the Mesh List.
 2. Open its **Materials/Textures** section and click **Add Texture**.
-3. Pick an image file (PNG/JPG). It's added with a **Type** (Diffuse/Specular/Emissive), plus **Offset**, **Scale**, and **Rotation** controls for fine-tuning how it sits on the UV unwrap.
-4. Texture assignments now save with the model (`info.json`) and reload correctly — this used to only exist in memory for the current session and would silently disappear the moment the model reloaded or the app restarted, which could easily look like "texturing isn't working" even though it always was.
+3. Pick an image file (PNG/JPG). It's added with a **Type**, plus **Offset**, **Scale**, and **Rotation** controls for fine-tuning how it sits on the UV unwrap.
+4. Texture assignments save with the model (`info.json`) and reload correctly.
 
-**If a texture looks wrong (smeared, one flat color, or not lining up):** this is almost always a property of the _mesh's own UV data_, not a setting in this app. The most common cause is a missing or degenerate UV unwrap — some export/optimization workflows drop or never generate one unless you explicitly tell the tool to preserve/create it. 3dco+ now detects this automatically: if a loaded mesh has no meaningful UV variation, a warning appears in the [log](#the-log-window) explaining exactly that, rather than leaving you guessing whether it's a texture-mapping bug. Re-export the mesh with a proper UV unwrap (most 3D tools have a "UV unwrap" or "smart UV project" operation) to fix it.
+**Texture types:**
+
+| Type          | What it does                                                                                                                                                         |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Diffuse       | The base color image.                                                                                                                                                |
+| Specular      | Controls highlight intensity/color.                                                                                                                                  |
+| Emissive      | Glows regardless of lighting.                                                                                                                                        |
+| Normal Map    | Adds surface detail (bumps, grain, panel lines) without extra geometry. Use an image where flat areas are blue-purple (roughly RGB 128, 128, 255) — the standard format most 3D tools export. |
+| Metallic Map  | Grayscale; brighter = more metallic.                                                                                                                                 |
+| Roughness Map | Grayscale; brighter = softer/rougher reflections, darker = sharper/glossier.                                                                                        |
+| AO Map        | Grayscale; darker = more occluded (crevices, contact points), brighter = more exposed to ambient light.                                                              |
+
+Any of these can also be set once for the whole model instead of per part — see [Materials](#materials).
+
+**If a texture looks wrong (smeared, one flat color, or not lining up):** this is almost always a property of the _mesh's own UV data_, not a setting in this app. The most common cause is a missing or degenerate UV unwrap — some export/optimization workflows drop or never generate one unless you explicitly tell the tool to preserve/create it. 3dco+ detects this automatically: if a loaded mesh has no meaningful UV variation, a warning appears in the [log](#the-log-window) explaining exactly that, rather than leaving you guessing whether it's a texture-mapping bug. Re-export the mesh with a proper UV unwrap (most 3D tools have a "UV unwrap" or "smart UV project" operation) to fix it.
 
 **A note on `.blend` files specifically:** importing a `.blend` file directly is unreliable for many Blender files — this is a long-standing limitation in the underlying Assimp library's own Blender parser (not something specific to your file), and it can fail outright rather than producing a usable model. If a `.blend` import fails, export from Blender as **OBJ, FBX, or glTF** instead (File → Export in Blender) and import that — those formats are handled reliably and are what this app's own built-in models use.
+
+---
+
+## Materials
+
+Set a texture or material property once at the model level instead of assigning it to every part by hand.
+
+**Global Textures:**
+
+1. In the Model tab, find the **Global Textures** section (above the per-part texture list).
+2. Add a texture there the same way you would for a single part — pick a file, then set its **Type** (any of the types listed in [Textures & UV Mapping](#textures--uv-mapping) above).
+3. It applies to every part that doesn't already have a texture of that same type. A part with its own texture of a given type always keeps using its own — the override is per type, so a part can use its own Diffuse while still inheriting a global Normal Map, for example.
+
+**Global Material:**
+
+1. Set the model's **Global Material** (ambient, diffuse, specular, shininess, color) once, in the Model tab.
+2. For any part that needs different values, enable **Use Custom Material** on that part, then set its own ambient/diffuse/specular/shininess/color.
+
+Neither of these is an all-or-nothing switch for the whole model — the override is always per part (and for textures, per texture type within that part).
 
 ---
 
@@ -227,6 +278,14 @@ Each window supports **directional**, **point**, and **spot** lights. Adjust amb
 - **On Windows especially**: these windows have no title bar to drag by design, so if you need to reposition one, turn on **Drag to Move** first - otherwise dragging on the model does whatever its normal input binding does instead.
 - **Camera**: distance, yaw, pitch, roll, and a **freelook** mode (WASD + mouse‑look).
 - **Swap interval** (V‑Sync: off/on/adaptive) and background colour/opacity.
+
+**Right-click menu:** right-click anywhere on a controller window for a quick menu — **Reset View**, **Enable/Disable Click-Through**, **Enable/Disable Drag to Move** — without opening Settings. Note that once Click-Through is on, clicks (including right-clicks) pass straight through the window to whatever's behind it, so the menu itself becomes unreachable that way — use a keyboard shortcut (below) to turn Click-Through back off in that case.
+
+**Keyboard shortcuts for Click-Through/Drag to Move:**
+
+1. In Settings, enable **Enable Shortcut Monitoring** (off by default, applies to every window on every platform once on).
+2. On any window's Click-Through and/or Drag to Move dropdown, pick any keyboard key — not limited to a fixed list.
+3. With monitoring on, holding that key toggles the setting from anywhere, without needing the window focused or hovered. If more than one window shares the same key, they react together when you press it.
 
 ---
 
@@ -350,3 +409,4 @@ Everything you configure – bindings, imported models, tab layouts, controller 
 - **Gyro crashes or misbehaves on Windows:** open an issue with controller model and log contents.
 - **First launch is slow:** expected – extracting the embedded model library. Subsequent launches are fast.
 - **Grid not visible:** ensure “Show Grid” is checked and camera distance is not too far. The grid is now smaller and positioned below the model.
+- **A "quit anyway / cancel" prompt appeared:** expected behavior, not a bug — you have unsaved changes, and this appears before Escape, closing a controller window, or the tray icon's Quit actually exits, so an accidental close doesn't silently discard them. Save first, or pick Quit Anyway to discard the changes on purpose.

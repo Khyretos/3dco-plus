@@ -99,6 +99,16 @@ typedef struct mesh_struct {
   Material material;
   std::vector<Texture> textures;
 
+  // When false (default), this mesh uses Model::globalMaterial. When
+  // true, it uses its own `material` values below instead. Global is
+  // the default so a model-wide material change applies everywhere
+  // unless a specific mesh deliberately opts out by turning this on.
+  bool use_custom_material = false;
+
+  // When false (default), this mesh uses Model::globalTextures. When
+  // true, it uses its own `textures` list below instead.
+  bool use_custom_textures = false;
+
   // Position / motion data
   float position[3] = {0.0f, 0.0f, 0.0f};
   float travel[3] = {0.0f, 0.0f, 0.0f};
@@ -218,6 +228,43 @@ typedef struct model_struct {
   bool popup_paddles = false;
 
   std::string source;
+  // Free-form notes about the model - credits, a contributor shout-out,
+  // build notes, anything the person setting it up wants attached to
+  // it. Purely informational: nothing reads this to change any
+  // behavior, it just displays and saves/loads alongside source.
+  std::string description;
+
+  // A single texture applied to every part that doesn't have its own
+  // texture assigned - lets a user apply one custom image across the
+  // whole model at once instead of assigning the same texture to each
+  // part individually. A per-part texture always overrides its
+  // matching global one, but ONLY for the specific type that part
+  // defines itself - a part with only its own Diffuse still falls
+  // back to the global Normal Map, AO, etc. if those are set here and
+  // that part doesn't define them itself (see drawMesh()'s merge
+  // logic in model.cpp). Same list-of-Texture structure as a mesh's
+  // own textures (so the same Type dropdown, UV controls, and the
+  // same 0=Diffuse/1=Specular/.../6=AO type numbering apply here too)
+  // rather than a single texture forced to Diffuse - that was this
+  // feature's original, more limited form, which made it impossible
+  // to apply a normal/AO/roughness/metallic map globally at all.
+  // Applied against each mesh's own UVs individually - not a single
+  // shared UV layout across the whole model, so results will vary per
+  // part depending on how that part's own UVs happen to be laid out,
+  // same as it would if the same image were assigned to each part by
+  // hand one at a time.
+  std::vector<Texture> globalTextures;
+
+  // Model-wide material defaults, applied to every mesh whose
+  // use_custom_material is false (see Mesh above). Same idea as
+  // globalTextures - one place to tune ambient/diffuse/specular/
+  // shininess/color/alpha for the whole model at once, rather than
+  // editing it mesh by mesh. Particularly useful for normal maps:
+  // they're most visible when specular is high and shininess is low
+  // (a broad, responsive highlight that the perturbed normal can
+  // swing around), which is not what a mesh's own saved values
+  // usually are.
+  Material globalMaterial;
 
   // ----- Temporary storage for imported meshes (used by importModelFile and
   // preview) -----
@@ -233,6 +280,15 @@ struct ImportAssignment {
   int parent_part = -1;
   float touch_width = 1.0f;
   float touch_height = 1.0f;
+  // Optional - lets the user assign which input drives this part right
+  // in the import dialog, the same Type + Specific Input picker the
+  // Model table's own per-mesh assignment uses (see
+  // drawInputBindingPicker() in settings_window.cpp), rather than
+  // needing to import first and then set this up as a separate step
+  // afterward. Empty means unbound, same convention as a Mesh's own
+  // inputBinding - carried over onto the resulting Mesh once the
+  // import is actually applied.
+  std::string inputBinding;
 };
 
 struct ImportPreviewData {
@@ -268,7 +324,9 @@ void drawMesh(const Mesh &mesh, const glm::mat4 &modelMatrix, GLuint shader,
               const glm::mat4 &view = glm::mat4(1.0f),
               const glm::mat4 &projection = glm::mat4(1.0f),
               const glm::vec3 &cameraPos = glm::vec3(0.0f, 0.0f, 0.0f),
-              const std::string &globalShaderName = "");
+              const std::string &globalShaderName = "",
+              const std::vector<Texture> *globalTextures = nullptr,
+              const Model *globalMaterial = nullptr);
 
 void drawModel(Model &m, GLuint shader, int highlight_mesh_index = -1,
                const glm::vec4 &globalHighlightColor = glm::vec4(1.0f, 0.0f,

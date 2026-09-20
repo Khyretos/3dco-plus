@@ -70,6 +70,37 @@ int numpadFromStick(float dx, float dy, float deadzone = 0.5f) {
                         dx > deadzone);
 }
 
+// Whether a gamepad button index has been marked Invert on any mesh
+// it's bound to in the Model table - e.g. a grip sensor that reads
+// "pressed" while released and "not pressed" while actually gripped,
+// which some controllers (reportedly including a Steam Controller's
+// grip sensors) do, and which the Model table already has its own
+// per-mesh Invert checkbox to correct for the 3D display. Input
+// History's own capture reads the raw SDL button state directly,
+// completely independent of which meshes are bound to what - so
+// without this, a button set up this way would show as permanently
+// "held" in Input History (and pile up in Show Holds) for exactly as
+// long as the controller is actually being held normally, which is
+// backwards from what actually happened. Mirroring the same Invert
+// flag here, rather than adding a separate Input-History-only
+// setting, means it's one thing to set per button, not two things
+// that could drift out of sync with each other.
+//
+// This scans the model's meshes fresh each call rather than caching
+// a lookup table - mesh count is small (tens, not thousands) and
+// this only runs once per button per frame, so the cost is trivial,
+// and it stays correct automatically if bindings/inverts change
+// while Input History is running, with no separate invalidation to
+// remember.
+bool isGamepadButtonInverted(controller_window &w, int buttonIdx) {
+  std::string target = "gamepad:b" + std::to_string(buttonIdx);
+  for (auto &mesh : w.model.meshes) {
+    if (mesh.invert && mesh.inputBinding == target)
+      return true;
+  }
+  return false;
+}
+
 int computeDpadDigit(controller_window &w) {
   if (!w.is_gamecontroller || !w.sdl_controller)
     return 5;
@@ -549,8 +580,49 @@ void captureInputHistory(controller_window &w) {
           (b == SDL_GAMEPAD_BUTTON_DPAD_UP || b == SDL_GAMEPAD_BUTTON_DPAD_DOWN ||
            b == SDL_GAMEPAD_BUTTON_DPAD_LEFT || b == SDL_GAMEPAD_BUTTON_DPAD_RIGHT))
         continue;
+      // Marked Ignore for this display style (see
+      // isRawButtonIgnored()'s own doc comment) - skip entirely, not
+      // just "no glyph for it": no discrete press entry, and (since
+      // input_history_last_gamepad_button[b] below never gets touched
+      // for this index) no hold tracking either, which reads that
+      // same array. "- 2" converts input_history_display_style (0=Raw,
+      // 1=Notation, 2+=actual glyph styles) into listGlyphStyles()'s
+      // own indexing (0-based, glyph styles only) - the same
+      // conversion drawEntryInputCell() already does for glyph
+      // lookups. Missing this is exactly what made Ignore Button
+      // silently check the wrong style (or an out-of-range index that
+      // safely no-ops) instead of the one actually selected.
+      if (w.input_history_display_style >= 2 &&
+          isRawButtonIgnored(w.input_history_display_style - 2, b)) {
+        // Force-clear rather than just skip: if this button was
+        // already held (true) the moment it became ignored - a real
+        // scenario for an inverted grip sensor, which reads "pressed"
+        // for as long as the controller is actually being held
+        // normally - leaving its stored state untouched would leave
+        // it stuck at true forever (nothing else ever writes it once
+        // skipped), which is exactly what kept its hold timer running
+        // indefinitely until the app was restarted. Also drops any
+        // hold already being tracked for it, so an in-progress one
+        // doesn't linger either.
+        w.input_history_last_gamepad_button[b] = false;
+        std::string ignoredKey = "gp_btn_" + std::to_string(b);
+        for (auto it = w.input_history_active_holds.begin();
+            it != w.input_history_active_holds.end();) {
+          if (it->identityKey == ignoredKey)
+            it = w.input_history_active_holds.erase(it);
+          else
+            ++it;
+        }
+        continue;
+      }
       bool pressed =
           SDL_GetGamepadButton(w.sdl_controller, (SDL_GamepadButton)b);
+      // See isGamepadButtonInverted()'s own doc comment - this is what
+      // keeps an inverted button (e.g. a grip sensor wired backwards)
+      // from showing as permanently held in Input History for as long
+      // as the controller is actually being held normally.
+      if (isGamepadButtonInverted(w, b))
+        pressed = !pressed;
       if (w.input_history_gamepad_state_initialized && pressed &&
           !w.input_history_last_gamepad_button[b]) {
         InputHistoryInput in;
@@ -661,6 +733,35 @@ void captureInputHistory(controller_window &w) {
     for (int i = 0; i < SDL_SCANCODE_COUNT; ++i) {
       SDL_Scancode sc = static_cast<SDL_Scancode>(i);
       bool pressed = GlobalKeyboard::isPressed(sc);
+      // Only bother building the "keyboard:key_x" binding string and
+      // checking it when the key is actually down - checking all
+      // ~512 scancodes' Ignore status every single frame regardless
+      // of state would be wasted work for the near-total majority
+      // that are never pressed at any given moment.
+      if (pressed && w.input_history_display_style >= 2) {
+        const char *name = SDL_GetScancodeName(sc);
+        if (name && name[0]) {
+          std::string key = "key_";
+          for (const char *p = name; *p; ++p)
+            key.push_back((char)tolower((unsigned char)*p));
+          if (isInputIgnored(w.input_history_display_style - 2,
+                             "keyboard:" + key)) {
+            // Same force-clear reasoning as the gamepad case above -
+            // if this key was already held the moment it became
+            // ignored, leaving its stored state untouched would leave
+            // it stuck forever.
+            pressed = false;
+            std::string ignoredKey = "key_" + std::to_string(i);
+            for (auto it = w.input_history_active_holds.begin();
+                it != w.input_history_active_holds.end();) {
+              if (it->identityKey == ignoredKey)
+                it = w.input_history_active_holds.erase(it);
+              else
+                ++it;
+            }
+          }
+        }
+      }
       if (w.input_history_key_state_initialized && pressed &&
           !w.input_history_last_key_state[i]) {
         InputHistoryInput in;
@@ -676,8 +777,28 @@ void captureInputHistory(controller_window &w) {
 
   // ---- Mouse ----
   if (w.input_history_capture_mouse) {
+    // Matches the Model table's own mouse_left/mouse_right/mouse_middle/
+    // mouse_4../mouse_8 binding-string naming exactly, so an Ignore
+    // Button row picked from that same list matches the right button
+    // here.
+    static const char *kMouseBindingNames[8] = {
+        "mouse_left", "mouse_right", "mouse_middle", "mouse_4",
+        "mouse_5",    "mouse_6",     "mouse_7",      "mouse_8"};
     for (int b = 0; b < 8; ++b) {
       bool pressed = GlobalKeyboard::isMouseButtonPressed(b);
+      if (pressed && w.input_history_display_style >= 2 &&
+          isInputIgnored(w.input_history_display_style - 2,
+                         std::string("mouse:") + kMouseBindingNames[b])) {
+        pressed = false;
+        std::string ignoredKey = "mouse_" + std::to_string(b);
+        for (auto it = w.input_history_active_holds.begin();
+            it != w.input_history_active_holds.end();) {
+          if (it->identityKey == ignoredKey)
+            it = w.input_history_active_holds.erase(it);
+          else
+            ++it;
+        }
+      }
       if (w.input_history_mouse_state_initialized && pressed &&
           !w.input_history_last_mouse_state[b]) {
         InputHistoryInput in;
@@ -1149,9 +1270,12 @@ void drawActiveHoldsSection(controller_window &w) {
   for (auto &h : w.input_history_active_holds)
     if (h.confirmedHold)
       anyConfirmed = true;
-  if (!anyConfirmed)
+  if (!anyConfirmed) {
+    w.input_history_holds_section_height = 0.0f;
     return;
+  }
 
+  float startY = ImGui::GetCursorPosY();
   Uint64 now = SDL_GetTicks();
   if (ImGui::BeginTable("InputHistoryHolds", 1,
                         ImGuiTableFlags_Borders |
@@ -1191,6 +1315,10 @@ void drawActiveHoldsSection(controller_window &w) {
     }
     ImGui::EndTable();
   }
+  // Actual rendered height, measured directly rather than estimated -
+  // see input_history_holds_section_height's own doc comment. Read by
+  // the main table's own height-reservation calculation next frame.
+  w.input_history_holds_section_height = ImGui::GetCursorPosY() - startY;
 }
 
 void ensureInputHistoryWindowCreated(controller_window &w) {
@@ -1221,13 +1349,21 @@ void ensureInputHistoryWindowCreated(controller_window &w) {
 #endif
 
   std::string title = w.window_title + " - Input History";
-  w.input_history_glfw_window =
-      glfwCreateWindow(420, 260, title.c_str(), NULL, NULL);
+  // Created at its last known position/size (see input_history_last_x's
+  // own doc comment) rather than a fixed default, so it reopens
+  // wherever it was left, across both a re-enable within the same
+  // session and a fresh app launch (that field's own default covers
+  // the very first time this window is ever created).
+  w.input_history_glfw_window = glfwCreateWindow(
+      w.input_history_last_width, w.input_history_last_height, title.c_str(),
+      NULL, NULL);
   if (!w.input_history_glfw_window) {
     spdlog::error("Failed to create Input History window for '{}'.",
                   w.window_title);
     return;
   }
+  glfwSetWindowPos(w.input_history_glfw_window, w.input_history_last_x,
+                   w.input_history_last_y);
 
   GLFWimage images[1];
   images[0].pixels = stbi_load_from_memory(
@@ -1240,6 +1376,7 @@ void ensureInputHistoryWindowCreated(controller_window &w) {
 
   setWindowClickThrough(w.input_history_glfw_window,
                         w.input_history_click_through);
+  w.input_history_click_through_last_applied = w.input_history_click_through;
 
   GLFWwindow *previousContext = glfwGetCurrentContext();
   glfwMakeContextCurrent(w.input_history_glfw_window);
@@ -1359,6 +1496,21 @@ void drawOneInputHistoryWindow(controller_window &w) {
   }
 #endif
 
+  // Keep the "last known" position/size fresh every frame this window
+  // actually exists - see input_history_last_x's own doc comment for
+  // why this is tracked separately rather than only read at save time.
+  // Position specifically is skipped on a platform that can't report
+  // it at all (see g_window_pos_unavailable's own doc comment) - size
+  // alone is still queryable there, so that half keeps working; the
+  // position half just keeps whatever it was last successfully read
+  // as (or its default, if never), rather than repeatedly trying a
+  // query already known to fail and logging a fresh error every frame.
+  if (!g_window_pos_unavailable)
+    glfwGetWindowPos(w.input_history_glfw_window, &w.input_history_last_x,
+                     &w.input_history_last_y);
+  glfwGetWindowSize(w.input_history_glfw_window, &w.input_history_last_width,
+                    &w.input_history_last_height);
+
   if (glfwWindowShouldClose(w.input_history_glfw_window)) {
     // Closing the window (native close button/Alt-F4) turns the
     // feature off, same as unchecking it in Settings - not just hidden,
@@ -1384,7 +1536,31 @@ void drawOneInputHistoryWindow(controller_window &w) {
   // windows already have - only meaningful while Click-Through is
   // off, since with it on this window never receives mouse events at
   // all (they pass straight through to whatever's behind it).
-  if (w.input_history_drag_to_move) {
+  //
+  // On-the-fly shortcuts - see drag_to_move_shortcut's doc comment on
+  // controller windows in controller_window.h for the full picture.
+  // This window's own hover check (via its own glfw_window) is
+  // completely independent of any controller window's, so a
+  // shortcut fired while hovering here never affects one there.
+  bool dragToMoveEffective = updateShortcutToggle(
+      w.input_history_drag_to_move, w.input_history_drag_to_move_shortcut_was_active,
+      w.input_history_drag_to_move_shortcut, w.input_history_glfw_window);
+  // Middle Mouse Button built-in - see its doc comment on controller
+  // windows' own click_through_middle_mouse_was_active for the full
+  // explanation. Applied first, same layering as there.
+  updateShortcutToggle(w.input_history_click_through,
+                       w.input_history_click_through_middle_mouse_was_active,
+                       1 /* Middle Mouse Button */, w.input_history_glfw_window);
+  bool clickThroughEffective = updateShortcutToggle(
+      w.input_history_click_through,
+      w.input_history_click_through_shortcut_was_active,
+      w.input_history_click_through_shortcut, w.input_history_glfw_window);
+  if (clickThroughEffective != w.input_history_click_through_last_applied) {
+    setWindowClickThrough(w.input_history_glfw_window, clickThroughEffective);
+    w.input_history_click_through_last_applied = clickThroughEffective;
+  }
+
+  if (dragToMoveEffective && !g_window_pos_unavailable) {
     ImGuiIO &io = ImGui::GetIO();
     if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
       int win_x = 0, win_y = 0;
@@ -1494,8 +1670,8 @@ void drawOneInputHistoryWindow(controller_window &w) {
   if (w.input_history_alternating_rows)
     tableFlags |= ImGuiTableFlags_RowBg;
 
-  // How much vertical space the active holds section will need, so
-  // the main table can be constrained to leave exactly that much room
+  // How much vertical space the active holds section needs, so the
+  // main table can be constrained to leave exactly that much room
   // instead of using all available space and pushing the holds
   // section below the window's visible bounds. Previously the table
   // had no height limit and relied on the *outer* window's own
@@ -1511,19 +1687,16 @@ void drawOneInputHistoryWindow(controller_window &w) {
   // entirely - always stays exactly where it's pinned (top or
   // reserved bottom space), independent of how much history exists
   // or how small the window gets.
-  int confirmedHoldCount = 0;
-  for (auto &h : w.input_history_active_holds)
-    if (h.confirmedHold)
-      confirmedHoldCount++;
-  float holdsRowHeight =
-      std::max((float)w.input_history_glyph_size,
-               ImGui::GetTextLineHeight() *
-                   (w.input_history_font_size / 16.0f)) +
-      ImGui::GetStyle().CellPadding.y * 2.0f;
-  float holdsSectionHeight =
-      confirmedHoldCount > 0
-          ? (holdsRowHeight * confirmedHoldCount + ImGui::GetStyle().ItemSpacing.y)
-          : 0.0f;
+  //
+  // The reserved amount itself comes from input_history_holds_section_
+  // height - what the section actually measured as, last time it was
+  // drawn - rather than a hand-written formula estimating row count *
+  // row height. An estimate like that has no way to account for
+  // exactly how much space ImGui's own table borders/padding/spacing
+  // add on top of the content itself, so it tended to run slightly
+  // short - which is exactly what let the section overflow past its
+  // reserved space and visibly cut into (or get cut off by) the main
+  // table. A direct measurement can't have that class of error.
 
   // Active holds are pinned at whichever end is "newest" - outside
   // the scrollable table entirely, so a long history can never scroll
@@ -1534,11 +1707,19 @@ void drawOneInputHistoryWindow(controller_window &w) {
   // Only the bottom case needs an explicit reservation here - the top
   // case already reserves its own space naturally, just by having
   // been drawn first (the table below simply starts after it).
-  float reserveForBottomHolds =
-      (!w.input_history_newest_on_top) ? holdsSectionHeight : 0.0f;
+  float reserveForBottomHolds = (!w.input_history_newest_on_top)
+                                    ? w.input_history_holds_section_height
+                                    : 0.0f;
   float tableHeight =
       std::max(0.0f, ImGui::GetContentRegionAvail().y - reserveForBottomHolds);
 
+  // Removes the child window's own default padding (top+bottom, from
+  // the style's WindowPadding) so its content area exactly matches
+  // tableHeight above with nothing hidden - otherwise the last row
+  // could end up partially cut off at the child window's own edge,
+  // since the reserved-space calculation has no way to know about
+  // padding it never accounted for.
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
   if (ImGui::BeginChild("InputHistoryTableRegion", ImVec2(0, tableHeight),
                         false, ImGuiWindowFlags_NoScrollbar)) {
     if (ImGui::BeginTable("InputHistoryTable", columns, tableFlags)) {
@@ -1591,13 +1772,22 @@ void drawOneInputHistoryWindow(controller_window &w) {
       for (auto &entry : w.input_history_entries) {
         drawRow(entry);
       }
-      if (ImGui::GetScrollMaxY() > 0)
-        ImGui::SetScrollHereY(1.0f);
+      // SetScrollY(GetScrollMaxY()) directly, rather than
+      // SetScrollHereY(1.0f) (scroll to make the last-drawn item
+      // visible) - SetScrollHereY computes its target from the last
+      // item's own rect, which inside a table cell could end up
+      // slightly imprecise and leave the very last row partially cut
+      // off at the bottom edge instead of fully flush with it.
+      // Scrolling directly to the actual maximum scroll position is a
+      // more direct guarantee of the same intent ("show the bottom of
+      // the content"), with no per-item rect calculation involved.
+      ImGui::SetScrollY(ImGui::GetScrollMaxY());
     }
     ImGui::EndTable();
     }
   }
   ImGui::EndChild();
+  ImGui::PopStyleVar(); // WindowPadding pushed before BeginChild above
 
   if (!w.input_history_newest_on_top)
     drawActiveHoldsSection(w);

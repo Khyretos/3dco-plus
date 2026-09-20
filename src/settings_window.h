@@ -63,6 +63,9 @@ extern bool g_log_controller;
 extern bool g_log_keyboard;
 extern bool g_log_mouse;
 extern bool g_debug_mode_enabled;
+extern bool g_window_pos_unavailable;
+extern bool g_shortcut_monitoring_enabled;
+extern bool g_pending_quit_confirmation;
 void setDebugModeEnabled(bool enabled);
 
 #endif

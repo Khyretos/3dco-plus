@@ -17,6 +17,9 @@
 #include "controller_window.h"
 #include "cube_info.h"
 #include "icon_data.h"
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
 #include "keyboard_input.h"
 #include "settings.h"
 #include "settings_window.h"
@@ -109,7 +112,7 @@ void setWindowClickThrough(GLFWwindow *window, bool enable) {
     if (w.glfw_window == window && w.transparent_overlay.hwnd) {
       hwnd = (HWND)w.transparent_overlay.hwnd;
     } else if (w.input_history_glfw_window == window &&
-              w.input_history_overlay.hwnd) {
+               w.input_history_overlay.hwnd) {
       // Same idea, for the Input History window's own companion -
       // without this, toggling its Click-Through setting would only
       // ever affect the hidden GLFW window underneath, never the
@@ -138,6 +141,133 @@ void setWindowClickThrough(GLFWwindow *window, bool enable) {
   (void)enable;
   spdlog::warn("Click‑through not supported: GLFW < 3.4");
 #endif
+}
+
+// ------------------------------------------------------------------
+// On-the-fly Click-Through/Drag-to-Move shortcuts - see
+// drag_to_move_shortcut's doc comment in controller_window.h for the
+// full picture, and each function's own declaration there.
+// ------------------------------------------------------------------
+bool isMouseGloballyHoveringWindow(GLFWwindow *window) {
+  if (!window)
+    return false;
+  // See g_shortcut_monitoring_enabled's own doc comment
+  // (settings_window.cpp) - deliberately not a real hover check
+  // (comparing the cursor's global position against this window's own
+  // screen rectangle) anymore. That used to be how this worked on
+  // Windows/X11 (falling back to this flag only on Wayland, which
+  // can't report a window's own position at all), but kept two
+  // different code paths doing conceptually the same job depending on
+  // platform. Unified onto this single flag everywhere instead: with
+  // it off (the default), shortcuts never fire on any platform; with
+  // it on, they fire globally rather than scoped to whichever window
+  // happens to be under the cursor.
+  return g_shortcut_monitoring_enabled;
+}
+
+// Shortcut ID encoding (see drawShortcutDropdown() in settings_window.cpp
+// for the UI side of this):
+//   0                 = Off
+//   1                 = Middle Mouse Button (used only by Input History's
+//                       own built-in Middle-Mouse Click-Through toggle)
+//   2..5              = Meta / Ctrl / Shift / Alt (legacy, Hold kind)
+//   6..9              = F9..F12 (legacy, Discrete kind)
+//   1000 + scancode   = arbitrary SDL_Scancode key. Modifier keys are
+//                       Hold kind (temporary flip while held);
+//                       everything else is Discrete kind (fresh press
+//                       flips the stored setting once).
+ShortcutKind getShortcutKind(int shortcutId) {
+  if (shortcutId <= 0)
+    return ShortcutKind::None;
+  if (shortcutId >= 2 && shortcutId <= 5)
+    return ShortcutKind::Hold;
+  if (shortcutId >= 1000) {
+    SDL_Scancode sc = (SDL_Scancode)(shortcutId - 1000);
+    switch (sc) {
+    case SDL_SCANCODE_LSHIFT:
+    case SDL_SCANCODE_RSHIFT:
+    case SDL_SCANCODE_LCTRL:
+    case SDL_SCANCODE_RCTRL:
+    case SDL_SCANCODE_LALT:
+    case SDL_SCANCODE_RALT:
+    case SDL_SCANCODE_LGUI:
+    case SDL_SCANCODE_RGUI:
+      return ShortcutKind::Hold;
+    default:
+      return ShortcutKind::Discrete;
+    }
+  }
+  return ShortcutKind::Discrete;
+}
+
+// Numbering matches the dropdown built in settings_window.cpp's
+// drawShortcutDropdown() - keep the two in sync if either changes.
+// 0=Off, 1=Middle Mouse Button, 2=Meta (hold), 3=Ctrl (hold),
+// 4=Shift (hold), 5=Alt (hold), 6=F9, 7=F10, 8=F11, 9=F12.
+bool isShortcutPhysicallyActive(int shortcutId) {
+  if (shortcutId <= 0)
+    return false;
+  // Arbitrary-key shortcuts (added via "Press any key..." in the
+  // dropdown) all share one range - see getShortcutKind() above.
+  if (shortcutId >= 1000) {
+    SDL_Scancode sc = (SDL_Scancode)(shortcutId - 1000);
+    return GlobalKeyboard::isPressed(sc);
+  }
+  switch (shortcutId) {
+  case 1:
+    return GlobalKeyboard::isMouseButtonPressed(2);
+  case 2:
+    return GlobalKeyboard::isPressed(SDL_SCANCODE_LGUI) ||
+           GlobalKeyboard::isPressed(SDL_SCANCODE_RGUI);
+  case 3:
+    return GlobalKeyboard::isPressed(SDL_SCANCODE_LCTRL) ||
+           GlobalKeyboard::isPressed(SDL_SCANCODE_RCTRL);
+  case 4:
+    return GlobalKeyboard::isPressed(SDL_SCANCODE_LSHIFT) ||
+           GlobalKeyboard::isPressed(SDL_SCANCODE_RSHIFT);
+  case 5:
+    return GlobalKeyboard::isPressed(SDL_SCANCODE_LALT) ||
+           GlobalKeyboard::isPressed(SDL_SCANCODE_RALT);
+  case 6:
+    return GlobalKeyboard::isPressed(SDL_SCANCODE_F9);
+  case 7:
+    return GlobalKeyboard::isPressed(SDL_SCANCODE_F10);
+  case 8:
+    return GlobalKeyboard::isPressed(SDL_SCANCODE_F11);
+  case 9:
+    return GlobalKeyboard::isPressed(SDL_SCANCODE_F12);
+  default:
+    return false;
+  }
+}
+
+bool updateShortcutToggle(bool &persistentValue, bool &wasActiveLastFrame,
+                          int shortcutId, GLFWwindow *window) {
+  ShortcutKind kind = getShortcutKind(shortcutId);
+  if (kind == ShortcutKind::None) {
+    wasActiveLastFrame = false;
+    return persistentValue;
+  }
+  bool active = isMouseGloballyHoveringWindow(window) &&
+                isShortcutPhysicallyActive(shortcutId);
+  bool effective = persistentValue;
+  if (kind == ShortcutKind::Hold) {
+    // Live override for exactly as long as it's held - the stored
+    // setting itself is never touched, so releasing the key/button
+    // always reverts to whatever it actually was.
+    if (active)
+      effective = !persistentValue;
+  } else { // Discrete
+    // Edge-triggered: only the frame the key/button first goes down
+    // flips the stored setting, not every frame it happens to still
+    // be held.
+    if (active && !wasActiveLastFrame) {
+      persistentValue = !persistentValue;
+      effective = persistentValue;
+    }
+  }
+  wasActiveLastFrame = active;
+  return effective;
 }
 
 // ------------------------------------------------------------------
@@ -1295,9 +1425,27 @@ LRESULT CALLBACK CompanionWndProc(HWND hwnd, UINT msg, WPARAM wParam,
   case WM_LBUTTONUP:
     ReleaseCapture();
     goto forward_input_message;
-  case WM_MOUSEMOVE:
   case WM_RBUTTONDOWN:
+    // Same capture reasoning as WM_LBUTTONDOWN above, but for the
+    // right-click context menu specifically: without it, moving the
+    // cursor from the initial right-click point toward a menu item
+    // (a completely ordinary part of using a context menu) carries it
+    // outside this window's bounds, and every message from that point
+    // on - including the eventual WM_RBUTTONUP release - goes to
+    // whatever's now under the cursor instead of here, never reaching
+    // the hidden GLFW window/ImGui at all. That's what produced both
+    // symptoms at once: the popup reading a stale mouse position
+    // (position updates stopped arriving) and needing an actual
+    // held-drag-then-release onto the item to register (the release
+    // itself was going missing the same way). Left/Drag-to-Move never
+    // hit this since that capture was already in place; right-click
+    // had no equivalent until now.
+    SetCapture(hwnd);
+    goto forward_input_message;
   case WM_RBUTTONUP:
+    ReleaseCapture();
+    goto forward_input_message;
+  case WM_MOUSEMOVE:
   case WM_MBUTTONDOWN:
   case WM_MBUTTONUP:
   case WM_MOUSEWHEEL:
@@ -1415,10 +1563,10 @@ void createCompanionWindow(CompanionWindow &cw, GLFWwindow *source_window,
   // focus from whatever's running underneath - input still reaches it
   // (and gets forwarded), it just doesn't become the active/foreground
   // window on click, matching how an overlay should behave.
-  HWND hwnd = CreateWindowExW(
-      WS_EX_LAYERED | WS_EX_NOACTIVATE, kCompanionClassName, wtitle.c_str(),
-      WS_POPUP, x, y, width, height, nullptr, nullptr,
-      GetModuleHandleW(nullptr), nullptr);
+  HWND hwnd =
+      CreateWindowExW(WS_EX_LAYERED | WS_EX_NOACTIVATE, kCompanionClassName,
+                      wtitle.c_str(), WS_POPUP, x, y, width, height, nullptr,
+                      nullptr, GetModuleHandleW(nullptr), nullptr);
 
   if (!hwnd) {
     spdlog::error(
@@ -1442,8 +1590,8 @@ void createCompanionWindow(CompanionWindow &cw, GLFWwindow *source_window,
   SetWindowPos(hwnd, HWND_NOTOPMOST, x, y, width, height, SWP_NOACTIVATE);
   glfwHideWindow(source_window); // still renders, just not shown directly
 
-  spdlog::info("Created companion window '{}' ({}x{} at {},{})",
-              window_title, width, height, x, y);
+  spdlog::info("Created companion window '{}' ({}x{} at {},{})", window_title,
+               width, height, x, y);
 }
 
 void destroyCompanionWindow(CompanionWindow &cw) {
@@ -1584,8 +1732,8 @@ void updateCompanionWindow(CompanionWindow &cw, bool always_on_top,
   int wx = 0, wy = 0, ww = 0, wh = 0;
   glfwGetWindowPos(cw.source_window, &wx, &wy);
   glfwGetWindowSize(cw.source_window, &ww, &wh);
-  SetWindowPos(hwnd, always_on_top ? HWND_TOPMOST : HWND_NOTOPMOST, wx, wy,
-               ww, wh, SWP_NOACTIVATE);
+  SetWindowPos(hwnd, always_on_top ? HWND_TOPMOST : HWND_NOTOPMOST, wx, wy, ww,
+               wh, SWP_NOACTIVATE);
 
   glfwMakeContextCurrent(cw.source_window);
 
@@ -2068,6 +2216,21 @@ unsigned int defaultWidth = 640;
 unsigned int defaultHeight = 480;
 std::vector<controller_window> windows;
 
+// True if any open controller window has changes since its model was
+// last saved - checked before either of this app's two quit paths
+// (the Settings window's ESC/close button, and closing a regular
+// controller window directly) actually quits, so an accidental ESC
+// or window close doesn't silently discard pending edits. Global
+// across every window rather than per-window, since quitting ends
+// the whole app regardless of which window's close triggered it.
+bool anyUnsavedChanges() {
+  for (const controller_window &w : windows) {
+    if (w.unsaved_change_count > 0)
+      return true;
+  }
+  return false;
+}
+
 float get_axis_value_choice(controller_window &w, int axis_idx, bool useRaw) {
   if (useRaw) {
     SDL_Joystick *joy = nullptr;
@@ -2173,6 +2336,7 @@ void createControllerWindow(std::string title, std::string model_path) {
   glfwMakeContextCurrent(w.glfw_window);
   w.window_title = title;
   setWindowClickThrough(w.glfw_window, false); // default: no passthrough
+  w.click_through_last_applied = false;
 
   glEnable(GL_MULTISAMPLE);
 
@@ -2437,6 +2601,45 @@ void createControllerWindow(std::string title, std::string model_path) {
                         w.window_title);
 #endif
 
+  // Second ImGui context for this window's own Middle Mouse Button
+  // context menu - see controller_imgui_ctx's own doc comment
+  // (controller_window.h) for why this exists at all. Initialized
+  // after glfwSetScrollCallback() above (not before): Dear ImGui's
+  // GLFW backend detects and chains to any callback already set on
+  // the window at init time, so this order lets both this app's own
+  // scroll-to-zoom and ImGui's own scroll handling for the menu work
+  // side by side, neither silently overwriting the other.
+  {
+    GLFWwindow *previousContext = glfwGetCurrentContext();
+    glfwMakeContextCurrent(w.glfw_window);
+    ImGuiContext *previousImgui = ImGui::GetCurrentContext();
+    w.controller_imgui_ctx = ImGui::CreateContext();
+    ImGui::SetCurrentContext(w.controller_imgui_ctx);
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::StyleColorsDark();
+    applyCustomImGuiTheme();
+
+#if defined(IMGUI_IMPL_OPENGL_ES2)
+    const char *glsl_version = "#version 100";
+#elif defined(__APPLE__)
+    const char *glsl_version = "#version 150";
+#else
+    const char *glsl_version = "#version 130";
+#endif
+    ImGui_ImplGlfw_InitForOpenGL(w.glfw_window, true);
+    w.controller_imgui_backend_ready = ImGui_ImplOpenGL3_Init(glsl_version);
+    if (!w.controller_imgui_backend_ready) {
+      spdlog::error("Failed to initialize ImGui OpenGL3 backend for "
+                    "controller window '{}'.",
+                    title);
+    }
+
+    if (previousImgui)
+      ImGui::SetCurrentContext(previousImgui);
+    if (previousContext)
+      glfwMakeContextCurrent(previousContext);
+  }
+
   windows.push_back(w);
 }
 
@@ -2579,7 +2782,7 @@ void anchorTouchpointToTouchpad(controller_window &w, int meshIdx) {
     mesh.position[2] = 0.0f;
     mesh.useCustomScale = false;
     spdlog::info("Anchored touchpoint '{}' to touchpad '{}'", mesh.name,
-                w.model.meshes[touchpadIdxFound].name);
+                 w.model.meshes[touchpadIdxFound].name);
   }
 }
 
@@ -2911,7 +3114,8 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
                 value != "mouse_scroll_x" && fabs(globalScrollDy) > 0.001f;
             if (scrolledX || scrolledY)
               w.scroll_highlight_until =
-                  glfwGetTime() + (double)w.scroll_highlight_duration_ms / 1000.0;
+                  glfwGetTime() +
+                  (double)w.scroll_highlight_duration_ms / 1000.0;
 
             bool lit = glfwGetTime() < w.scroll_highlight_until;
             mesh.press = lit ? 1.0f : 0.0f;
@@ -3474,24 +3678,25 @@ void controller_window_input() {
               continue;
             if (g_debug_mode_enabled) {
               int tpAncestor = getTouchpadAncestor(w.model, meshIdx);
-              bool hasEntry =
-                  w.touchpoint_last_move_time.find(meshIdx) !=
-                  w.touchpoint_last_move_time.end();
-              spdlog::info(
-                  "[touchpoint recenter] window='{}' mesh {} ('{}') isTouchpoint=true "
-                  "touchpadAncestor={} hasMoveTimeEntry={} touch=({:.3f},{:.3f}) "
-                  "touch_state={}",
-                  w.window_title, meshIdx, mesh.name, tpAncestor, hasEntry, mesh.touch_X,
-                  mesh.touch_Y, (int)mesh.touch_state);
+              bool hasEntry = w.touchpoint_last_move_time.find(meshIdx) !=
+                              w.touchpoint_last_move_time.end();
+              spdlog::info("[touchpoint recenter] window='{}' mesh {} ('{}') "
+                           "isTouchpoint=true "
+                           "touchpadAncestor={} hasMoveTimeEntry={} "
+                           "touch=({:.3f},{:.3f}) "
+                           "touch_state={}",
+                           w.window_title, meshIdx, mesh.name, tpAncestor,
+                           hasEntry, mesh.touch_X, mesh.touch_Y,
+                           (int)mesh.touch_state);
             }
             auto it = w.touchpoint_last_move_time.find(meshIdx);
             if (it == w.touchpoint_last_move_time.end())
               continue;
             if (g_debug_mode_enabled) {
-              spdlog::info(
-                  "[touchpoint recenter] mesh {} elapsed={:.2f}s threshold={:.2f}s",
-                  meshIdx, current_time - it->second,
-                  (double)w.touchpoint_recenter_seconds);
+              spdlog::info("[touchpoint recenter] mesh {} elapsed={:.2f}s "
+                           "threshold={:.2f}s",
+                           meshIdx, current_time - it->second,
+                           (double)w.touchpoint_recenter_seconds);
             }
             // Reset to center after this many seconds of inactivity -
             // see touchpoint_recenter_seconds's doc comment. Gives it
@@ -3504,7 +3709,8 @@ void controller_window_input() {
             // the position genuinely does reset (verified directly),
             // but nobody ever SEES it happen, since it's been
             // invisible for seconds already by the time it does.
-            if (current_time - it->second > (double)w.touchpoint_recenter_seconds) {
+            if (current_time - it->second >
+                (double)w.touchpoint_recenter_seconds) {
               // "No touchpad to go back to" case: do nothing at all,
               // exactly as described - not just leaving position/
               // touch_state alone, but skipping the glow
@@ -3528,9 +3734,10 @@ void controller_window_input() {
                 }
               }
               if (g_debug_mode_enabled) {
-                spdlog::info("[touchpoint recenter] FIRING for mesh {} ('{}') - "
-                            "setting touch=(0.5,0.5) touch_state=1",
-                            meshIdx, mesh.name);
+                spdlog::info(
+                    "[touchpoint recenter] FIRING for mesh {} ('{}') - "
+                    "setting touch=(0.5,0.5) touch_state=1",
+                    meshIdx, mesh.name);
               }
               // Reset to center - touch_state deliberately stays at 1
               // (not reset to 0) so the touchpad-offset transform in
@@ -3630,6 +3837,34 @@ void controller_window_input() {
     int middle_button =
         w.mouse_buttons[GLFW_MOUSE_BUTTON_MIDDLE] ? GLFW_PRESS : GLFW_RELEASE;
 
+    // On-the-fly Click-Through/Drag-to-Move shortcuts - see
+    // drag_to_move_shortcut's doc comment in controller_window.h for
+    // the full picture. dragToMoveEffective is a local, not w.drag_to_
+    // move itself, specifically so a Hold-kind shortcut's temporary
+    // override (see updateShortcutToggle()) never corrupts the actual
+    // stored setting - only a Discrete-kind shortcut's fresh press
+    // does that, and it does so through the function itself, not by
+    // this call site assigning the return value back.
+    bool dragToMoveEffective =
+        updateShortcutToggle(w.drag_to_move, w.drag_to_move_shortcut_was_active,
+                             w.drag_to_move_shortcut, w.glfw_window);
+    // Middle Mouse Button on a controller window opens a small context
+    // menu instead of directly toggling anything (see
+    // "middleClickMenuOpen" below) - it used to hardcode toggling
+    // Click-Through here the same way Input History's own Middle
+    // Mouse Button still does, but that collided with this window's
+    // pre-existing Reset View behavior (also middle-click), firing
+    // both at once. The menu lets a single middle-click reach either
+    // action (plus Drag to Move) without the two ever fighting over
+    // the same input again.
+    bool clickThroughEffective = updateShortcutToggle(
+        w.click_through, w.click_through_shortcut_was_active,
+        w.click_through_shortcut, w.glfw_window);
+    if (clickThroughEffective != w.click_through_last_applied) {
+      setWindowClickThrough(w.glfw_window, clickThroughEffective);
+      w.click_through_last_applied = clickThroughEffective;
+    }
+
     bool pivotHit = false;
     glm::vec3 pivotPos(0.0f);
     if (selected_tab < tabs.size()) {
@@ -3656,7 +3891,7 @@ void controller_window_input() {
       }
     }
 
-    if (left_button == GLFW_PRESS && !w.drag_to_move) {
+    if (left_button == GLFW_PRESS && !dragToMoveEffective) {
       if (pivotHit && !w.pivot_dragging) {
         w.pivot_dragging = true;
         w.pivot_drag_start_screen_x = mouse_x;
@@ -3704,7 +3939,8 @@ void controller_window_input() {
         w.prev_mouse_x = mouse_x;
         w.prev_mouse_y = mouse_y;
       }
-    } else if (left_button == GLFW_PRESS && w.drag_to_move) {
+    } else if (left_button == GLFW_PRESS && dragToMoveEffective &&
+               !g_window_pos_unavailable) {
       // Actually move the window - previously this checkbox only
       // disabled the camera-rotate-on-drag behavior above and had no
       // window-moving logic of its own at all (it likely worked by
@@ -3755,28 +3991,72 @@ void controller_window_input() {
       w.drag_moving = false;
     }
 
+    // Middle Mouse Button: continuous Blender-style pan, every frame
+    // the button is held.
     if (middle_button == GLFW_PRESS) {
-      bool shiftPressed =
-          glfwGetKey(w.glfw_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
-          glfwGetKey(w.glfw_window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS;
-      if (shiftPressed) {
-        // Pan: move offsets based on mouse delta
-        float sensitivity = 0.005f;
-        w.camera_offset_x -= w.mouse_delta_x * sensitivity;
-        w.camera_offset_y += w.mouse_delta_y * sensitivity; // inverted Y
-      } else {
-        // Reset view
-        w.camera_yaw = 0.0f;
-        w.camera_pitch = 89.999f;
-        w.camera_distance = 3.5f;
-        w.camera_roll = 0.0f;
-        w.camera_offset_x = 0.0f;
-        w.camera_offset_y = 0.0f;
-      }
+      float sensitivity = 0.005f;
+      w.camera_offset_x -= w.mouse_delta_x * sensitivity;
+      w.camera_offset_y += w.mouse_delta_y * sensitivity; // inverted Y
     }
+
+    // Right Mouse Button: opens the context menu on release (a
+    // completed click), not on press. Opening on press left the menu
+    // open and interactive while the button was still physically
+    // held down, and Windows' companion-window message-forwarding
+    // layer (unlike a direct GLFW window on Linux/X11) made that
+    // window genuinely ambiguous: a hover-then-release while still
+    // holding could end up registering as a selection, and the menu
+    // could appear to lag since it depended on continued forwarding
+    // while held. Opening on release instead means the popup simply
+    // doesn't exist yet until the button is already back up - there's
+    // no window during which "still holding" can interact with it at
+    // all, on either platform, regardless of how forwarding behaves.
+    int right_button =
+        w.mouse_buttons[GLFW_MOUSE_BUTTON_RIGHT] ? GLFW_PRESS : GLFW_RELEASE;
+    if (right_button == GLFW_RELEASE && w.right_button_was_pressed) {
+      w.middle_click_menu_open = true;
+    }
+    w.right_button_was_pressed = (right_button == GLFW_PRESS);
 
     // Check if window should close
     if (glfwWindowShouldClose(w.glfw_window)) {
+      // Only the "quit the whole app" path (below) needs the unsaved-
+      // changes check - an import preview window closing itself never
+      // quits anything, so it's excluded here entirely. Checked and
+      // handled before any teardown below: this window's own
+      // controller_imgui_ctx would otherwise get destroyed even
+      // though the window isn't actually closing, breaking its
+      // rendering (including the confirmation popup itself, if this
+      // were the window driving it) for as long as the user is still
+      // deciding.
+      if (!w.is_import_preview && anyUnsavedChanges()) {
+        glfwSetWindowShouldClose(w.glfw_window, false);
+        g_pending_quit_confirmation = true;
+        continue;
+      }
+      // Tear down this window's own Middle Mouse Button menu context
+      // before the GLFW window/GL context it lives in goes away - see
+      // input_history.cpp's own teardown of input_history_imgui_ctx
+      // for the same sequence and reasoning (ImGui_ImplOpenGL3/Glfw
+      // shutdown, then DestroyContext, both before the window itself
+      // is destroyed).
+      {
+        GLFWwindow *previousContext = glfwGetCurrentContext();
+        ImGuiContext *previousImgui = ImGui::GetCurrentContext();
+        glfwMakeContextCurrent(w.glfw_window);
+        ImGui::SetCurrentContext(w.controller_imgui_ctx);
+        if (w.controller_imgui_backend_ready) {
+          ImGui_ImplOpenGL3_Shutdown();
+          ImGui_ImplGlfw_Shutdown();
+        }
+        ImGui::DestroyContext(w.controller_imgui_ctx);
+        w.controller_imgui_ctx = nullptr;
+        w.controller_imgui_backend_ready = false;
+        if (previousImgui)
+          ImGui::SetCurrentContext(previousImgui);
+        if (previousContext)
+          glfwMakeContextCurrent(previousContext);
+      }
       if (w.is_import_preview) {
         // For import preview windows, just close the window and remove its
         // tab
@@ -4498,6 +4778,97 @@ void drawControllerWindows() {
       }
 
       glUseProgram(0);
+
+      // ---- Middle Mouse Button context menu ----
+      // Rendered in this window's own second ImGui context (see
+      // controller_imgui_ctx's doc comment, controller_window.h) on
+      // top of the 3D scene just drawn above, before the Windows
+      // companion copy/swap below - so it's included in what actually
+      // ends up visible either way.
+      if (w.controller_imgui_ctx && w.controller_imgui_backend_ready) {
+        ImGuiContext *previousImgui = ImGui::GetCurrentContext();
+        ImGui::SetCurrentContext(w.controller_imgui_ctx);
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+#if defined(_WIN32)
+        // ImGui_ImplGlfw_NewFrame() above just set io.MousePos by
+        // polling glfwGetCursorPos() on this window - which, on
+        // Win32, calls the real GetCursorPos() and maps it through
+        // ScreenToClient() against THIS window's own screen rect.
+        // That's correct for a window the user can actually see and
+        // click on directly, but this one is deliberately hidden
+        // (glfwHideWindow, see createCompanionWindow's own doc
+        // comment) - its own screen rect has no reason to track the
+        // visible companion window's rect with pixel-perfect,
+        // zero-latency precision every single frame, and any drift
+        // between them - even briefly, e.g. mid-drag or right after a
+        // resize - was exactly what produced hover never registering
+        // and the popup opening at a position that didn't match
+        // where the user actually right-clicked. Recomputed directly
+        // against the companion window - the one the cursor is
+        // actually over - instead of trusting the hidden window's
+        // own idea of where it is on screen.
+        if (w.transparent_overlay.hwnd) {
+          POINT pt;
+          if (GetCursorPos(&pt)) {
+            ScreenToClient((HWND)w.transparent_overlay.hwnd, &pt);
+            // Plain io.MousePos assignment rather than the newer
+            // AddMousePosEvent() input-queue API - universally
+            // compatible across ImGui versions, and this is the one
+            // spot in the whole codebase setting mouse position this
+            // way at all, so there's no existing precedent here to
+            // confirm which API generation this project's ImGui
+            // actually is.
+            ImGui::GetIO().MousePos = ImVec2((float)pt.x, (float)pt.y);
+          }
+        }
+#endif
+
+        if (w.middle_click_menu_open) {
+          ImGui::OpenPopup("MiddleClickMenu");
+          // ImGui's own popup-open state (driven by the OpenPopup
+          // call above) takes over from here - this flag only needed
+          // to survive long enough to trigger that once.
+          w.middle_click_menu_open = false;
+        }
+        if (ImGui::BeginPopup("MiddleClickMenu")) {
+          if (ImGui::Selectable("Reset View")) {
+            w.camera_yaw = 0.0f;
+            w.camera_pitch = 89.999f;
+            w.camera_distance = 3.5f;
+            w.camera_roll = 0.0f;
+            w.camera_offset_x = 0.0f;
+            w.camera_offset_y = 0.0f;
+          }
+          ImGui::Separator();
+          // Toggles, not one-way enables - the same menu item flips
+          // the current state either way, matching what the checkbox
+          // in Settings does.
+          if (ImGui::Selectable(w.click_through ? "Disable Click-Through"
+                                                : "Enable Click-Through")) {
+            w.click_through = !w.click_through;
+            // Apply immediately (the same call the checkbox handler
+            // in Settings makes) rather than waiting for the next
+            // frame's effective-value diff in controller_window_input -
+            // otherwise there's a one-frame window where the stored
+            // bool and the OS-level click-through state disagree.
+            setWindowClickThrough(w.glfw_window, w.click_through);
+            w.click_through_last_applied = w.click_through;
+          }
+          if (ImGui::Selectable(w.drag_to_move ? "Disable Drag to Move"
+                                               : "Enable Drag to Move")) {
+            w.drag_to_move = !w.drag_to_move;
+          }
+          ImGui::EndPopup();
+        }
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        if (previousImgui)
+          ImGui::SetCurrentContext(previousImgui);
+      }
+
 #if defined(_WIN32)
       if (w.transparent_overlay.hwnd) {
         // The companion window is what's actually visible - copy this
@@ -4564,6 +4935,27 @@ static void releaseControllerWindowResources(controller_window &w) {
   // drawn (see createControllerWindow() / drawControllerWindows()).
   glfwMakeContextCurrent(w.glfw_window);
 
+  // Tear down this window's own Middle Mouse Button menu context too -
+  // this function runs on app shutdown (via destroyWindows()) as well
+  // as an individual window's own close, so it must not be skipped
+  // just because the per-frame close-button path above already
+  // handles the common case. Safe to call twice if this window was
+  // already torn down there (ImGui::DestroyContext/Shutdown-ing an
+  // already-null/already-shut-down context is a no-op).
+  if (w.controller_imgui_ctx) {
+    ImGuiContext *previousImgui = ImGui::GetCurrentContext();
+    ImGui::SetCurrentContext(w.controller_imgui_ctx);
+    if (w.controller_imgui_backend_ready) {
+      ImGui_ImplOpenGL3_Shutdown();
+      ImGui_ImplGlfw_Shutdown();
+    }
+    ImGui::DestroyContext(w.controller_imgui_ctx);
+    w.controller_imgui_ctx = nullptr;
+    w.controller_imgui_backend_ready = false;
+    if (previousImgui)
+      ImGui::SetCurrentContext(previousImgui);
+  }
+
   GLuint programs[] = {w.grid_shader, w.shader, w.light_source_shader,
                        w.touch_shader};
   for (GLuint p : programs)
@@ -4610,6 +5002,13 @@ static void releaseControllerWindowResources(controller_window &w) {
     delBuf(mesh.ebo);
     delVao(mesh.vao);
   }
+  // Global textures (Model::globalTextures) are their own separate GL
+  // handles, not shared with any mesh's own textures - missing this
+  // loop leaked every one of them on window close/app exit, silently,
+  // since a leaked GPU texture handle produces no visible symptom
+  // until it accumulates across many sessions.
+  for (Texture &tex : w.model.globalTextures)
+    deleteTexture(tex.id);
 }
 
 void destroyWindows() {
