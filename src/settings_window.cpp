@@ -6140,7 +6140,7 @@ void drawSettingsWindow() {
         ImGui::TextColored(ImVec4(0.8f, 0.4f, 1.0f, 1.0f),
                            "3D Controller Overlay +");
         ImGui::SameLine();
-        ImGui::TextDisabled("v1.2.0");
+        ImGui::TextDisabled("v1.3.0");
 
         ImGui::NewLine();
         ImGui::Text(

@@ -330,7 +330,6 @@ Shader files live in your [data directory](#data-directory--backups), under `sha
 ## Input History
 
 ![Input History demo placeholder](images/input_history_demo.webp)
-_(Video coming soon)_
 
 A separate always-on-top window per controller/keyboard/mouse window, showing a scrolling list of recent presses — the input-display style fighting games like Street Fighter and Tekken use, equally handy for tutorials. Toggle it per-window from that window's **Input History** section in Settings.
 
@@ -364,6 +363,12 @@ Build your own icon set instead of (or alongside) the bundled ones, in its own w
 2. An empty table appears. Click **Add Row** for each input you want to map: choose its type (Gamepad Button, D-Pad Direction, Gamepad Motion, Trigger, Keyboard, or Mouse), the specific input, then **Browse...** (the last column) to assign an image — either an existing glyph from the `glyphs/` folder or your own picture, which gets automatically converted and resized. **Gamepad Motion** is a fixed dropdown of the compound sequences the bundled FGC Motion art has icons for (`236`, `623`, `360`, and similar) — worth being clear-eyed about what this is: there's no actual runtime detection of a player performing a multi-direction motion to match against, so this only lets you assign a glyph to one of those known strings for whatever other use, not a claim the app recognizes them during play.
 3. Optionally set **Combine With** to another style, so anything you don't define yourself falls back to that style's glyphs instead of a bare text label — a mapping can also exclude specific input types from that fallback (FGC Motion does this for D-Pad glyphs, since it already represents direction its own way).
 4. **Save Mapping** — it's written to its own folder under `glyphs/` and immediately shows up as a Display Style choice, for any window. If a standard bundled style's folder ever goes missing (deleted by accident, an interrupted install), it's silently restored from the bundled pack the next time you launch.
+
+And for controllers like the "Steam Controller 2026" you can explicitley add rows to ignore specific buttons. since some buttons are based on touch like button 22 and button 23 which are the surface of the thumbsticks on this controller or the grip sensors which are buttons 24 and 25 that will trigger only when you hold the controller. To tackle this situation you just add these buttons to be ignored so that the input history does not get filled with buttons that are being hold because of the nature of their functionality.
+
+Note that these need to be specified per glyph mapping. So you need to pay attention on which button is being detected and map it according to your needs. In the mapping of your preference.
+
+![Example ignore button](images/ignore_buttons.png)
 
 ---
 

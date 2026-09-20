@@ -40,8 +40,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "base_top.obj",
@@ -83,8 +86,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "button_0.obj",
@@ -126,8 +132,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "button_01.obj",
@@ -169,8 +178,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "button_02.obj",
@@ -212,8 +224,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "button_03.obj",
@@ -255,8 +270,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "button_04.obj",
@@ -298,8 +316,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "button_05.obj",
@@ -341,8 +362,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "button_06.obj",
@@ -384,8 +408,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "button_07.obj",
@@ -427,8 +454,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "button_08.obj",
@@ -470,8 +500,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "button_09.obj",
@@ -513,8 +546,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "button_10.obj",
@@ -556,8 +592,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "button_11.obj",
@@ -599,8 +638,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "button_12.obj",
@@ -642,8 +684,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "button_13.obj",
@@ -685,8 +730,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "button_14.obj",
@@ -728,8 +776,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "button_15.obj",
@@ -771,8 +822,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "hat_down.obj",
@@ -814,8 +868,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "hat_left.obj",
@@ -857,8 +914,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "hat_right.obj",
@@ -900,8 +960,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "hat_up.obj",
@@ -943,8 +1006,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "joystick_bottom.obj",
@@ -986,8 +1052,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": false,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "joystick_top.obj",
@@ -1029,8 +1098,11 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "throttle.obj",
@@ -1072,9 +1144,22 @@
       "highlight_color_positive": [1.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 1.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     }
   ],
-  "source": "https://github.com/WolxStein/JoystickVisualizer"
+  "global_textures": [  ],
+  "global_material": {
+    "ambient": 0.200000,
+    "diffuse": 1.000000,
+    "specular": 0.100000,
+    "shininess": 32.000000,
+    "color": [0.300000, 0.300000, 0.300000],
+    "alpha": 1.000000
+  },
+  "source": "https://github.com/WolxStein/JoystickVisualizer",
+  "description": "Credits to Larf, the original creator."
 }

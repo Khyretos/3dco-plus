@@ -4,7 +4,7 @@
       "filename": "Touch_Point.obj",
       "name": "Touch_Point",
       "assigned_part": -1,
-      "position": [0.200000, 0.020000, 0.290000],
+      "position": [0.000000, 0.000000, 0.000000],
       "travel": [0.000000, 0.000000, 0.000000],
       "popup_offset": [0.000000, 0.000000, 0.000000],
       "popup_rotation": [0.000000, 0.000000, 0.000000],
@@ -31,7 +31,7 @@
       "specular": 0.100000,
       "shininess": 32.000000,
       "color": [1.000000, 1.000000, 1.000000],
-      "alpha": 0.872049,
+      "alpha": 0.870317,
       "use_custom_highlight": false,
       "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
       "travel_rotation": [0.000000, 0.000000, 0.000000],
@@ -40,8 +40,11 @@
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": false,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "button_3.obj",
@@ -83,8 +86,11 @@
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "button_4.obj",
@@ -126,8 +132,11 @@
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "button_6.obj",
@@ -169,8 +178,11 @@
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "dpi_+.obj",
@@ -212,8 +224,11 @@
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "dpi_-.obj",
@@ -255,8 +270,11 @@
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "left_click.obj",
@@ -291,15 +309,18 @@
       "color": [0.300000, 0.300000, 0.300000],
       "alpha": 1.000000,
       "use_custom_highlight": false,
-      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 1.000000],
+      "custom_highlight_color": [1.000000, 0.000000, 0.000000, 0.000000],
       "travel_rotation": [0.000000, 0.000000, 0.000000],
       "use_dual_highlight": false,
       "axis_deadzone": 0.100000,
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "mousepad.obj",
@@ -341,8 +362,11 @@
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
       "visible": false,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": false,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "right_click.obj",
@@ -384,8 +408,11 @@
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "shell.obj",
@@ -427,8 +454,11 @@
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "wheel_inner.obj",
@@ -470,8 +500,11 @@
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     },
     {
       "filename": "wheel_outer.obj",
@@ -513,9 +546,22 @@
       "highlight_color_positive": [0.000000, 0.000000, 0.000000, 1.000000],
       "highlight_color_negative": [0.000000, 0.000000, 0.000000, 1.000000],
       "visible": true,
+      "use_custom_material": true,
+      "use_custom_textures": true,
       "smooth_travel_enabled": true,
-      "smooth_travel_duration": 0.150000
+      "smooth_travel_duration": 0.150000,
+      "textures": [      ]
     }
   ],
-  "source": "https://www.cgtrader.com/items/6950150/download-page"
+  "global_textures": [  ],
+  "global_material": {
+    "ambient": 0.200000,
+    "diffuse": 1.000000,
+    "specular": 0.100000,
+    "shininess": 32.000000,
+    "color": [0.300000, 0.300000, 0.300000],
+    "alpha": 1.000000
+  },
+  "source": "https://www.cgtrader.com/items/6950150/download-page",
+  "description": "Credits to CaptGalaxyStar,\nRandomly found 3D model online."
 }
