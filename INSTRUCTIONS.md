@@ -212,11 +212,16 @@ You can bring in your own 3D model (common formats like FBX, glTF, OBJ, etc.) in
 ## Textures & UV Mapping
 
 ![Texture mapping placeholder](images/texture_demo.webp)
-_(Video coming soon)_
 
 **How texture mapping works:** 3dco+ always uses the mesh's own UV coordinates — the standard `vt` texture-coordinate data from an OBJ file, or the equivalent channel from whatever format you imported (FBX, glTF, etc.). It never uses object-space, triplanar, or normal-based mapping. If a mesh already has a proper UV unwrap from whatever 3D tool you made or exported it in, a texture applied here will follow that unwrap exactly.
 
+Note: the video example shows a per mesh assignement of the texture and this is not necesary, you can assign textures & materials globally and override them per mesh if necesary... im just too lazy to make another video.
+
 **Adding a texture to a mesh:**
+
+![Texture material example](images/texture_material_example.webp)
+
+Credits to [DAT](https://www.youtube.com/@gitardat) for the amazing 3D keyboard model and files to make this example possible!.
 
 1. Select the mesh in the Mesh List.
 2. Open its **Materials/Textures** section and click **Add Texture**.
@@ -225,15 +230,15 @@ _(Video coming soon)_
 
 **Texture types:**
 
-| Type          | What it does                                                                                                                                                         |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Diffuse       | The base color image.                                                                                                                                                |
-| Specular      | Controls highlight intensity/color.                                                                                                                                  |
-| Emissive      | Glows regardless of lighting.                                                                                                                                        |
+| Type          | What it does                                                                                                                                                                                  |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Diffuse       | The base color image.                                                                                                                                                                         |
+| Specular      | Controls highlight intensity/color.                                                                                                                                                           |
+| Emissive      | Glows regardless of lighting.                                                                                                                                                                 |
 | Normal Map    | Adds surface detail (bumps, grain, panel lines) without extra geometry. Use an image where flat areas are blue-purple (roughly RGB 128, 128, 255) — the standard format most 3D tools export. |
-| Metallic Map  | Grayscale; brighter = more metallic.                                                                                                                                 |
-| Roughness Map | Grayscale; brighter = softer/rougher reflections, darker = sharper/glossier.                                                                                        |
-| AO Map        | Grayscale; darker = more occluded (crevices, contact points), brighter = more exposed to ambient light.                                                              |
+| Metallic Map  | Grayscale; brighter = more metallic.                                                                                                                                                          |
+| Roughness Map | Grayscale; brighter = softer/rougher reflections, darker = sharper/glossier.                                                                                                                  |
+| AO Map        | Grayscale; darker = more occluded (crevices, contact points), brighter = more exposed to ambient light.                                                                                       |
 
 Any of these can also be set once for the whole model instead of per part — see [Materials](#materials).
 

@@ -19,10 +19,6 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 - **Fully configurable shortcuts.** Click-Through and Drag-to-Move can each be bound to any keyboard key now, not a fixed short list — pick whatever's comfortable and doesn't collide with anything else you use. A single **Enable Shortcut Monitoring** toggle (off by default) turns this on for every window, on every platform, rather than the feature working differently depending on your OS.
 - **Model Description field**, alongside the existing Source URL, for crediting a model's contributors, leaving setup notes, or anything else worth keeping with the model — saves and loads with the model itself and has no effect on how it looks or behaves.
 - **Unsaved-changes confirmation before quitting.** Pressing Escape, closing a controller window, and the tray icon's Quit now all check for pending changes first and offer **Quit Anyway**/**Cancel**, instead of silently discarding an accidental close.
-- **Fixed: Source URL and Description not resetting when switching models.** Switching to a model whose own file doesn't set one of these fields used to leave the *previous* model's value displayed, since the same in-memory model object is reused across a switch rather than rebuilt from scratch — now correctly resets to blank.
-- **Fixed: crashes when adding or removing textures**, including removing the last texture left in a mesh's list.
-- **Fixed: texture GPU memory not being freed** on window close or when switching to a different model — affected both per-part and global textures.
-- **Fixed: repeated Wayland log spam** from a window-position query this app has no way to answer on that platform (a deliberate Wayland restriction, not a bug) — now queried once and skipped afterward instead of every frame.
 
 ## What's new in 1.2.0
 
@@ -296,6 +292,10 @@ If a texture looks wrong (one flat color, smeared, misaligned), that's almost al
 Any of the above types can also be set once at the model level instead of per part — see [Materials](#materials) for global textures and how the per-part override works.
 
 ## Materials
+
+![Texture material showcase](images/texture_material_showcase.webp)
+
+Credits to [DAT](https://www.youtube.com/@gitardat) for the amazing 3D keyboard model and files to make this example possible!.
 
 Set a texture or a material property once at the model level instead of assigning it to every part by hand:
 
