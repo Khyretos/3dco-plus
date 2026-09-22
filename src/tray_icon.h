@@ -67,10 +67,27 @@ bool isEnabled();
 void update();
 
 // ---- Data shown in the right-click menu's submenus ----
+// Each controller is its own submenu (Minimize/Restore, Click-Through,
+// Drag to Move, and - if that controller has its own Input History
+// window enabled - a nested "Input History" submenu with its own
+// Click-Through/Drag to Move) rather than a single clickable row, so
+// the shortcut toggle that normally needs the keyboard/mouse
+// permission workaround (see the GitHub issue this was added for) has
+// a reachable fallback from the tray on platforms/setups where that
+// permission was never granted. has_input_history mirrors whether
+// that specific controller window currently has its own Input History
+// window open, not just enabled-but-closed - the nested submenu is
+// left out entirely when false, rather than shown disabled, since
+// there'd be nothing there to toggle yet.
 struct ControllerEntry {
   unsigned id;
   std::string title;
   bool minimized;
+  bool click_through;
+  bool drag_to_move;
+  bool has_input_history;
+  bool input_history_click_through;
+  bool input_history_drag_to_move;
 };
 // Call every frame (or whenever the open-window list changes) with the
 // current set of controller windows, for the "Controllers" submenu.
@@ -102,6 +119,14 @@ void setOnLeftClick(VoidCallback cb);              // toggle main window
 void setOnShowMainWindow(VoidCallback cb);         // "Show Window" menu item
 void setOnQuit(VoidCallback cb);                   // "Quit" menu item
 void setOnToggleController(ControllerCallback cb); // per-controller item
+// Click-Through/Drag to Move toggles reachable from the tray, for the
+// same controller window (Toggle*Controller*) or its Input History
+// window (Toggle*InputHistory*) identified by ControllerEntry::id -
+// see that struct's own doc comment for why these exist.
+void setOnToggleControllerClickThrough(ControllerCallback cb);
+void setOnToggleControllerDragToMove(ControllerCallback cb);
+void setOnToggleInputHistoryClickThrough(ControllerCallback cb);
+void setOnToggleInputHistoryDragToMove(ControllerCallback cb);
 
 } // namespace TrayIcon
 

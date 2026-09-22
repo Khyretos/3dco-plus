@@ -1211,8 +1211,19 @@ void removeDevice(std::vector<LinuxDevice> &devices, size_t index) {
   devices.erase(devices.begin() + static_cast<std::ptrdiff_t>(index));
 }
 
+// permission_denied_count, when given, is incremented for every device
+// open() rejects with EACCES/EPERM (as opposed to, say, ENOENT for one
+// that raced and disappeared between the directory listing and the
+// open call). Distinguishing that failure mode - rather than open()
+// failing and the device just being silently skipped, as before - is
+// what makes it possible to tell "this user simply doesn't have
+// permission to read any /dev/input device" apart from "there's
+// nothing to monitor right now", which otherwise look identical from
+// out here: an empty devices list either way, with no indication of
+// why.
 void scanDevices(std::vector<LinuxDevice> &devices,
-                 std::unordered_set<std::string> &ignored_paths) {
+                 std::unordered_set<std::string> &ignored_paths,
+                 int *permission_denied_count = nullptr) {
   namespace fs = std::filesystem;
   std::error_code ec;
   for (const auto &entry : fs::directory_iterator("/dev/input", ec)) {
@@ -1228,8 +1239,11 @@ void scanDevices(std::vector<LinuxDevice> &devices,
     if (already)
       continue;
     int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-    if (fd < 0)
+    if (fd < 0) {
+      if ((errno == EACCES || errno == EPERM) && permission_denied_count)
+        (*permission_denied_count)++;
       continue;
+    }
     bool isKeyboard = looksLikeKeyboard(fd);
     bool isMouse = looksLikeMouse(fd);
     if (!isKeyboard && !isMouse) {
@@ -1255,20 +1269,43 @@ void scanDevices(std::vector<LinuxDevice> &devices,
   }
 }
 
+// Overrides g_status with a clear, actionable message - matching the
+// existing pattern already used for a failed Windows hook install or a
+// denied macOS Accessibility permission above - when every /dev/input
+// device this scan looked at was rejected for permissions rather than
+// this machine genuinely having nothing to monitor. Only overrides
+// when devices is still empty: a mix of some accessible and some
+// denied devices is a real, working (if incomplete) setup, not this
+// failure mode, so it's left alone.
+void reportIfPermissionDenied(const std::vector<LinuxDevice> &devices,
+                              int permission_denied_count) {
+  if (!devices.empty() || permission_denied_count == 0)
+    return;
+  g_status = "Linux evdev: permission denied on every /dev/input device - "
+             "add this user to the 'input' group (sudo usermod -aG input "
+             "$USER, then log out and back in) or add a udev rule "
+             "granting access to /dev/input/event*";
+  spdlog::error("Global input backend: {}", g_status);
+}
+
 void linuxThreadPollingFallback() {
   // The old polling method, but with a much longer interval (e.g., 10 seconds)
   // as a safety net when inotify is unavailable.
   std::vector<LinuxDevice> devices;
   std::unordered_set<std::string> ignored_paths;
-  scanDevices(devices, ignored_paths);
+  int permission_denied = 0;
+  scanDevices(devices, ignored_paths, &permission_denied);
   g_status = "Linux evdev (fallback polling - 10s interval)";
   spdlog::warn("Global input backend: {}", g_status);
+  reportIfPermissionDenied(devices, permission_denied);
 
   auto lastScan = std::chrono::steady_clock::now();
   while (g_running.load()) {
     if (std::chrono::steady_clock::now() - lastScan >
         std::chrono::seconds(10)) {
-      scanDevices(devices, ignored_paths);
+      permission_denied = 0;
+      scanDevices(devices, ignored_paths, &permission_denied);
+      reportIfPermissionDenied(devices, permission_denied);
       lastScan = std::chrono::steady_clock::now();
     }
 
@@ -1323,7 +1360,9 @@ void linuxThread() {
   std::unordered_set<std::string> ignored_paths;
 
   // Initial scan
-  scanDevices(devices, ignored_paths);
+  int permission_denied = 0;
+  scanDevices(devices, ignored_paths, &permission_denied);
+  reportIfPermissionDenied(devices, permission_denied);
 
   // Buffer for inotify events (size is sufficient for many events)
   char buffer[sizeof(struct inotify_event) + NAME_MAX + 1];
@@ -1337,7 +1376,9 @@ void linuxThread() {
       // changed, but rescanning is cheap (only happens when a device is
       // added/removed). To avoid losing events, we loop through all events and
       // then scan once. But we can just scan once after processing all events.
-      scanDevices(devices, ignored_paths);
+      permission_denied = 0;
+      scanDevices(devices, ignored_paths, &permission_denied);
+      reportIfPermissionDenied(devices, permission_denied);
     }
 
     // ---- Poll input devices for events ----

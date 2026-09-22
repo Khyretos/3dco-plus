@@ -2,6 +2,13 @@
 #include "settings.h"     // for config_base_path
 #include "shaders_data.h" // will be generated
 #include "stb_image.h"
+// glad.h (via shader.h, included above) must come before this -
+// GLFW's own header checks whether a GL loader already defined the
+// GL types/prototypes it would otherwise try to declare itself.
+// Needed here for glfwGetCurrentContext() - see LoadShaderProgram()'s
+// own doc comment for why.
+#include <GLFW/glfw3.h>
+#include <cstdint> // uintptr_t, for LoadShaderProgram()'s cache key
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -13,6 +20,56 @@
 namespace {
 std::unordered_map<std::string, GLuint> g_shader_cache;
 std::unordered_map<std::string, std::string> g_embedded_shaders;
+
+// (context, program, uniform name) -> location. Every shaderUniform*
+// helper below previously called glGetUniformLocation() fresh, every
+// single call, with no caching at all - a well-known OpenGL
+// anti-pattern. A uniform's location is stable for a linked program's
+// entire lifetime (it only changes if the program is re-linked), so
+// this is a correctness-preserving cache, not an approximation. At
+// this project's own typical load - a handful of controller windows
+// open together, each with dozens to (for something like a keyboard)
+// hundreds of meshes, each mesh issuing on the order of 15-20 of
+// these calls every single frame - that's on the order of hundreds of
+// thousands of uncached, driver-crossing string lookups per second
+// before this cache existed.
+//
+// The context is part of the key for the same reason as
+// g_shader_cache above (see LoadShaderProgram()'s own comment): each
+// controller window has its own, separate, non-shared GL context, and
+// a GLuint program ID is only meaningful relative to whichever
+// context issued it - program ID 3 in window A's context and program
+// ID 3 in window B's context are two unrelated programs that happen
+// to share a number, so without the context in the key, a location
+// cached for one could be silently reused - wrongly - for the other.
+std::unordered_map<std::string, GLint> g_uniform_location_cache;
+} // namespace
+
+// Not inside the anonymous namespace above (unlike its own
+// g_uniform_location_cache) - declared in shader.h so model.cpp can
+// also use it directly, for the same reason it exists here: a large
+// block of "common uniforms a custom shader might expect" lookups
+// (lightDir, iTime, iChannel0..3, and others - see drawMesh(), the
+// block right after useProgramIfNeeded()) used to call
+// glGetUniformLocation() fresh for every one of those names, for
+// EVERY mesh, EVERY frame, even when the mesh's program is the
+// ordinary default shader that never declares any of them - meaning
+// every one of those lookups was a wasted driver call whose only
+// possible answer is -1, every single time, regardless of whether any
+// custom shader effect was even in use.
+GLint getCachedUniformLocation(GLuint program, const char *name) {
+  std::string key =
+      std::to_string(reinterpret_cast<uintptr_t>(glfwGetCurrentContext())) +
+      "#" + std::to_string(program) + "#" + name;
+  auto it = g_uniform_location_cache.find(key);
+  if (it != g_uniform_location_cache.end())
+    return it->second;
+  GLint loc = glGetUniformLocation(program, name);
+  g_uniform_location_cache[key] = loc;
+  return loc;
+}
+
+namespace {
 
 // ---- ShaderToy channel textures (iChannel0..3) ----
 // Cached per "<shaderName>#<channelIndex>" key. Each entry is either a
@@ -389,10 +446,25 @@ GLuint LoadShaderProgram(const std::string &name) {
   unpackEmbeddedShaders();
   if (name.empty())
     return 0; // default shader
-  // Check cache
-  auto it = g_shader_cache.find(name);
+
+  // Cache key includes the currently-current GL context, not just the
+  // shader's name. Each controller window gets its own, separate,
+  // non-shared GL context (see glfwCreateWindow's own call sites -
+  // the share parameter is always NULL), so a GLuint program handle
+  // compiled while window A's context was current is meaningless (or
+  // worse, silently wrong) once window B's context is current instead
+  // - a name-only cache previously just assumed otherwise ("Check if
+  // program is still valid? We'll assume it is."), which is the kind
+  // of assumption that only fails silently, not loudly: the first
+  // window to use a given shader effect gets a real, correctly
+  // compiled program; every other window requesting that same effect
+  // name would have reused that first window's now-invalid-here
+  // handle instead of compiling its own.
+  std::string cacheKey =
+      std::to_string(reinterpret_cast<uintptr_t>(glfwGetCurrentContext())) +
+      "#" + name;
+  auto it = g_shader_cache.find(cacheKey);
   if (it != g_shader_cache.end() && it->second != 0) {
-    // Check if program is still valid? We'll assume it is.
     return it->second;
   }
 
@@ -413,7 +485,7 @@ GLuint LoadShaderProgram(const std::string &name) {
     return 0;
   }
 
-  g_shader_cache[name] = prog;
+  g_shader_cache[cacheKey] = prog;
   return prog;
 }
 
@@ -551,47 +623,48 @@ std::vector<std::string> GetShaderNames() {
 }
 
 void shaderUniformBool(GLuint ID, const char *name, bool value) {
-  glUniform1i(glGetUniformLocation(ID, name), (int)value);
+  glUniform1i(getCachedUniformLocation(ID, name), (int)value);
 }
 
 void shaderUniformInt(GLuint ID, const char *name, int value) {
-  glUniform1i(glGetUniformLocation(ID, name), value);
+  glUniform1i(getCachedUniformLocation(ID, name), value);
 }
 
 void shaderUniformFloat(GLuint ID, const char *name, float value) {
-  glUniform1f(glGetUniformLocation(ID, name), value);
+  glUniform1f(getCachedUniformLocation(ID, name), value);
 }
 
 void shaderUniformMat4(GLuint ID, const char *name, glm::mat4 mat) {
-  glUniformMatrix4fv(glGetUniformLocation(ID, name), 1, false,
+  glUniformMatrix4fv(getCachedUniformLocation(ID, name), 1, false,
                      glm::value_ptr(mat));
 }
 
 void shaderUniformMat3(GLuint ID, const char *name, glm::mat3 mat) {
-  glUniformMatrix3fv(glGetUniformLocation(ID, name), 1, false,
+  glUniformMatrix3fv(getCachedUniformLocation(ID, name), 1, false,
                      glm::value_ptr(mat));
 }
 
 void shaderUniformVec3(GLuint ID, const char *name, glm::vec3 vec) {
 
-  glUniform3fv(glGetUniformLocation(ID, name), 1, &vec[0]);
+  glUniform3fv(getCachedUniformLocation(ID, name), 1, &vec[0]);
 }
 
 void shaderUniformVec4(GLuint ID, const char *name, glm::vec4 vec) {
 
-  glUniform4fv(glGetUniformLocation(ID, name), 1, &vec[0]);
+  glUniform4fv(getCachedUniformLocation(ID, name), 1, &vec[0]);
 }
 
 void shaderUniform2f(GLuint ID, const char *name, float value1, float value2) {
-  glUniform2f(glGetUniformLocation(ID, name), value1, value2);
+  glUniform2f(getCachedUniformLocation(ID, name), value1, value2);
 }
 
 void shaderUniform3f(GLuint ID, const char *name, float value1, float value2,
                      float value3) {
-  glUniform3f(glGetUniformLocation(ID, name), value1, value2, value3);
+  glUniform3f(getCachedUniformLocation(ID, name), value1, value2, value3);
 }
 
 void shaderUniform4f(GLuint ID, const char *name, float value1, float value2,
                      float value3, float value4) {
-  glUniform4f(glGetUniformLocation(ID, name), value1, value2, value3, value4);
+  glUniform4f(getCachedUniformLocation(ID, name), value1, value2, value3,
+             value4);
 }

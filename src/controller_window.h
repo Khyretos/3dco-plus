@@ -20,6 +20,7 @@ struct ImGuiContext;
 
 #include "input_history_types.h"
 #include "model.h"
+#include "shortcut_logic.h"
 #include <GLFW/glfw3.h>
 #include <SDL3/SDL.h>
 #include <array>
@@ -403,6 +404,16 @@ typedef struct controller_window_struct {
   bool last_joy_button_values[128] = {};
   bool highlight_enabled = false;
   float highlight_color[4] = {1.0f, 0.0f, 0.0f, 1.0f};
+  // 0 = Add (default): the highlight color is added on top of the
+  // underlying texture, so it stays visible underneath and brightens/
+  // tints rather than disappearing. 1 = Replace: at full strength the
+  // highlight color completely replaces the underlying texture, via a
+  // straight mix() - this was the only behavior before Add existed,
+  // and is now the 2nd option rather than the default. See
+  // CalcTexCoords' neighbor, the highlight-combining line in the
+  // fragment shader (shaders.cpp), for where this is actually
+  // applied.
+  int highlight_blend_mode = 0;
   std::map<int, std::array<float, 3>> original_colors;
   GLuint touch_area_vao = 0;
   GLuint touch_area_vbo = 0;
@@ -901,13 +912,12 @@ void setWindowClickThrough(GLFWwindow *window, bool enable);
 // Through back off" is the entire point of this feature.
 bool isMouseGloballyHoveringWindow(GLFWwindow *window);
 
-// A shortcut ID's kind: None = shortcut disabled; Hold = shows the
-// effective value differs from the stored setting for exactly as
-// long as the key/button is held (never touches the stored setting
-// itself); Discrete = a fresh press flips the stored setting once,
-// same as clicking the checkbox.
-enum class ShortcutKind { None, Hold, Discrete };
-ShortcutKind getShortcutKind(int shortcutId);
+// ShortcutKind and getShortcutKind() now live in shortcut_logic.h
+// (included above via controller_window.h's own includes - see that
+// header for the full doc comment) so they - and
+// isShortcutPhysicallyActiveGeneric(), the testable core of the
+// function just below - can be unit tested without this header's own
+// GLFW/ImGui dependency weight.
 
 // Whether a shortcut ID's underlying physical key/button is currently
 // held down, globally - not gated on hovering (callers combine this

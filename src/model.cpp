@@ -1,4 +1,5 @@
 #include "model.h"
+#include "model_persistence.h"
 #include "shader.h"
 #include "stb_image.h"
 #include <GLFW/glfw3.h>
@@ -152,6 +153,8 @@ void writeJson(Model &m, const std::string &path) {
          << mesh.custom_highlight_color[1] << ", "
          << mesh.custom_highlight_color[2] << ", "
          << mesh.custom_highlight_color[3] << "],\n";
+    json << "      \"custom_highlight_blend_mode\": "
+         << mesh.custom_highlight_blend_mode << ",\n";
     json << "      \"travel_rotation\": [" << mesh.travel_rotation[0] << ", "
          << mesh.travel_rotation[1] << ", " << mesh.travel_rotation[2]
          << "],\n";
@@ -381,6 +384,17 @@ void readInfoJson(Model &m, const std::string &path) {
       mesh.isPaddle = p["isPaddle"].get<bool>();
     if (p.contains("assigned_part"))
       mesh.assignedPart = p["assigned_part"].get<int>();
+    // use_custom_highlight was written by writeJson (above) but never
+    // read back here - meaning the toggle itself silently reset to
+    // its struct default (off) on every reload from a saved model,
+    // even though custom_highlight_color (just above) loaded
+    // correctly. custom_highlight_blend_mode is new alongside this
+    // fix, using the same pattern.
+    if (p.contains("use_custom_highlight"))
+      mesh.use_custom_highlight = p["use_custom_highlight"].get<bool>();
+    if (p.contains("custom_highlight_blend_mode"))
+      mesh.custom_highlight_blend_mode =
+          p["custom_highlight_blend_mode"].get<int>();
     mesh.name = p.value("name", filename);
     mesh.shader_name = p.value("shader_name", "");
 
@@ -441,20 +455,14 @@ void readInfoJson(Model &m, const std::string &path) {
     //     which has its own per-mesh material values and no key at
     //     all): default to true so those values are respected, rather
     //     than being silently replaced by the global defaults.
-    if (p.contains("use_custom_material")) {
-      mesh.use_custom_material = p.value("use_custom_material", true);
-    } else if (p.contains("use_global_material")) {
-      mesh.use_custom_material = !p.value("use_global_material", false);
-    } else {
-      mesh.use_custom_material = true;
-    }
-    if (p.contains("use_custom_textures")) {
-      mesh.use_custom_textures = p.value("use_custom_textures", true);
-    } else if (p.contains("use_global_textures")) {
-      mesh.use_custom_textures = !p.value("use_global_textures", false);
-    } else {
-      mesh.use_custom_textures = true;
-    }
+    // See resolveUseCustomToggle()'s own doc comment
+    // (model_persistence.h) for the three-generation migration this
+    // handles - the same branch shape, used here for both toggles
+    // rather than hand-written twice.
+    mesh.use_custom_material = resolveUseCustomToggle(
+        p, "use_custom_material", "use_global_material");
+    mesh.use_custom_textures = resolveUseCustomToggle(
+        p, "use_custom_textures", "use_global_textures");
     // Smooth travel animation (1.1.1) - off by default, matching every
     // info.json written before this feature existed.
     mesh.smooth_travel_enabled = p.value("smooth_travel_enabled", false);
@@ -473,11 +481,36 @@ void readInfoJson(Model &m, const std::string &path) {
         if (tex_path.empty())
           continue;
         if (!std::filesystem::exists(tex_path)) {
-          spdlog::warn("Texture for mesh '{}' no longer exists at '{}' - "
-                       "skipping (the image was likely moved/deleted since "
-                       "this was saved).",
-                       mesh.name, tex_path);
-          continue;
+          // Path healing: the stored path can be stale in two common
+          // ways - a bundled example model ships with whatever
+          // absolute path its original author's own machine happened
+          // to use (e.g. "/home/originalauthor/.local/share/3dco+/
+          // models/X/textures/Y.jpg", meaningless on anyone else's
+          // machine once extracted there), or a user simply moved/
+          // renamed their own model folder. Either way, the same
+          // filename very likely still exists under THIS model's own,
+          // current folder's "textures/" subfolder - see
+          // copyTextureIntoModelFolder()'s own doc comment
+          // (settings_window.cpp) for where new textures get placed;
+          // this is the read-side counterpart of that same
+          // convention - before giving up on the texture entirely.
+          std::string healedPath =
+              path + "/textures/" +
+              std::filesystem::path(tex_path).filename().string();
+          if (std::filesystem::exists(healedPath)) {
+            spdlog::info(
+                "Texture for mesh '{}' not found at its saved path '{}' - "
+                "found it instead at '{}' (this model's own textures "
+                "folder) and will use that from now on.",
+                mesh.name, tex_path, healedPath);
+            tex_path = healedPath;
+          } else {
+            spdlog::warn("Texture for mesh '{}' no longer exists at '{}' - "
+                         "skipping (the image was likely moved/deleted "
+                         "since this was saved).",
+                         mesh.name, tex_path);
+            continue;
+          }
         }
         Texture t;
         t.path = tex_path;
@@ -522,8 +555,13 @@ void readInfoJson(Model &m, const std::string &path) {
   // that key at all (never described, or saved before this field
   // existed) - most visible as description never actually going
   // blank switching from a described model to an undescribed one.
-  m.source = data.value("source", "");
-  m.description = data.value("description", "");
+  // source, description, and globalMaterial - see loadModelMetadata()'s
+  // own doc comment (model_persistence.h) for why this slice was
+  // pulled into its own function: it's the exact part of this block
+  // that needs nothing beyond Model/Material and nlohmann::json, so
+  // it's the part that can actually be unit tested (tests/test_model_
+  // persistence.cpp) without a full GL/GLFW/SDL context.
+  loadModelMetadata(m, data);
 
   // Global textures - see writeJson()'s own comment on why this is a
   // top-level field rather than per-part. Same load pattern as a
@@ -542,11 +580,26 @@ void readInfoJson(Model &m, const std::string &path) {
     if (tex_path.empty())
       return;
     if (!std::filesystem::exists(tex_path)) {
-      spdlog::warn("Global texture no longer exists at '{}' - skipping "
-                   "(the image was likely moved/deleted since this was "
-                   "saved).",
-                   tex_path);
-      return;
+      // Path healing - see the per-mesh version of this same fix just
+      // above for the full reasoning (bundled example assets ship
+      // with their original author's own absolute path baked in, or
+      // a user simply moved/renamed their own model folder).
+      std::string healedPath =
+          path + "/textures/" +
+          std::filesystem::path(tex_path).filename().string();
+      if (std::filesystem::exists(healedPath)) {
+        spdlog::info("Global texture not found at its saved path '{}' - "
+                     "found it instead at '{}' (this model's own textures "
+                     "folder) and will use that from now on.",
+                     tex_path, healedPath);
+        tex_path = healedPath;
+      } else {
+        spdlog::warn("Global texture no longer exists at '{}' - skipping "
+                     "(the image was likely moved/deleted since this was "
+                     "saved).",
+                     tex_path);
+        return;
+      }
     }
     Texture t;
     t.path = tex_path;
@@ -581,34 +634,6 @@ void readInfoJson(Model &m, const std::string &path) {
     // saved, same as the older per-mesh "ignored_raw_buttons"
     // migration elsewhere in this app.
     loadOneGlobalTexture(data["global_texture"]);
-  }
-
-  // Reset to Material's own struct defaults first, then conditionally
-  // apply what this model's own JSON actually has - same reused-Model
-  // reasoning as source/description just above. The previous version
-  // both skipped this whole block entirely when a model's JSON has no
-  // "global_material" key at all (never customized, or saved before
-  // this feature existed), and even within the block defaulted each
-  // field to ITS OWN CURRENT VALUE via gm.value("ambient",
-  // m.globalMaterial.ambient) rather than a real default - so a model
-  // with no global material of its own, loaded right after one that
-  // did customize it, silently inherited that other model's values
-  // instead of this model's own (implicit, default) material.
-  m.globalMaterial = Material();
-  if (data.contains("global_material") && data["global_material"].is_object()) {
-    const auto &gm = data["global_material"];
-    m.globalMaterial.ambient = gm.value("ambient", m.globalMaterial.ambient);
-    m.globalMaterial.diffuse = gm.value("diffuse", m.globalMaterial.diffuse);
-    m.globalMaterial.specular = gm.value("specular", m.globalMaterial.specular);
-    m.globalMaterial.shininess =
-        gm.value("shininess", m.globalMaterial.shininess);
-    m.globalMaterial.alpha = gm.value("alpha", m.globalMaterial.alpha);
-    if (gm.contains("color") && gm["color"].is_array() &&
-        gm["color"].size() >= 3) {
-      m.globalMaterial.color[0] = gm["color"][0].get<float>();
-      m.globalMaterial.color[1] = gm["color"][1].get<float>();
-      m.globalMaterial.color[2] = gm["color"][2].get<float>();
-    }
   }
 
   // ---- Sanitize parentIndex (unchanged, but needed) ----
@@ -1088,13 +1113,84 @@ void loadTexture(GLuint &id, std::string path) {
   stbi_image_free(data);
 }
 
+// Precomputed, cached per-slot texture uniform name strings
+// ("textures[0].id", "textures[0].type", ...) for every texture slot
+// drawMesh() might index into. Built once per slot, on that slot's
+// first use, then reused forever - the full possible set (16 slots,
+// matching MAX_TEXTURES in the shader and selectEffectiveTextures()'s
+// own cap, x 9 suffixes = 144 strings) is both tiny and entirely
+// static, since "textures[3].id" means the same uniform name
+// regardless of which mesh, model, or GL context is currently
+// drawing - unlike LoadShaderProgram()'s own cache (shader.cpp) or
+// getCachedUniformLocation() just above, this one genuinely doesn't
+// need to be context-aware, since it's caching a string constant, not
+// a GL handle or location that's only meaningful relative to a
+// specific context/program.
+struct TextureUniformNames {
+  std::string id, type, offsetX, offsetY, scaleX, scaleY, rotation, flipX,
+      flipY;
+};
+
+// REVERTED to a plain, always-call wrapper - a prior version of this
+// function cached "unit N already holds texture X" per (GL context,
+// unit) to skip redundant glActiveTexture/glBindTexture calls. That
+// was reverted after a user-reported regression where normal maps
+// rendered incorrectly (a moire-like artifact) that could not be
+// conclusively ruled out or reproduced in the time available. Unlike
+// this file's other caches (getCachedUniformLocation, LoadShaderProgram
+// in shader.cpp), which cache stable facts - a string, a uniform
+// location - this one tracked live, mutable, externally-influenceable
+// GL state ("what's actually bound right now"), which can be changed
+// by any other code path issuing raw GL calls (ImGui's own OpenGL3
+// backend renders every frame and calls glBindTexture/glUseProgram
+// directly, for one - confirmed to save/restore correctly against its
+// own real, official source, but auditing every OTHER raw GL call
+// anywhere in this codebase for the same guarantee was not something
+// that could be done with confidence). Given the cost of being wrong
+// here is visibly broken rendering, and the benefit was avoiding a
+// redundant but otherwise harmless driver call, correctness won. If
+// re-attempting this optimization in the future, it needs a real,
+// conclusive reproduction - across multiple windows, varying texture
+// counts, and the actual PBR shader path - before shipping again, not
+// just a simplified standalone test that failed to reproduce the bug
+// (which is what happened here: the revert stands on principle, not
+// because the bug was confirmed in this specific function).
+void bindTextureIfNeeded(int unit, GLuint texId) {
+  glActiveTexture(GL_TEXTURE0 + unit);
+  glBindTexture(GL_TEXTURE_2D, texId);
+}
+
+// REVERTED - see bindTextureIfNeeded()'s own comment just above; same
+// reasoning, same regression, same decision.
+void useProgramIfNeeded(GLuint program) { glUseProgram(program); }
+
+const TextureUniformNames &getTextureUniformNames(int slot) {
+  static std::vector<TextureUniformNames> cache;
+  if ((int)cache.size() <= slot)
+    cache.resize(slot + 1);
+  TextureUniformNames &names = cache[slot];
+  if (names.id.empty()) {
+    std::string base = "textures[" + std::to_string(slot) + "]";
+    names.id = base + ".id";
+    names.type = base + ".type";
+    names.offsetX = base + ".offsetX";
+    names.offsetY = base + ".offsetY";
+    names.scaleX = base + ".scaleX";
+    names.scaleY = base + ".scaleY";
+    names.rotation = base + ".rotation";
+    names.flipX = base + ".flipX";
+    names.flipY = base + ".flipY";
+  }
+  return names;
+}
+
 void drawMesh(const Mesh &mesh, const glm::mat4 &modelMatrix, GLuint shader,
               const glm::vec4 &highlightColor,
               const glm::vec3 *baseColorOverride, const glm::mat4 &view,
               const glm::mat4 &projection, const glm::vec3 &cameraPos,
               const std::string &globalShaderName,
               const std::vector<Texture> *globalTextures,
-              const Model *globalMaterial) {
+              const Model *globalMaterial, int highlightBlendMode) {
   if (!mesh.vao || mesh.elements == 0)
     return;
 
@@ -1113,16 +1209,24 @@ void drawMesh(const Mesh &mesh, const glm::mat4 &modelMatrix, GLuint shader,
     }
   }
 
-  glUseProgram(program);
+  useProgramIfNeeded(program);
 
   // ----- Set common uniforms that custom shaders might expect -----
   // These are safe defaults; the actual camera/lighting is used by the
   // default shader via the render loop. For custom shaders, we provide
   // these so they don't default to zero (which can cause invisible meshes).
+  // Runs for every mesh, every frame, regardless of whether the
+  // program in use is a custom shader effect at all - the ordinary
+  // default shader (almost every mesh, on almost every model) never
+  // declares any of lightDir/iTime/iChannel0../etc, so every one of
+  // these lookups used to be a wasted driver call whose only possible
+  // answer was -1, every single time. getCachedUniformLocation()
+  // (shader.h) turns that into a cache hit after the very first call
+  // for each (context, program, name) combination.
   GLint loc;
 
   // Light direction (e.g., from above)
-  loc = glGetUniformLocation(program, "lightDir");
+  loc = getCachedUniformLocation(program, "lightDir");
   if (loc != -1) {
     // Light direction: from object toward light source (so -lightDir points
     // toward camera)
@@ -1131,45 +1235,45 @@ void drawMesh(const Mesh &mesh, const glm::mat4 &modelMatrix, GLuint shader,
   }
 
   // Light color (white)
-  loc = glGetUniformLocation(program, "lightColor");
+  loc = getCachedUniformLocation(program, "lightColor");
   if (loc != -1)
     glUniform3f(loc, 1.0f, 1.0f, 1.0f);
 
   // Camera position
-  loc = glGetUniformLocation(program, "viewPos");
+  loc = getCachedUniformLocation(program, "viewPos");
   if (loc != -1)
     glUniform3f(loc, cameraPos.x, cameraPos.y, cameraPos.z);
 
   // Time
-  loc = glGetUniformLocation(program, "time");
+  loc = getCachedUniformLocation(program, "time");
   if (loc != -1)
     glUniform1f(loc, (float)glfwGetTime());
 
   // ShaderToy standard uniforms
-  loc = glGetUniformLocation(program, "iTime");
+  loc = getCachedUniformLocation(program, "iTime");
   if (loc != -1)
     glUniform1f(loc, (float)glfwGetTime());
 
-  loc = glGetUniformLocation(program, "iResolution");
+  loc = getCachedUniformLocation(program, "iResolution");
   if (loc != -1) {
     int vp[4];
     glGetIntegerv(GL_VIEWPORT, vp);
     glUniform3f(loc, (float)vp[2], (float)vp[3], 1.0f);
   }
 
-  loc = glGetUniformLocation(program, "iMouse");
+  loc = getCachedUniformLocation(program, "iMouse");
   if (loc != -1)
     glUniform4f(loc, 0.0f, 0.0f, 0.0f, 0.0f);
 
-  loc = glGetUniformLocation(program, "iTimeDelta");
+  loc = getCachedUniformLocation(program, "iTimeDelta");
   if (loc != -1)
     glUniform1f(loc, (float)(1.0f / 60.0f));
 
-  loc = glGetUniformLocation(program, "iFrame");
+  loc = getCachedUniformLocation(program, "iFrame");
   if (loc != -1)
     glUniform1i(loc, (int)(glfwGetTime() * 60.0f));
 
-  loc = glGetUniformLocation(program, "iFrameRate");
+  loc = getCachedUniformLocation(program, "iFrameRate");
   if (loc != -1)
     glUniform1f(loc, 60.0f);
 
@@ -1184,7 +1288,7 @@ void drawMesh(const Mesh &mesh, const glm::mat4 &modelMatrix, GLuint shader,
   if (!effectiveShaderName.empty()) {
     for (int ch = 0; ch < 4; ++ch) {
       std::string chName = "iChannel" + std::to_string(ch);
-      GLint chLoc = glGetUniformLocation(program, chName.c_str());
+      GLint chLoc = getCachedUniformLocation(program, chName.c_str());
       if (chLoc == -1)
         continue;
       int texW = 0, texH = 0;
@@ -1198,12 +1302,12 @@ void drawMesh(const Mesh &mesh, const glm::mat4 &modelMatrix, GLuint shader,
       glBindTexture(GL_TEXTURE_2D, texId);
       glUniform1i(chLoc, unit);
 
-      GLint resLoc = glGetUniformLocation(
+      GLint resLoc = getCachedUniformLocation(
           program, ("iChannelResolution[" + std::to_string(ch) + "]").c_str());
       if (resLoc != -1)
         glUniform3f(resLoc, (float)texW, (float)texH, 1.0f);
 
-      GLint timeLoc = glGetUniformLocation(
+      GLint timeLoc = getCachedUniformLocation(
           program, ("iChannelTime[" + std::to_string(ch) + "]").c_str());
       if (timeLoc != -1)
         glUniform1f(timeLoc, (float)glfwGetTime());
@@ -1212,78 +1316,65 @@ void drawMesh(const Mesh &mesh, const glm::mat4 &modelMatrix, GLuint shader,
                                   // rest of this function expects it
   }
 
-  loc = glGetUniformLocation(program, "_uiTime");
+  loc = getCachedUniformLocation(program, "_uiTime");
   if (loc != -1)
     glUniform1f(loc, (float)glfwGetTime());
 
-  loc = glGetUniformLocation(program, "_uiResolution");
+  loc = getCachedUniformLocation(program, "_uiResolution");
   if (loc != -1) {
     int vp[4];
     glGetIntegerv(GL_VIEWPORT, vp);
     glUniform2f(loc, (float)vp[2], (float)vp[3]);
   }
 
-  loc = glGetUniformLocation(program, "_uiMouse");
+  loc = getCachedUniformLocation(program, "_uiMouse");
   if (loc != -1)
     glUniform4f(loc, 0.0f, 0.0f, 0.0f, 0.0f);
 
   // View and projection matrices
-  loc = glGetUniformLocation(program, "view");
+  loc = getCachedUniformLocation(program, "view");
   if (loc != -1)
     glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(view));
-  loc = glGetUniformLocation(program, "projection");
+  loc = getCachedUniformLocation(program, "projection");
   if (loc != -1)
     glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(projection));
 
   // --- ALL material and highlight uniforms ---
-  // Per-type merge with the model's global textures (see
-  // Model::globalTextures's own doc comment in model.h): a mesh's own
-  // textures always win, but only for the specific type(s) it
-  // actually defines - a mesh with only its own Diffuse still picks
-  // up a global Normal Map, AO, etc. if those are set globally and
-  // this mesh doesn't define them itself. Built as a small array of
-  // pointers rather than copying Texture objects, so this stays cheap
-  // despite running every frame for every visible mesh.
-  std::vector<const Texture *> effectiveTextures;
-  if (mesh.use_custom_textures) {
-    for (const Texture &t : mesh.textures)
-      effectiveTextures.push_back(&t);
-  } else {
-    if (globalTextures) {
-      for (const Texture &t : *globalTextures)
-        effectiveTextures.push_back(&t);
-    }
-  }
-  // MAX_TEXTURES in the shader (see its own #define) - a mesh with 16
-  // of its own textures already at the cap plus any global ones on
-  // top could otherwise exceed the uniform array's actual size.
-  if (effectiveTextures.size() > 16)
-    effectiveTextures.resize(16);
+  // All-or-nothing toggle, not a per-type merge: use_custom_textures
+  // on means only this mesh's own texture list, off means only the
+  // model's globalTextures - see selectEffectiveTextures()'s own doc
+  // comment (model_persistence.h) for why that's worth spelling out
+  // explicitly here. 16 matches MAX_TEXTURES in the shader (see its
+  // own #define) - a mesh with 16 of its own textures already at the
+  // cap plus any global ones on top could otherwise exceed the
+  // uniform array's actual size.
+  std::vector<const Texture *> effectiveTextures =
+      selectEffectiveTextures(mesh.use_custom_textures, mesh.textures,
+                              globalTextures, 16);
   shaderUniformInt(program, "num_textures", (int)effectiveTextures.size());
   for (size_t i = 0; i < effectiveTextures.size(); i++) {
     const Texture &tex = *effectiveTextures[i];
-    std::string name = "textures[";
-    name.append(std::to_string(i));
-    name.append("]");
-    shaderUniformInt(program, std::string(name).append(".id").c_str(), i);
-    shaderUniformInt(program, std::string(name).append(".type").c_str(),
-                     tex.type);
-    shaderUniformFloat(program, std::string(name).append(".offsetX").c_str(),
-                       tex.offsetX);
-    shaderUniformFloat(program, std::string(name).append(".offsetY").c_str(),
-                       tex.offsetY);
-    shaderUniformFloat(program, std::string(name).append(".scaleX").c_str(),
-                       tex.scaleX);
-    shaderUniformFloat(program, std::string(name).append(".scaleY").c_str(),
-                       tex.scaleY);
-    shaderUniformFloat(program, std::string(name).append(".rotation").c_str(),
-                       tex.rotation);
-    shaderUniformFloat(program, std::string(name).append(".flipX").c_str(),
-                       tex.flipX ? 1.0f : 0.0f);
-    shaderUniformFloat(program, std::string(name).append(".flipY").c_str(),
-                       tex.flipY ? 1.0f : 0.0f);
-    glActiveTexture(GL_TEXTURE0 + i);
-    glBindTexture(GL_TEXTURE_2D, tex.id);
+    // getTextureUniformNames() (below) precomputes and caches these 9
+    // strings per slot - see its own doc comment for why this used to
+    // be a genuinely significant, previously invisible cost: this
+    // loop runs per texture, per mesh, per frame, and every one of
+    // the 9 calls below used to construct a brand new std::string via
+    // std::string(name).append(...) rather than reuse anything, for a
+    // set of strings (16 slots x 9 suffixes) that's both tiny and
+    // entirely static - the same "textures[3].id" every time, for
+    // every mesh, forever, so there was never anything to actually
+    // gain from rebuilding it.
+    const TextureUniformNames &names = getTextureUniformNames((int)i);
+    shaderUniformInt(program, names.id.c_str(), (int)i);
+    shaderUniformInt(program, names.type.c_str(), tex.type);
+    shaderUniformFloat(program, names.offsetX.c_str(), tex.offsetX);
+    shaderUniformFloat(program, names.offsetY.c_str(), tex.offsetY);
+    shaderUniformFloat(program, names.scaleX.c_str(), tex.scaleX);
+    shaderUniformFloat(program, names.scaleY.c_str(), tex.scaleY);
+    shaderUniformFloat(program, names.rotation.c_str(), tex.rotation);
+    shaderUniformFloat(program, names.flipX.c_str(), tex.flipX ? 1.0f : 0.0f);
+    shaderUniformFloat(program, names.flipY.c_str(), tex.flipY ? 1.0f : 0.0f);
+    bindTextureIfNeeded((int)i, tex.id);
   }
 
   // Global material (Model::globalMaterial) applies to every mesh
@@ -1351,6 +1442,7 @@ void drawMesh(const Mesh &mesh, const glm::mat4 &modelMatrix, GLuint shader,
   shaderUniformVec4(program, "highlight_color", effectiveHighlight);
   shaderUniformFloat(program, "highlight_value", effectiveHighlightValue);
   shaderUniformFloat(program, "pressValue", pressValForShader);
+  shaderUniformInt(program, "highlight_blend_mode", highlightBlendMode);
 
   shaderUniformMat4(program, "model", modelMatrix);
   glm::mat3 normal = glm::mat3(modelMatrix);
@@ -1364,15 +1456,15 @@ void drawMesh(const Mesh &mesh, const glm::mat4 &modelMatrix, GLuint shader,
     // Silhouette outline (inverted hull)
     GLuint outlineProg = getOutlineProgram();
     glUseProgram(outlineProg);
-    glUniformMatrix4fv(glGetUniformLocation(outlineProg, "view"), 1, GL_FALSE,
+    glUniformMatrix4fv(getCachedUniformLocation(outlineProg, "view"), 1, GL_FALSE,
                        glm::value_ptr(view));
-    glUniformMatrix4fv(glGetUniformLocation(outlineProg, "projection"), 1,
+    glUniformMatrix4fv(getCachedUniformLocation(outlineProg, "projection"), 1,
                        GL_FALSE, glm::value_ptr(projection));
-    glUniformMatrix4fv(glGetUniformLocation(outlineProg, "model"), 1, GL_FALSE,
+    glUniformMatrix4fv(getCachedUniformLocation(outlineProg, "model"), 1, GL_FALSE,
                        glm::value_ptr(modelMatrix));
 
     float outlineSize = 0.003f; // adjust as needed
-    glUniform1f(glGetUniformLocation(outlineProg, "outlineSize"), outlineSize);
+    glUniform1f(getCachedUniformLocation(outlineProg, "outlineSize"), outlineSize);
 
     // Draw only the back side (silhouette)
     glEnable(GL_CULL_FACE);
@@ -1586,7 +1678,7 @@ glm::mat4 getMeshFinalMatrix(const Model &m, int idx, const glm::mat4 &parent) {
 void drawModel(Model &m, GLuint shader, int highlight_mesh_index,
                const glm::vec4 &globalHighlightColor, const glm::mat4 &view,
                const glm::mat4 &projection, const glm::vec3 &cameraPos,
-               const std::string &globalShaderName) {
+               const std::string &globalShaderName, int highlightBlendMode) {
   int num_meshes = (int)m.meshes.size();
   std::vector<glm::mat4> finalMatrices(num_meshes, glm::mat4(1.0f));
   std::vector<bool> computed(num_meshes, false);
@@ -1620,33 +1712,33 @@ void drawModel(Model &m, GLuint shader, int highlight_mesh_index,
   for (int i = 0; i < num_meshes; ++i) {
     Mesh &mesh = m.meshes[i];
 
-    // ---- Determine effective highlight color ----
+    // ---- Determine effective highlight color and blend mode ----
+    // use_custom_highlight gates both together - see its own doc
+    // comment (model.h) for why this is one toggle, not two.
     glm::vec4 highlightCol;
+    int effectiveBlendMode;
     if (mesh.use_custom_highlight) {
       highlightCol = glm::vec4(
           mesh.custom_highlight_color[0], mesh.custom_highlight_color[1],
           mesh.custom_highlight_color[2], mesh.custom_highlight_color[3]);
+      effectiveBlendMode = mesh.custom_highlight_blend_mode;
     } else {
       highlightCol = globalHighlightColor;
-    }
-
-    // Determine which shader to use
-    // Determine which shader to use: per-mesh override, else global
-    GLuint program = shader;
-    std::string effectiveShaderName = mesh.shader_name;
-    if (effectiveShaderName.empty())
-      effectiveShaderName = globalShaderName;
-    if (!effectiveShaderName.empty()) {
-      GLuint customProg = LoadShaderProgram(effectiveShaderName);
-      if (customProg != 0) {
-        program = customProg;
-      } else {
-        // Fallback to default
-        program = shader;
-      }
+      effectiveBlendMode = highlightBlendMode;
     }
 
     // ---- Draw the mesh ----
+    // (Per-mesh shader override resolution - mesh.shader_name vs.
+    // globalShaderName, LoadShaderProgram() - genuinely happens inside
+    // drawMesh() itself, from the shader_name/globalShaderName it's
+    // passed below. A duplicate copy of that same resolution used to
+    // sit here too, computing its own local `program`/
+    // `effectiveShaderName` that were passed to nothing - the actual
+    // call below has always passed the plain `shader` parameter, not
+    // that local `program` - so this was a second, complete,
+    // provably-dead run of shader-name string building and a
+    // LoadShaderProgram() cache lookup, for every mesh, every frame,
+    // whose entire result was discarded unread.
     // When this mesh is the selected one (highlight_mesh_index), force its
     // base color to green for the draw call only, via baseColorOverride,
     // rather than overwriting mesh.material.color — which used to require
@@ -1656,7 +1748,7 @@ void drawModel(Model &m, GLuint shader, int highlight_mesh_index,
         (i == highlight_mesh_index) ? &selectionColor : nullptr;
     drawMesh(mesh, finalMatrices[i], shader, highlightCol, baseColorOverride,
              view, projection, cameraPos, globalShaderName, &m.globalTextures,
-             &m);
+             &m, effectiveBlendMode);
   }
 }
 

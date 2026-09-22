@@ -252,6 +252,47 @@ void InitializeProgram() {
       minimizeControllerWindow(*w);
     }
   });
+  // The four new tray toggles (see ControllerEntry's own doc comment,
+  // tray_icon.h, for why these exist - reachable fallback for the
+  // shortcut-based toggle when the OS-level permission it needs was
+  // never granted). Click-Through applies immediately via
+  // setWindowClickThrough(), the same call and _last_applied sync the
+  // right-click menu's own equivalent toggle makes (see its own
+  // comment, controller_window.cpp, for why: otherwise there's a
+  // one-frame window where the stored bool and the OS-level state
+  // disagree). Drag to Move doesn't need this - it's checked fresh
+  // every frame during drag handling, not an OS-level state that
+  // needs syncing.
+  TrayIcon::setOnToggleControllerClickThrough([](unsigned id) {
+    controller_window *w = getControllerWindow(id);
+    if (!w)
+      return;
+    w->click_through = !w->click_through;
+    setWindowClickThrough(w->glfw_window, w->click_through);
+    w->click_through_last_applied = w->click_through;
+  });
+  TrayIcon::setOnToggleControllerDragToMove([](unsigned id) {
+    controller_window *w = getControllerWindow(id);
+    if (!w)
+      return;
+    w->drag_to_move = !w->drag_to_move;
+  });
+  TrayIcon::setOnToggleInputHistoryClickThrough([](unsigned id) {
+    controller_window *w = getControllerWindow(id);
+    if (!w || !w->input_history_glfw_window)
+      return;
+    w->input_history_click_through = !w->input_history_click_through;
+    setWindowClickThrough(w->input_history_glfw_window,
+                          w->input_history_click_through);
+    w->input_history_click_through_last_applied =
+        w->input_history_click_through;
+  });
+  TrayIcon::setOnToggleInputHistoryDragToMove([](unsigned id) {
+    controller_window *w = getControllerWindow(id);
+    if (!w || !w->input_history_glfw_window)
+      return;
+    w->input_history_drag_to_move = !w->input_history_drag_to_move;
+  });
 
   // Self-heals any standard glyph style folder that's missing or
   // incomplete (someone deleted it, an interrupted first-run

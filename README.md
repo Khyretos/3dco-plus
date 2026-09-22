@@ -11,6 +11,15 @@ This is a **fork, not a replacement**. It exists as an homage to the original to
 
 The **`+`** in the name means exactly that: **improvements and extra features** layered on top of the original — more controllers, more rendering features, more input paths, more build tooling — while keeping the same "point it at your input device and it just works" spirit. It's also a personal passion project: a way for me to see what I'm actually capable of building and maintaining with AI as a collaborator rather than a crutch.
 
+## What's new in 1.3.1
+
+- **Flip Y now off by default** for a newly-added texture, replacing the previous default of on. The original default was tuned against a single real model+texture pair early on; broader use since showed that combination wrong more often than right for the images people actually import.
+- **"Reset All Meshes to Global Textures"** button next to the Global Texture editor, for applying a new or changed global texture across a model where many meshes already have their own custom textures, without switching to each one individually and clearing it by hand. See [Materials](#materials).
+- **Bulk Travel/Travel Rotation copy** in Movement & Animation - "Copy Travel to All Buttons" and "Copy Travel to Matching Name" (a substring filter on the mesh's own name), aimed squarely at keyboards and other models with many mechanically-identical parts that would otherwise mean setting the same six numbers by hand, once per key.
+- **Highlight Blend Mode**: alongside the existing **Replace** (the highlight color fully covers the part's own texture at full strength), a new **Add** mode layers the highlight color on top instead, so the underlying texture stays visible and brightens/tints rather than disappearing.
+- **Fixed: shortcuts silently not working on some Linux setups.** The underlying cause was a permission issue (this app's account not being in the `input` group, needed to read raw input devices) that produced no error or indication anywhere - Settings now shows a clear ✓/✗ status line under Enable Shortcut Monitoring once it's on, and the ✗ case explains exactly how to fix it.
+- **Fixed: an Ignore Button rule on a glyph style's Combine With target not taking effect.** Glyph lookup itself already followed a style's Combine With chain (so a style missing a glyph could inherit one from what it combines with) - the ignore-rule check didn't follow that same chain, so a rule set on the combine target silently never applied while viewing the combining style.
+
 ## What's new in 1.3.0
 
 - **PBR-style texture maps.** Alongside the existing Diffuse/Specular/Emissive types, a texture can now be a **Normal Map** (adds surface detail — bumps, grain, panel lines — without extra geometry), **Metallic Map**, **Roughness Map**, or **AO Map** (ambient occlusion). This isn't a full physically-based renderer bolted on — it's a practical approximation layered onto the existing lighting model, chosen deliberately over a much larger lighting-engine rewrite. See [Textures & UV Mapping](#textures--uv-mapping).
@@ -19,6 +28,10 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 - **Fully configurable shortcuts.** Click-Through and Drag-to-Move can each be bound to any keyboard key now, not a fixed short list — pick whatever's comfortable and doesn't collide with anything else you use. A single **Enable Shortcut Monitoring** toggle (off by default) turns this on for every window, on every platform, rather than the feature working differently depending on your OS.
 - **Model Description field**, alongside the existing Source URL, for crediting a model's contributors, leaving setup notes, or anything else worth keeping with the model — saves and loads with the model itself and has no effect on how it looks or behaves.
 - **Unsaved-changes confirmation before quitting.** Pressing Escape, closing a controller window, and the tray icon's Quit now all check for pending changes first and offer **Quit Anyway**/**Cancel**, instead of silently discarding an accidental close.
+- **Fixed: Source URL and Description not resetting when switching models.** Switching to a model whose own file doesn't set one of these fields used to leave the *previous* model's value displayed, since the same in-memory model object is reused across a switch rather than rebuilt from scratch — now correctly resets to blank.
+- **Fixed: crashes when adding or removing textures**, including removing the last texture left in a mesh's list.
+- **Fixed: texture GPU memory not being freed** on window close or when switching to a different model — affected both per-part and global textures.
+- **Fixed: repeated Wayland log spam** from a window-position query this app has no way to answer on that platform (a deliberate Wayland restriction, not a bug) — now queried once and skipped afterward instead of every frame.
 
 ## What's new in 1.2.0
 
@@ -81,6 +94,7 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 
 - [What stayed the same](#what-stayed-the-same)
 - [What's new in the `+`](#whats-new-in-the-)
+- [What's new in 1.3.1](#whats-new-in-131)
 - [What's new in 1.3.0](#whats-new-in-130)
 - [What's new in 1.2.0](#whats-new-in-120)
 - [What's new in 1.1.1](#whats-new-in-111)
@@ -285,7 +299,7 @@ Shader files live under `shaders/<name>/` in your [data directory](#where-your-d
 - **Roughness Map** — a grayscale image; brighter areas scatter reflections more (rougher/softer), darker areas stay sharp (smoother/glossier).
 - **AO Map** — a grayscale image; darker areas are treated as more occluded (crevices, contact points), brighter areas as more exposed to ambient light.
 
-Alongside Type, every texture has Offset/Scale/Rotation controls plus Flip X/Flip Y for source images that read mirrored on the mesh. A newly-added texture starts with Flip Y on and Offset Y at 1 - the combination that lines up correctly for most images exported the ordinary way; an existing texture loaded from a saved model always keeps whatever it was actually saved with, so this doesn't change anything already correctly configured.
+Alongside Type, every texture has Offset/Scale/Rotation controls plus Flip X/Flip Y for source images that read mirrored on the mesh. A newly-added texture starts with Flip Y off, which lines up correctly for most images exported the ordinary way; an existing texture loaded from a saved model always keeps whatever it was actually saved with, so this doesn't change anything already correctly configured.
 
 If a texture looks wrong (one flat color, smeared, misaligned), that's almost always the mesh's own UV data, not a setting here — most commonly a missing or degenerate UV unwrap from an export/optimization workflow that didn't preserve one.
 
@@ -293,16 +307,12 @@ Any of the above types can also be set once at the model level instead of per pa
 
 ## Materials
 
-![Texture material showcase](images/texture_material_showcase.webp)
-
-Credits to [DAT](https://www.youtube.com/@gitardat) for the amazing 3D keyboard model and files to make this example possible!.
-
 Set a texture or a material property once at the model level instead of assigning it to every part by hand:
 
-- **Global Textures** — its own section above the per-part texture list. Add a texture there the same way you would for a single part and give it a Type (any of the types listed in [Textures & UV Mapping](#textures--uv-mapping) above). It applies to every part that doesn't already define a texture of that same type itself — a part's own texture of a given type always overrides the global one for that type specifically, so a part can mix its own Diffuse with an inherited global Normal Map, for example.
+- **Global Textures** — its own section above the per-part texture list. Add a texture there the same way you would for a single part and give it a Type (any of the types listed in [Textures & UV Mapping](#textures--uv-mapping) above). Each part has a **Use Custom Textures** toggle: off (default) means the part uses the Global Textures list above, entirely; on means it uses its own texture list instead, entirely. It's an all-or-nothing switch per part, not a per-type merge — turning it on for a part with only its own Diffuse set doesn't pick up a global Normal Map alongside it, for example.
 - **Global Material** — the same idea for material properties (ambient, diffuse, specular, shininess, color). Set it once at the model level; any part that needs different values can enable **Use Custom Material** on that part and set its own instead.
 
-Neither is an all-or-nothing switch for the whole model — the override is per part, and for textures, per texture type within that part.
+The override is per part — some parts can use their own textures/material while others use the model's global ones — but for any one part, it's all-or-nothing rather than mixed field by field.
 
 ## Input History
 

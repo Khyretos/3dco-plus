@@ -6,6 +6,7 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <set> // validateUniqueIds() (Linux section) - duplicate menu id detection
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -57,6 +58,16 @@ VoidCallback g_onLeftClick = nullptr;
 VoidCallback g_onShowMainWindow = nullptr;
 VoidCallback g_onQuit = nullptr;
 ControllerCallback g_onToggleController = nullptr;
+// Stored but not yet wired into this platform's own native menu -
+// see the Linux implementation (elsewhere in this file, #elif
+// defined(__linux__) && defined(HAVE_DBUS)) for the real, working
+// version of this feature. Stored rather than left undeclared so a
+// future pass extending the Windows menu to match doesn't also need
+// to revisit these setters.
+ControllerCallback g_onToggleControllerClickThrough = nullptr;
+ControllerCallback g_onToggleControllerDragToMove = nullptr;
+ControllerCallback g_onToggleInputHistoryClickThrough = nullptr;
+ControllerCallback g_onToggleInputHistoryDragToMove = nullptr;
 
 std::wstring toWide(const std::string &s) {
   if (s.empty())
@@ -345,6 +356,18 @@ void setOnLeftClick(VoidCallback cb) { g_onLeftClick = cb; }
 void setOnShowMainWindow(VoidCallback cb) { g_onShowMainWindow = cb; }
 void setOnQuit(VoidCallback cb) { g_onQuit = cb; }
 void setOnToggleController(ControllerCallback cb) { g_onToggleController = cb; }
+void setOnToggleControllerClickThrough(ControllerCallback cb) {
+  g_onToggleControllerClickThrough = cb;
+}
+void setOnToggleControllerDragToMove(ControllerCallback cb) {
+  g_onToggleControllerDragToMove = cb;
+}
+void setOnToggleInputHistoryClickThrough(ControllerCallback cb) {
+  g_onToggleInputHistoryClickThrough = cb;
+}
+void setOnToggleInputHistoryDragToMove(ControllerCallback cb) {
+  g_onToggleInputHistoryDragToMove = cb;
+}
 
 #elif defined(__linux__) && defined(HAVE_DBUS)
 
@@ -387,6 +410,10 @@ VoidCallback g_onLeftClick = nullptr;
 VoidCallback g_onShowMainWindow = nullptr;
 VoidCallback g_onQuit = nullptr;
 ControllerCallback g_onToggleController = nullptr;
+ControllerCallback g_onToggleControllerClickThrough = nullptr;
+ControllerCallback g_onToggleControllerDragToMove = nullptr;
+ControllerCallback g_onToggleInputHistoryClickThrough = nullptr;
+ControllerCallback g_onToggleInputHistoryDragToMove = nullptr;
 
 constexpr const char *kItemPath = "/StatusNotifierItem";
 constexpr const char *kItemIface = "org.freedesktop.StatusNotifierItem";
@@ -406,6 +433,42 @@ constexpr int kIdNetworkStatusLine = 200;
 constexpr int kIdNetworkSeparator = 250; // between status line and connections
 constexpr int kIdConnectionBase = 201;   // 201..299
 constexpr int kIdQuit = 6;
+// New per-controller toggles (see ControllerEntry's own doc comment,
+// tray_icon.h, for why these exist) - well clear of the ranges above,
+// with generous headroom between each so none of them could ever
+// collide even at the 99-controller cap the existing
+// kIdControllerBase range already assumes. kIdControllerBase itself
+// (100..199) is now reused for the Minimize/Restore entry inside each
+// controller's own new submenu, rather than being that controller's
+// single, flat, directly-clickable row as before - same meaning
+// ("this controller's own minimize/restore action"), just one level
+// deeper now that there's more than one action to offer.
+constexpr int kIdControllerClickThroughBase = 1100;     // 1100..1199
+constexpr int kIdControllerDragToMoveBase = 1200;       // 1200..1299
+constexpr int kIdInputHistoryClickThroughBase = 1300;   // 1300..1399
+constexpr int kIdInputHistoryDragToMoveBase = 1400;     // 1400..1499
+// CRITICAL: id 0 is reserved, by the dbusmenu protocol itself, for
+// the single invisible root of the WHOLE menu (confirmed against
+// multiple independent dbusmenu implementations) - it is NOT a
+// generic "non-clickable container" value safe to reuse for every
+// submenu that isn't directly actionable. The original version of
+// this code did exactly that: every controller's own submenu root
+// and every nested "Input History" submenu root were all given
+// id = 0, alongside the real root at the very top of the tree -
+// meaning a client could see many different, unrelated nodes all
+// simultaneously claiming to be THE root. A dbusmenu client's
+// internal model is very plausibly keyed by id, so that's a direct,
+// serious protocol violation - not a harmless placeholder value -
+// and it's the leading, well-evidenced explanation for menus showing
+// duplicate/wrong labels and, worse, a client-side hang serious
+// enough to take input routing down with it. These two ranges give
+// every submenu container its own genuinely unique, non-zero id, the
+// same as every other node in the tree - neither is ever matched by
+// handleMenuActivation() below, since clicking a submenu header
+// expands it rather than triggering an action, but they still need
+// to be unique for the tree itself to be well-formed.
+constexpr int kIdControllerSubmenuBase = 1500;   // 1500..1599
+constexpr int kIdInputHistorySubmenuBase = 1600; // 1600..1699
 
 // ---- Simple in-memory menu tree, rebuilt fresh on every GetLayout
 // or LayoutUpdated - our whole menu is cheap enough to reconstruct
@@ -415,8 +478,48 @@ struct MenuNode {
   std::string label;
   bool enabled = true;
   bool is_separator = false;
+  // When true, this node is rendered as a checkbox (dbusmenu's
+  // "checkmark" toggle-type) rather than a plain, one-shot action -
+  // the standard, spec-defined way to tell a compliant client not to
+  // dismiss the menu when this specific item is clicked, since a
+  // checkbox is something you'd naturally want to flip more than
+  // once per visit to the menu. toggle_checked is only meaningful
+  // when this is true. Used for the Click-Through/Drag to Move
+  // toggles (and their Input History equivalents) added for the
+  // GitHub issue this feature exists for - previously these were
+  // plain action items whose only visible state was baked into the
+  // label text ("Click-Through: On"/"Off"), which meant clicking one
+  // closed the whole menu and made toggling several settings in a
+  // row require reopening it each time.
+  bool is_toggle = false;
+  bool toggle_checked = false;
   std::vector<MenuNode> children;
 };
+
+// Defensive validation, run once every time the tree is rebuilt:
+// every node's id must be unique across the WHOLE tree, with 0
+// reserved exclusively for the true root - see
+// kIdControllerSubmenuBase's own comment (this file) for the concrete
+// bug this exists to catch before it ever ships again. A dbusmenu
+// client's own internal model is very plausibly keyed by id, so a
+// duplicate isn't cosmetic - it produced real, observed data
+// corruption (menus showing the same label for every entry) and,
+// separately, is the leading explanation for a client-side hang bad
+// enough to take system input routing down with it. Logged loudly
+// rather than silently ignored or asserted/crashed on, since a
+// malformed menu is far better than an app that won't start.
+void validateUniqueIds(const MenuNode &node, std::set<int> &seenIds) {
+  if (!seenIds.insert(node.id).second) {
+    spdlog::error(
+        "TrayIcon: duplicate menu id {} found while building the tray "
+        "menu tree ('{}') - every node must have a unique id (0 is "
+        "reserved for the root specifically). This is a real dbusmenu "
+        "protocol violation, not a cosmetic issue - please report this.",
+        node.id, node.label);
+  }
+  for (const MenuNode &child : node.children)
+    validateUniqueIds(child, seenIds);
+}
 
 MenuNode buildMenuTree() {
   MenuNode root;
@@ -445,11 +548,75 @@ MenuNode buildMenuTree() {
   } else {
     int count = std::min((int)g_controllers.size(), 99);
     for (int i = 0; i < count; ++i) {
+      const ControllerEntry &c = g_controllers[i];
+      // Each controller is its own submenu now, not a single
+      // clickable row - see ControllerEntry's own doc comment
+      // (tray_icon.h) for why. kIdControllerBase + i is reused here
+      // for the Minimize/Restore row specifically (see that
+      // constant's own comment above for why this is a reuse, not a
+      // new range) - handleMenuActivation() below and
+      // setOnToggleController()'s existing callers are both
+      // unaffected by this restructuring, since the id and its
+      // meaning haven't changed, only where it now sits in the tree.
       MenuNode entry;
-      entry.id = kIdControllerBase + i;
-      entry.label =
-          g_controllers[i].title +
-          (g_controllers[i].minimized ? "  (Restore)" : "  (Minimize)");
+      // See kIdControllerSubmenuBase's own comment above - this must
+      // be a genuinely unique id, never 0 (reserved for the true
+      // root), even though clicking this specific node never
+      // triggers an action of its own.
+      entry.id = kIdControllerSubmenuBase + i;
+      entry.label = c.title;
+
+      MenuNode minimize;
+      minimize.id = kIdControllerBase + i;
+      minimize.label = c.minimized ? "Restore" : "Minimize";
+      entry.children.push_back(minimize);
+
+      // is_toggle (checkmark, not a one-shot action) - see MenuNode's
+      // own doc comment for why. Labels are now static ("Click-
+      // Through", not "Click-Through: On"/"Off") since the checkmark
+      // itself now shows the state, matching the usual convention for
+      // a checkbox-style menu item elsewhere (a text editor's own
+      // Format menu showing "☑ Bold" rather than "Bold: On", for
+      // example) - keeping the old "On"/"Off" suffix in the label
+      // text as well would just be showing the same state twice.
+      MenuNode clickThrough;
+      clickThrough.id = kIdControllerClickThroughBase + i;
+      clickThrough.label = "Click-Through";
+      clickThrough.is_toggle = true;
+      clickThrough.toggle_checked = c.click_through;
+      entry.children.push_back(clickThrough);
+
+      MenuNode dragToMove;
+      dragToMove.id = kIdControllerDragToMoveBase + i;
+      dragToMove.label = "Drag to Move";
+      dragToMove.is_toggle = true;
+      dragToMove.toggle_checked = c.drag_to_move;
+      entry.children.push_back(dragToMove);
+
+      if (c.has_input_history) {
+        MenuNode inputHistory;
+        // Same reasoning as kIdControllerSubmenuBase just above -
+        // must be unique, never 0.
+        inputHistory.id = kIdInputHistorySubmenuBase + i;
+        inputHistory.label = "Input History";
+
+        MenuNode ihClickThrough;
+        ihClickThrough.id = kIdInputHistoryClickThroughBase + i;
+        ihClickThrough.label = "Click-Through";
+        ihClickThrough.is_toggle = true;
+        ihClickThrough.toggle_checked = c.input_history_click_through;
+        inputHistory.children.push_back(ihClickThrough);
+
+        MenuNode ihDragToMove;
+        ihDragToMove.id = kIdInputHistoryDragToMoveBase + i;
+        ihDragToMove.label = "Drag to Move";
+        ihDragToMove.is_toggle = true;
+        ihDragToMove.toggle_checked = c.input_history_drag_to_move;
+        inputHistory.children.push_back(ihDragToMove);
+
+        entry.children.push_back(inputHistory);
+      }
+
       controllers.children.push_back(entry);
     }
   }
@@ -498,6 +665,11 @@ MenuNode buildMenuTree() {
   quit.id = kIdQuit;
   quit.label = "Quit";
   root.children.push_back(quit);
+
+  {
+    std::set<int> seenIds;
+    validateUniqueIds(root, seenIds);
+  }
 
   return root;
 }
@@ -571,6 +743,23 @@ void appendBoolPropTo(DBusMessageIter *dict_iter, const char *name,
   dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "b", &var);
   dbus_bool_t v = value ? TRUE : FALSE;
   dbus_message_iter_append_basic(&var, DBUS_TYPE_BOOLEAN, &v);
+  dbus_message_iter_close_container(&entry, &var);
+  dbus_message_iter_close_container(dict_iter, &entry);
+}
+
+// For "toggle-state" specifically (int32 per the dbusmenu spec: 0 =
+// unchecked, 1 = checked) - see MenuNode::is_toggle's own doc comment
+// for why this, together with "toggle-type", is what tells a
+// compliant client this item is a checkbox that should stay open when
+// clicked, not a one-shot action that dismisses the menu.
+void appendIntPropTo(DBusMessageIter *dict_iter, const char *name,
+                     int32_t value) {
+  DBusMessageIter entry, var;
+  dbus_message_iter_open_container(dict_iter, DBUS_TYPE_DICT_ENTRY, nullptr,
+                                   &entry);
+  dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &name);
+  dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "i", &var);
+  dbus_message_iter_append_basic(&var, DBUS_TYPE_INT32, &value);
   dbus_message_iter_close_container(&entry, &var);
   dbus_message_iter_close_container(dict_iter, &entry);
 }
@@ -713,6 +902,10 @@ void appendMenuNodeProperties(DBusMessageIter *props_iter,
   appendStrPropTo(props_iter, "label", node.label);
   appendBoolPropTo(props_iter, "enabled", node.enabled);
   appendBoolPropTo(props_iter, "visible", true);
+  if (node.is_toggle) {
+    appendStrPropTo(props_iter, "toggle-type", "checkmark");
+    appendIntPropTo(props_iter, "toggle-state", node.toggle_checked ? 1 : 0);
+  }
   if (!node.children.empty())
     appendStrPropTo(props_iter, "children-display", "submenu");
 }
@@ -781,6 +974,30 @@ void handleMenuActivation(int id) {
     int idx = id - kIdControllerBase;
     if (idx >= 0 && idx < (int)g_controllers.size() && g_onToggleController)
       g_onToggleController(g_controllers[idx].id);
+  } else if (id >= kIdControllerClickThroughBase &&
+            id < kIdControllerClickThroughBase + 99) {
+    int idx = id - kIdControllerClickThroughBase;
+    if (idx >= 0 && idx < (int)g_controllers.size() &&
+        g_onToggleControllerClickThrough)
+      g_onToggleControllerClickThrough(g_controllers[idx].id);
+  } else if (id >= kIdControllerDragToMoveBase &&
+            id < kIdControllerDragToMoveBase + 99) {
+    int idx = id - kIdControllerDragToMoveBase;
+    if (idx >= 0 && idx < (int)g_controllers.size() &&
+        g_onToggleControllerDragToMove)
+      g_onToggleControllerDragToMove(g_controllers[idx].id);
+  } else if (id >= kIdInputHistoryClickThroughBase &&
+            id < kIdInputHistoryClickThroughBase + 99) {
+    int idx = id - kIdInputHistoryClickThroughBase;
+    if (idx >= 0 && idx < (int)g_controllers.size() &&
+        g_onToggleInputHistoryClickThrough)
+      g_onToggleInputHistoryClickThrough(g_controllers[idx].id);
+  } else if (id >= kIdInputHistoryDragToMoveBase &&
+            id < kIdInputHistoryDragToMoveBase + 99) {
+    int idx = id - kIdInputHistoryDragToMoveBase;
+    if (idx >= 0 && idx < (int)g_controllers.size() &&
+        g_onToggleInputHistoryDragToMove)
+      g_onToggleInputHistoryDragToMove(g_controllers[idx].id);
   }
   // Network submenu entries are informational only (enabled=false) -
   // no action on click.
@@ -1112,7 +1329,15 @@ void setControllerList(const std::vector<ControllerEntry> &entries) {
     for (size_t i = 0; i < entries.size(); ++i) {
       if (entries[i].id != g_controllers[i].id ||
           entries[i].title != g_controllers[i].title ||
-          entries[i].minimized != g_controllers[i].minimized) {
+          entries[i].minimized != g_controllers[i].minimized ||
+          entries[i].click_through != g_controllers[i].click_through ||
+          entries[i].drag_to_move != g_controllers[i].drag_to_move ||
+          entries[i].has_input_history !=
+              g_controllers[i].has_input_history ||
+          entries[i].input_history_click_through !=
+              g_controllers[i].input_history_click_through ||
+          entries[i].input_history_drag_to_move !=
+              g_controllers[i].input_history_drag_to_move) {
         changed = true;
         break;
       }
@@ -1145,6 +1370,18 @@ void setOnLeftClick(VoidCallback cb) { g_onLeftClick = cb; }
 void setOnShowMainWindow(VoidCallback cb) { g_onShowMainWindow = cb; }
 void setOnQuit(VoidCallback cb) { g_onQuit = cb; }
 void setOnToggleController(ControllerCallback cb) { g_onToggleController = cb; }
+void setOnToggleControllerClickThrough(ControllerCallback cb) {
+  g_onToggleControllerClickThrough = cb;
+}
+void setOnToggleControllerDragToMove(ControllerCallback cb) {
+  g_onToggleControllerDragToMove = cb;
+}
+void setOnToggleInputHistoryClickThrough(ControllerCallback cb) {
+  g_onToggleInputHistoryClickThrough = cb;
+}
+void setOnToggleInputHistoryDragToMove(ControllerCallback cb) {
+  g_onToggleInputHistoryDragToMove = cb;
+}
 
 #elif defined(__APPLE__)
 
@@ -1185,6 +1422,16 @@ VoidCallback g_onLeftClick = nullptr;
 VoidCallback g_onShowMainWindow = nullptr;
 VoidCallback g_onQuit = nullptr;
 ControllerCallback g_onToggleController = nullptr;
+// Stored but not yet wired into this platform's own native menu -
+// see the Linux implementation (elsewhere in this file, #elif
+// defined(__linux__) && defined(HAVE_DBUS)) for the real, working
+// version of this feature. Stored rather than left undeclared so a
+// future pass extending the macOS menu to match doesn't also need to
+// revisit these setters.
+ControllerCallback g_onToggleControllerClickThrough = nullptr;
+ControllerCallback g_onToggleControllerDragToMove = nullptr;
+ControllerCallback g_onToggleInputHistoryClickThrough = nullptr;
+ControllerCallback g_onToggleInputHistoryDragToMove = nullptr;
 
 void rebuildMenu();
 
@@ -1447,6 +1694,18 @@ void setOnLeftClick(VoidCallback cb) { g_onLeftClick = cb; }
 void setOnShowMainWindow(VoidCallback cb) { g_onShowMainWindow = cb; }
 void setOnQuit(VoidCallback cb) { g_onQuit = cb; }
 void setOnToggleController(ControllerCallback cb) { g_onToggleController = cb; }
+void setOnToggleControllerClickThrough(ControllerCallback cb) {
+  g_onToggleControllerClickThrough = cb;
+}
+void setOnToggleControllerDragToMove(ControllerCallback cb) {
+  g_onToggleControllerDragToMove = cb;
+}
+void setOnToggleInputHistoryClickThrough(ControllerCallback cb) {
+  g_onToggleInputHistoryClickThrough = cb;
+}
+void setOnToggleInputHistoryDragToMove(ControllerCallback cb) {
+  g_onToggleInputHistoryDragToMove = cb;
+}
 
 #else // Linux without libdbus-1 at build time, or any other unhandled
       // platform - no real implementation.

@@ -165,80 +165,17 @@ bool isMouseGloballyHoveringWindow(GLFWwindow *window) {
   return g_shortcut_monitoring_enabled;
 }
 
-// Shortcut ID encoding (see drawShortcutDropdown() in settings_window.cpp
-// for the UI side of this):
-//   0                 = Off
-//   1                 = Middle Mouse Button (used only by Input History's
-//                       own built-in Middle-Mouse Click-Through toggle)
-//   2..5              = Meta / Ctrl / Shift / Alt (legacy, Hold kind)
-//   6..9              = F9..F12 (legacy, Discrete kind)
-//   1000 + scancode   = arbitrary SDL_Scancode key. Modifier keys are
-//                       Hold kind (temporary flip while held);
-//                       everything else is Discrete kind (fresh press
-//                       flips the stored setting once).
-ShortcutKind getShortcutKind(int shortcutId) {
-  if (shortcutId <= 0)
-    return ShortcutKind::None;
-  if (shortcutId >= 2 && shortcutId <= 5)
-    return ShortcutKind::Hold;
-  if (shortcutId >= 1000) {
-    SDL_Scancode sc = (SDL_Scancode)(shortcutId - 1000);
-    switch (sc) {
-    case SDL_SCANCODE_LSHIFT:
-    case SDL_SCANCODE_RSHIFT:
-    case SDL_SCANCODE_LCTRL:
-    case SDL_SCANCODE_RCTRL:
-    case SDL_SCANCODE_LALT:
-    case SDL_SCANCODE_RALT:
-    case SDL_SCANCODE_LGUI:
-    case SDL_SCANCODE_RGUI:
-      return ShortcutKind::Hold;
-    default:
-      return ShortcutKind::Discrete;
-    }
-  }
-  return ShortcutKind::Discrete;
-}
-
-// Numbering matches the dropdown built in settings_window.cpp's
-// drawShortcutDropdown() - keep the two in sync if either changes.
-// 0=Off, 1=Middle Mouse Button, 2=Meta (hold), 3=Ctrl (hold),
-// 4=Shift (hold), 5=Alt (hold), 6=F9, 7=F10, 8=F11, 9=F12.
+// getShortcutKind() itself now lives in shortcut_logic.cpp (pure, no
+// GlobalKeyboard dependency, so it's called directly by its own
+// tests). isShortcutPhysicallyActive() here is a thin wrapper over
+// isShortcutPhysicallyActiveGeneric() (shortcut_logic.h), supplying
+// the two real, live-hardware checks that function is templated on -
+// see that header's own doc comment for why the mapping logic itself
+// is what's tested, not these two real calls.
 bool isShortcutPhysicallyActive(int shortcutId) {
-  if (shortcutId <= 0)
-    return false;
-  // Arbitrary-key shortcuts (added via "Press any key..." in the
-  // dropdown) all share one range - see getShortcutKind() above.
-  if (shortcutId >= 1000) {
-    SDL_Scancode sc = (SDL_Scancode)(shortcutId - 1000);
-    return GlobalKeyboard::isPressed(sc);
-  }
-  switch (shortcutId) {
-  case 1:
-    return GlobalKeyboard::isMouseButtonPressed(2);
-  case 2:
-    return GlobalKeyboard::isPressed(SDL_SCANCODE_LGUI) ||
-           GlobalKeyboard::isPressed(SDL_SCANCODE_RGUI);
-  case 3:
-    return GlobalKeyboard::isPressed(SDL_SCANCODE_LCTRL) ||
-           GlobalKeyboard::isPressed(SDL_SCANCODE_RCTRL);
-  case 4:
-    return GlobalKeyboard::isPressed(SDL_SCANCODE_LSHIFT) ||
-           GlobalKeyboard::isPressed(SDL_SCANCODE_RSHIFT);
-  case 5:
-    return GlobalKeyboard::isPressed(SDL_SCANCODE_LALT) ||
-           GlobalKeyboard::isPressed(SDL_SCANCODE_RALT);
-  case 6:
-    return GlobalKeyboard::isPressed(SDL_SCANCODE_F9);
-  case 7:
-    return GlobalKeyboard::isPressed(SDL_SCANCODE_F10);
-  case 8:
-    return GlobalKeyboard::isPressed(SDL_SCANCODE_F11);
-  case 9:
-    return GlobalKeyboard::isPressed(SDL_SCANCODE_F12);
-  default:
-    return false;
-  }
+  return isShortcutPhysicallyActiveGeneric(
+      shortcutId, [](SDL_Scancode sc) { return GlobalKeyboard::isPressed(sc); },
+      [](int button) { return GlobalKeyboard::isMouseButtonPressed(button); });
 }
 
 bool updateShortcutToggle(bool &persistentValue, bool &wasActiveLastFrame,
@@ -4661,7 +4598,8 @@ void drawControllerWindows() {
                     w.highlight_color[2], w.highlight_color[3]);
       glm::vec3 camPos = w.freelook ? w.freelook_position : w.camera_position;
       drawModel(w.model, w.shader, highlight, globalHighlight, w.view_matrix,
-                w.projection_matrix, camPos, w.global_shader_name);
+                w.projection_matrix, camPos, w.global_shader_name,
+                w.highlight_blend_mode);
 
       // ---- Draw Pivot Circle, Axis, and Text Overlay (always on top) ----
       // Disable depth test so they appear on top

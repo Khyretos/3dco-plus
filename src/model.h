@@ -58,16 +58,15 @@ typedef struct texture_struct {
   int wrapX = 0;
   int wrapY = 0;
   float offsetX = 0;
-  // Default is 1.0 (not 0) and flipY below defaults to true - this is
-  // the combination that correctly aligns a freshly-added texture
-  // against this app's UV convention for most images exported the
-  // ordinary way (confirmed against a real model+texture pair). Only
-  // affects a *newly added* texture's starting values - an existing
-  // texture loaded from a saved model keeps whatever it was actually
-  // saved with, even if that model predates this default and has no
-  // flipY/offsetY key at all (see readInfoJson() in model.cpp, whose
-  // fallback for a missing key is unchanged at false/0, specifically
-  // so this doesn't retroactively change already-correct old models).
+  // Left at 1.0 rather than 0 mostly for history - functionally the
+  // two are identical, since GL_TEXTURE_WRAP_T is unconditionally
+  // GL_REPEAT (see loadTexture()/loadModel() in model.cpp) and a full
+  // period offset on a repeating coordinate wraps back to exactly
+  // where it started. Only affects a *newly added* texture's starting
+  // values - an existing texture loaded from a saved model keeps
+  // whatever it was actually saved with, even if that model predates
+  // this default and has no offsetY key at all (see readInfoJson() in
+  // model.cpp, whose fallback for a missing key is unchanged at 0).
   float offsetY = 1.0f;
   float scaleX = 1.0f;
   float scaleY = 1.0f;
@@ -80,7 +79,15 @@ typedef struct texture_struct {
   // like text appearing reversed) with no way to fix that by editing
   // the source image itself without also breaking its alignment.
   bool flipX = false;
-  bool flipY = true;
+  // Was true by default, on the strength of one real model+texture
+  // pair it had been checked against - user feedback across a wider
+  // range of real textures showed that combination was wrong more
+  // often than right, so this now starts off, matching what most
+  // images exported the ordinary way actually need. Only affects a
+  // *newly added* texture's starting value - see offsetY's own doc
+  // comment just above for why an existing texture loaded from a
+  // saved model is entirely unaffected by this default either way.
+  bool flipY = false;
 } Texture;
 
 enum InputType {
@@ -199,8 +206,17 @@ typedef struct mesh_struct {
   float touch_offset[3] = {0.0f, 0.0f, 0.0f};
   float touch_rotation[3] = {0.0f, 0.0f, 0.0f};
 
-  // Per‑mesh highlight override
+  // Per‑mesh highlight override - use_custom_highlight gates both the
+  // color (custom_highlight_color above) and this blend mode
+  // together, rather than a second, separate toggle: they're the two
+  // halves of the same "this mesh's highlight looks different from
+  // the model's global one" override. Same 0=Add/1=Replace encoding
+  // as controller_window::highlight_blend_mode (see that field's own
+  // doc comment) - drawMesh() (model.cpp) picks this over the global
+  // value when use_custom_highlight is on, the same way it already
+  // does for custom_highlight_color.
   bool use_custom_highlight = false;
+  int custom_highlight_blend_mode = 0;
 
   std::string shader_name; // empty => default
 } Mesh;
@@ -326,7 +342,15 @@ void drawMesh(const Mesh &mesh, const glm::mat4 &modelMatrix, GLuint shader,
               const glm::vec3 &cameraPos = glm::vec3(0.0f, 0.0f, 0.0f),
               const std::string &globalShaderName = "",
               const std::vector<Texture> *globalTextures = nullptr,
-              const Model *globalMaterial = nullptr);
+              const Model *globalMaterial = nullptr,
+              // 0 = Replace, 1 = Add - see controller_window.h's own
+              // doc comment on highlight_blend_mode for what each
+              // means. Defaulted so every other existing call site
+              // (there's only the one, from drawModel below, but the
+              // default keeps this non-breaking regardless) keeps
+              // compiling and keeps today's Replace behavior without
+              // being touched.
+              int highlightBlendMode = 0);
 
 void drawModel(Model &m, GLuint shader, int highlight_mesh_index = -1,
                const glm::vec4 &globalHighlightColor = glm::vec4(1.0f, 0.0f,
@@ -334,7 +358,8 @@ void drawModel(Model &m, GLuint shader, int highlight_mesh_index = -1,
                const glm::mat4 &view = glm::mat4(1.0f),
                const glm::mat4 &projection = glm::mat4(1.0f),
                const glm::vec3 &cameraPos = glm::vec3(0.0f, 0.0f, 0.0f),
-               const std::string &globalShaderName = "");
+               const std::string &globalShaderName = "",
+               int highlightBlendMode = 0);
 
 // ----- functions for custom mesh import and mapping -----
 void importModelFile(Model &m, const std::string &filepath);

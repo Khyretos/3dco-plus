@@ -14,6 +14,15 @@
 
 GLuint CompileShader(GLuint type, const char *shaderSource);
 
+// Cached, context-aware glGetUniformLocation() - see its own doc
+// comment (shader.cpp) for why this exists and why the context
+// matters. Every shaderUniform* helper below already goes through
+// this; call it directly when a uniform's raw location is needed
+// without immediately setting a value with it (e.g. checking whether
+// a program declares a given uniform at all before deciding what to
+// do next).
+GLint getCachedUniformLocation(GLuint program, const char *name);
+
 GLuint CreateShaderProgram(const char *vertexShaderSource,
                            const char *fragmentShaderSource);
 

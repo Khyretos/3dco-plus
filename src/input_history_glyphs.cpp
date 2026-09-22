@@ -1,5 +1,6 @@
 #include "input_history_glyphs.h"
 
+#include "combine_with_chain.h"
 #include "settings.h"
 #include "glyphs_zip_data.h"
 #include "stb_image.h"
@@ -338,13 +339,40 @@ bool isInputIgnored(int styleIndex, const std::string &binding) {
   const auto &styles = listGlyphStyles();
   if (styleIndex < 0 || styleIndex >= (int)styles.size())
     return false;
-  const StyleData *data = getStyleData(styles[styleIndex].folderName);
-  if (!data)
-    return false;
-  for (const std::string &b : data->ignoredInputs)
-    if (b == binding)
-      return true;
-  return false;
+
+  // Follows the same combine_with chain as getGlyphTexture() above,
+  // for the same reason: a style that combines with another is
+  // treated as one unified style for every other purpose (a glyph
+  // missing from the first is found in the second), so an ignore rule
+  // living on either half should count the same way. Previously this
+  // only ever checked the originating style's own ignoredInputs,
+  // meaning a rule added to a combine_with target - reasonable to
+  // expect it'd apply, given that's exactly how glyph lookup itself
+  // already behaves - silently never took effect.
+  //
+  // The walk itself (cycle-capped chain following, found/matched/
+  // continue semantics) is walkCombineWithChain() - extracted to its
+  // own header (combine_with_chain.h) specifically so that algorithm
+  // is unit tested (tests/test_combine_with_chain.cpp) against a
+  // plain in-memory fixture, independent of StyleData, disk I/O, and
+  // image decoding. What's left here is just this function's own
+  // domain-specific lookup: given a folder, does IT ignore this
+  // binding, and where would the chain go next.
+  return walkCombineWithChain(
+      styles[styleIndex].folderName,
+      [&binding](const std::string &folder) -> ChainHop {
+        const StyleData *data = getStyleData(folder);
+        if (!data)
+          return {false, false, ""};
+        bool matched = false;
+        for (const std::string &b : data->ignoredInputs) {
+          if (b == binding) {
+            matched = true;
+            break;
+          }
+        }
+        return {true, matched, data->combineWith};
+      });
 }
 
 std::string getGlyphStyleDirectory(const std::string &folderName) {

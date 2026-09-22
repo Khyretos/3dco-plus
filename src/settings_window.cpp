@@ -34,6 +34,7 @@ extern bool gQuit;
 #include "tray_icon.h"
 #include <SDL3/SDL_joystick.h>
 #include <algorithm>
+#include <cctype> // std::toupper, for the texture-filename sanitizer's reserved-name check
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -899,6 +900,27 @@ static void drawInputBindingPicker(controller_window *current_window,
 // declaration to see it at all.
 extern GLFWwindow *glfw_settings_window;
 
+// Shared Highlight Blend Mode combo - the global one (Model tab, next
+// to Highlight Color (Global)) and the per-mesh one (Highlight
+// Override section, its own call site) both use this, rather than
+// keeping two copies of the same combo+tooltip in sync, the same
+// reasoning as drawTextureEditor() just below. blendMode is edited in
+// place; current_window is only needed for its unsaved_change_count.
+static void drawHighlightBlendModeCombo(int *blendMode,
+                                        controller_window *current_window) {
+  static const char *blendModeNames[] = {"Add", "Replace"};
+  if (ImGui::Combo("Highlight Blend Mode", blendMode, blendModeNames, 2)) {
+    current_window->unsaved_change_count++;
+  }
+  WrappedTooltip(
+      "Add (default): the highlight color is added on top of the "
+      "button's own texture, so the underlying texture stays visible "
+      "and brightens/tints rather than disappearing - closer to how a "
+      "real backlit key looks. Replace: at full strength, the "
+      "highlight color completely covers the button's own texture "
+      "instead.");
+}
+
 // Shared Type + Wrap Mode + Border Color + Offset/Scale/Rotation/Flip
 // editor for a single Texture - the per-mesh texture editor (its own
 // call site right after this) and the Global Texture list (see
@@ -908,6 +930,56 @@ extern GLFWwindow *glfw_settings_window;
 // place; current_window is needed for its own GL context (wrap mode/
 // border color changes apply directly to the live GL texture object)
 // and its unsaved_change_count.
+// Deletes a texture's own copied file from the model's "textures"
+// folder when it's no longer referenced by anything else in the
+// model - the delete-side counterpart to copyTextureIntoModelFolder()
+// (its own call sites further down this file): that copies a user-
+// picked file INTO the model's own folder when a texture is added;
+// this removes that same copy when the texture is later deleted, so
+// removed textures don't silently accumulate as orphaned files in the
+// model's folder forever. Two safety checks before ever touching
+// disk: (1) the path must actually be INSIDE this model's own
+// "textures" folder - an external file the user still owns elsewhere
+// (e.g. if the original copy-in failed and the texture is still
+// pointing at its original location) is never deleted, only copies
+// this app made itself; (2) no OTHER texture entry anywhere in the
+// model - global textures, or any mesh's own list - may still
+// reference the same path, since a texture used in more than one
+// place must survive as long as any reference to it does. Call this
+// AFTER erasing the deleted entry from its own vector, so the
+// "still referenced elsewhere" scan correctly reflects the model's
+// state post-deletion.
+static void deleteOrphanedTextureFile(const std::string &modelPath,
+                                      const std::string &deletedPath,
+                                      const Model &model) {
+  if (modelPath.empty() || deletedPath.empty())
+    return;
+  std::string texturesDir = modelPath + "/textures";
+  if (deletedPath.compare(0, texturesDir.size(), texturesDir) != 0)
+    return; // not one of our own copies - never touch it
+
+  for (const Texture &t : model.globalTextures) {
+    if (t.path == deletedPath)
+      return; // still referenced elsewhere
+  }
+  for (const Mesh &m : model.meshes) {
+    for (const Texture &t : m.textures) {
+      if (t.path == deletedPath)
+        return; // still referenced elsewhere
+    }
+  }
+
+  std::error_code ec;
+  if (std::filesystem::remove(deletedPath, ec)) {
+    spdlog::info("Removed orphaned texture file '{}' (no longer "
+                 "referenced by this model).",
+                 deletedPath);
+  } else if (ec) {
+    spdlog::warn("Could not remove orphaned texture file '{}': {}", deletedPath,
+                 ec.message());
+  }
+}
+
 static void drawTextureEditor(Texture *t, controller_window *current_window) {
   ImGui::NewLine();
   enum Type {
@@ -2518,15 +2590,12 @@ void settings_sdl_events(SDL_Event *event) {
   // Maybe used later
 }
 
-bool check_tab_title_exists(std::string title) {
-  bool exists = false;
-  for (my_tab t : tabs) {
-    if (title == t.title) {
-      exists = true;
-      break;
-    }
+bool check_tab_title_exists(const std::string &title) {
+  for (const my_tab &t : tabs) {
+    if (title == t.title)
+      return true;
   }
-  return exists;
+  return false;
 }
 
 // Forward declarations of helper functions (defined later)
@@ -2564,6 +2633,16 @@ void drawSettingsWindow() {
       entry.id = t.ID;
       entry.title = t.title;
       entry.minimized = isControllerWindowMinimized(*cw);
+      entry.click_through = cw->click_through;
+      entry.drag_to_move = cw->drag_to_move;
+      // input_history_glfw_window (not input_history_enabled) is the
+      // right check here - non-null only while that window is
+      // actually open right now, matching what the tray's nested
+      // submenu is meant to represent (see ControllerEntry's own doc
+      // comment, tray_icon.h).
+      entry.has_input_history = (cw->input_history_glfw_window != nullptr);
+      entry.input_history_click_through = cw->input_history_click_through;
+      entry.input_history_drag_to_move = cw->input_history_drag_to_move;
       tray_controllers.push_back(entry);
 
       if (!cw->network_enabled)
@@ -2670,13 +2749,7 @@ void drawSettingsWindow() {
   }
 
   bool new_controller_window = false;
-  int new_tab_number = 1;
-  std::string new_tab_title = "Controller ";
-  while (check_tab_title_exists(
-      std::string("Controller ").append(std::to_string(new_tab_number)))) {
-    new_tab_number++;
-  }
-  new_tab_title.append(std::to_string(new_tab_number));
+  std::string new_tab_title;
 
   static ImGuiTabBarFlags tab_bar_flags =
       ImGuiTabBarFlags_AutoSelectNewTabs | ImGuiTabBarFlags_Reorderable |
@@ -2685,6 +2758,18 @@ void drawSettingsWindow() {
   if (ImGui::BeginTabBar("MyTabBar", tab_bar_flags)) {
     if (ImGui::TabItemButton("New", ImGuiTabItemFlags_Trailing |
                                         ImGuiTabItemFlags_NoTooltip)) {
+      // Was computed unconditionally every single frame regardless of
+      // whether this button was ever pressed - moved here so the
+      // check_tab_title_exists() search (itself O(tabs.size()) per
+      // candidate number, worse the more "Controller N" tabs already
+      // exist) only runs on the one frame it's actually needed.
+      int new_tab_number = 1;
+      while (check_tab_title_exists(
+          std::string("Controller ").append(std::to_string(new_tab_number)))) {
+        new_tab_number++;
+      }
+      new_tab_title = "Controller " + std::to_string(new_tab_number);
+
       window_tab new_tab;
       tabs_made++;
       new_tab.title = new_tab_title;
@@ -2812,6 +2897,47 @@ void drawSettingsWindow() {
             "an application reposition its own window at all, which no "
             "setting here can work around - Click-Through is unaffected "
             "by that and works normally there once this is on.");
+
+        // Surfaces GlobalKeyboard::backendName() - previously computed
+        // but never actually shown anywhere in this UI, so a backend
+        // that quietly failed (most commonly on Linux: this user's
+        // account lacking permission to read any /dev/input device,
+        // which differs by distro/setup and isn't something this app
+        // can grant itself) looked from in here identical to "working
+        // normally, nothing's been pressed yet" - a configured
+        // shortcut would just silently never fire, with nothing in
+        // this window to explain why. Only shown once monitoring is
+        // actually turned on, since the backend status is meaningless
+        // before that.
+        //
+        // Deliberately an inline red/green line rather than a popup
+        // like the unsaved-changes confirmation: that one blocks an
+        // irreversible action (losing edits) and has to be dismissed
+        // to proceed, which is exactly why it works there. This is
+        // purely informational - forcing a must-dismiss dialog every
+        // time this checkbox gets toggled would just train people to
+        // reflexively click past it. Staying visible here instead
+        // means it's there to check when it matters and otherwise
+        // out of the way.
+        if (g_shortcut_monitoring_enabled) {
+          std::string backend = GlobalKeyboard::backendName();
+          bool isProblem =
+              backend.find("permission denied") != std::string::npos ||
+              backend.find("unavailable") != std::string::npos ||
+              backend.find("failed") != std::string::npos ||
+              backend.find("unsupported") != std::string::npos ||
+              backend.find("not initialized") != std::string::npos;
+          if (isProblem) {
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                                  ImVec4(0.95f, 0.25f, 0.25f, 1.0f));
+            ImGui::TextWrapped("\u2717 Not working: %s", backend.c_str());
+          } else {
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                                  ImVec4(0.3f, 0.85f, 0.35f, 1.0f));
+            ImGui::TextWrapped("\u2713 Working (%s)", backend.c_str());
+          }
+          ImGui::PopStyleColor();
+        }
         ImGui::NewLine();
 
 #if defined(_WIN32)
@@ -3346,6 +3472,8 @@ void drawSettingsWindow() {
           if (ImGui::IsItemHovered())
             DraggableTooltip("Default highlight color for all meshes. Can be "
                              "overridden per mesh.");
+          drawHighlightBlendModeCombo(&current_window->highlight_blend_mode,
+                                      current_window);
           EndShadedGroup(ShadeColor(0.42f, 0.28f, 0.62f),
                          ShadeBorder(0.42f, 0.28f, 0.62f));
 
@@ -3704,6 +3832,32 @@ void drawSettingsWindow() {
             ImGui::ColorEdit3("Color##global", gtm.globalMaterial.color);
             ImGui::DragFloat("Alpha##global", &gtm.globalMaterial.alpha, 0.01f,
                              0, 1);
+
+            // Material-side counterpart to "Reset All Meshes to Global
+            // Textures" (Global Textures section, above) - same
+            // reasoning: applying a changed Global Material across a
+            // model where many meshes already have "Use Custom
+            // Material" on meant selecting each mesh in turn and
+            // flipping its checkbox off, one at a time. Safe with no
+            // confirmation for the same reason as the textures version
+            // - only flips the toggle, never touches a mesh's own
+            // material values, so switching a mesh back to custom
+            // afterward finds them exactly as they were.
+            if (ImGui::Button("Reset All Meshes to Global Material")) {
+              for (Mesh &m : current_window->model.meshes)
+                m.use_custom_material = false;
+              current_window->unsaved_change_count++;
+            }
+            WrappedTooltip(
+                "Switches every mesh in this model back to the Global "
+                "Material above, without touching any mesh's own custom "
+                "material values - useful after changing the Global "
+                "Material on a model where several meshes already had "
+                "Use Custom Material on. A mesh can still be switched "
+                "back to its own material afterward via its own "
+                "checkbox below, and its values will be exactly as they "
+                "were.");
+
             ImGui::Separator();
 
             // Ensure material_mesh is valid
@@ -3833,6 +3987,7 @@ void drawSettingsWindow() {
               }
               WrappedTooltip("Add a new global texture.");
             }
+            bool just_deleted_global_texture = false;
             if (!gtModel.globalTextures.empty()) {
               if (gtModel.globalTextures.size() < 16)
                 ImGui::SameLine();
@@ -3840,13 +3995,16 @@ void drawSettingsWindow() {
               // the per-part texture list above (see its own comment)
               // - guard the rest of this block on a delete having
               // just happened this frame.
-              bool just_deleted_global_texture = false;
               if (ImGui::Button("Delete Global Texture")) {
                 glfwMakeContextCurrent(current_window->glfw_window);
                 deleteTexture(
                     gtModel.globalTextures[current_global_texture].id);
+                std::string deletedGlobalTexPath =
+                    gtModel.globalTextures[current_global_texture].path;
                 gtModel.globalTextures.erase(gtModel.globalTextures.begin() +
                                              current_global_texture);
+                deleteOrphanedTextureFile(gtModel.path, deletedGlobalTexPath,
+                                          gtModel);
                 current_window->unsaved_change_count++;
                 glfwMakeContextCurrent(glfw_settings_window);
                 current_global_texture = 0;
@@ -3858,15 +4016,48 @@ void drawSettingsWindow() {
                 just_deleted_global_texture = true;
               }
               WrappedTooltip("Remove the selected global texture.");
-              if (!just_deleted_global_texture &&
-                  current_global_texture < gtModel.globalTextures.size()) {
-                Texture *gt = &gtModel.globalTextures[current_global_texture];
-                ImGui::NewLine();
-                ImGui::PushID("global_texture_editor");
-                drawTextureEditor(gt, current_window);
-                ImGui::PopID();
-              }
             }
+
+            // On the same line as New/Delete Global Texture above (see
+            // "Reset All Meshes to Global Material" alongside it,
+            // further down, for the material-side counterpart) -
+            // bulk counterpart to the per-mesh "Use Custom Textures"
+            // checkbox further down, which only ever touches whichever
+            // single mesh is currently selected in the Meshes combo
+            // below, so applying a new/changed global texture across a
+            // model where many meshes already have their own custom
+            // textures meant selecting each mesh in turn and flipping
+            // its checkbox off, one at a time. Safe to do with no
+            // confirmation: this only flips use_custom_textures to
+            // false on every mesh, it never touches a mesh's own
+            // texture list, so anyone who flips an individual mesh
+            // back on afterward finds their custom textures for that
+            // mesh exactly as they left them.
+            ImGui::SameLine();
+            if (ImGui::Button("Reset All Meshes to Global Textures")) {
+              for (Mesh &m : current_window->model.meshes)
+                m.use_custom_textures = false;
+              current_window->unsaved_change_count++;
+            }
+            WrappedTooltip(
+                "Switches every mesh in this model back to the Global "
+                "Textures above, without touching any mesh's own custom "
+                "texture list - useful after adding or changing a global "
+                "texture on a model where several meshes already had "
+                "their own. A mesh can still be switched back to its own "
+                "textures afterward via its own checkbox below, and its "
+                "textures will be exactly as they were.");
+
+            if (!just_deleted_global_texture &&
+                !gtModel.globalTextures.empty() &&
+                current_global_texture < gtModel.globalTextures.size()) {
+              Texture *gt = &gtModel.globalTextures[current_global_texture];
+              ImGui::NewLine();
+              ImGui::PushID("global_texture_editor");
+              drawTextureEditor(gt, current_window);
+              ImGui::PopID();
+            }
+
             ImGui::Separator();
 
             if (texture_mesh >= (int)current_window->model.meshes.size())
@@ -3960,8 +4151,13 @@ void drawSettingsWindow() {
                 if (ImGui::Button("Delete Texture")) {
                   glfwMakeContextCurrent(current_window->glfw_window);
                   deleteTexture(texMesh.textures[current_texture].id);
+                  std::string deletedTexPath =
+                      texMesh.textures[current_texture].path;
                   texMesh.textures.erase(texMesh.textures.begin() +
                                          current_texture);
+                  deleteOrphanedTextureFile(current_window->model.path,
+                                            deletedTexPath,
+                                            current_window->model);
                   current_window->unsaved_change_count++;
                   glfwMakeContextCurrent(glfw_settings_window);
                   current_texture = 0;
@@ -4497,6 +4693,140 @@ void drawSettingsWindow() {
                                 1.0f, "%.1f");
               WrappedTooltip("Movement when the button is pressed.");
 
+              // Bulk-apply/clear this mesh's own Travel/Travel Rotation
+              // values - same "Copy to All"/"Unassign" pattern already
+              // proven just below for Smooth Travel Animation, extended
+              // to the actual press-offset values themselves. Aimed
+              // squarely at models with many mechanically-identical
+              // parts (a keyboard's own keys, most of all) that would
+              // otherwise mean setting the same six numbers by hand,
+              // once per key, dozens of times over.
+              if (ImGui::Button("Copy Travel to All Buttons")) {
+                int applied = 0;
+                for (auto &m : current_window->model.meshes) {
+                  if (isAnalogTravelMesh(m))
+                    continue;
+                  for (int a = 0; a < 3; ++a) {
+                    m.travel[a] = selectedMesh.travel[a];
+                    m.travel_rotation[a] = selectedMesh.travel_rotation[a];
+                  }
+                  ++applied;
+                }
+                current_window->unsaved_change_count++;
+                spdlog::info(
+                    "Copied Travel/Travel Rotation to {} non-analog mesh(es).",
+                    applied);
+              }
+              WrappedTooltip(
+                  "Applies this mesh's own Travel and Travel Rotation "
+                  "values to every other button-type mesh on this "
+                  "controller. Stick, trigger, and touchpad meshes are "
+                  "skipped automatically, since travel there tracks the "
+                  "live input instead of a fixed press offset.");
+              ImGui::SameLine();
+              // Opposite of Copy: zeroes Travel/Travel Rotation back to
+              // this struct's own defaults (0,0,0 for both - see
+              // Mesh::travel's own declaration, model.h) on every
+              // non-analog mesh, rather than only ever being able to
+              // spread one mesh's values further.
+              if (ImGui::Button("Remove Travel from All Buttons")) {
+                int applied = 0;
+                for (auto &m : current_window->model.meshes) {
+                  if (isAnalogTravelMesh(m))
+                    continue;
+                  for (int a = 0; a < 3; ++a) {
+                    m.travel[a] = 0.0f;
+                    m.travel_rotation[a] = 0.0f;
+                  }
+                  ++applied;
+                }
+                current_window->unsaved_change_count++;
+                spdlog::info(
+                    "Cleared Travel/Travel Rotation on {} non-analog mesh(es).",
+                    applied);
+              }
+              WrappedTooltip(
+                  "Zeroes Travel and Travel Rotation back to no movement "
+                  "on every button-type mesh on this controller - the "
+                  "opposite of Copy Travel to All Buttons. Stick, "
+                  "trigger, and touchpad meshes are skipped "
+                  "automatically, same as Copy.");
+
+              // Checkbox multi-select for copying to specific meshes -
+              // replaced an earlier substring-name-filter version of
+              // this (fuzzy, not very discoverable) with an explicit
+              // pick-from-a-list, which is what a "copy to some of
+              // these" tool should actually look like. ImGui has no
+              // built-in tag/chip multi-select widget, so this is the
+              // standard ImGui idiom for one: a combo whose preview
+              // text summarizes the selection, containing a checkbox
+              // per item rather than Selectables (Selectable's default
+              // click behavior closes the combo immediately, which
+              // would make picking more than one mesh without
+              // reopening the dropdown each time impossible).
+              static std::vector<bool> travelSelectedMeshes;
+              if (travelSelectedMeshes.size() !=
+                  current_window->model.meshes.size())
+                travelSelectedMeshes.resize(current_window->model.meshes.size(),
+                                            false);
+              int travelSelectedCount = 0;
+              for (bool b : travelSelectedMeshes)
+                if (b)
+                  ++travelSelectedCount;
+              std::string travelComboPreview =
+                  travelSelectedCount == 0
+                      ? "Pick meshes..."
+                      : (std::to_string(travelSelectedCount) +
+                         " mesh(es) selected");
+              if (ImGui::BeginCombo("##TravelMeshPicker",
+                                    travelComboPreview.c_str())) {
+                for (int i = 0; i < (int)current_window->model.meshes.size();
+                     ++i) {
+                  Mesh &pickMesh = current_window->model.meshes[i];
+                  if (isAnalogTravelMesh(pickMesh))
+                    continue;
+                  std::string displayName = pickMesh.name.empty()
+                                                ? ("Mesh " + std::to_string(i))
+                                                : pickMesh.name;
+                  bool checked = travelSelectedMeshes[i];
+                  ImGui::PushID(i);
+                  if (ImGui::Checkbox(displayName.c_str(), &checked))
+                    travelSelectedMeshes[i] = checked;
+                  ImGui::PopID();
+                }
+                ImGui::EndCombo();
+              }
+              WrappedTooltip(
+                  "Pick which meshes to copy Travel/Travel Rotation to "
+                  "below - only button-type meshes are listed, since "
+                  "stick/trigger/touchpad meshes don't use a fixed "
+                  "travel offset.");
+              ImGui::SameLine();
+              if (ImGui::Button("Copy Travel to Selected")) {
+                int applied = 0;
+                for (int i = 0; i < (int)current_window->model.meshes.size();
+                     ++i) {
+                  if (!travelSelectedMeshes[i])
+                    continue;
+                  Mesh &m = current_window->model.meshes[i];
+                  if (isAnalogTravelMesh(m))
+                    continue;
+                  for (int a = 0; a < 3; ++a) {
+                    m.travel[a] = selectedMesh.travel[a];
+                    m.travel_rotation[a] = selectedMesh.travel_rotation[a];
+                  }
+                  ++applied;
+                }
+                if (applied > 0)
+                  current_window->unsaved_change_count++;
+                spdlog::info("Copied Travel/Travel Rotation to {} selected "
+                             "mesh(es).",
+                             applied);
+              }
+              WrappedTooltip(
+                  "Same as \"Copy Travel to All Buttons\", but only for "
+                  "the meshes checked in the picker to the left.");
+
               if (isAnalogTravelMesh(selectedMesh)) {
                 ImGui::TextDisabled(
                     "Smooth Travel Animation isn't available for stick/"
@@ -4636,6 +4966,8 @@ void drawSettingsWindow() {
                                   selectedMesh.custom_highlight_color);
                 if (ImGui::IsItemHovered())
                   DraggableTooltip("Custom Highlight Color");
+                drawHighlightBlendModeCombo(
+                    &selectedMesh.custom_highlight_blend_mode, current_window);
               }
 
               // ---- Dual highlight for axes ----
@@ -6140,7 +6472,7 @@ void drawSettingsWindow() {
         ImGui::TextColored(ImVec4(0.8f, 0.4f, 1.0f, 1.0f),
                            "3D Controller Overlay +");
         ImGui::SameLine();
-        ImGui::TextDisabled("v1.3.0");
+        ImGui::TextDisabled("v1.3.1");
 
         ImGui::NewLine();
         ImGui::Text(
@@ -6293,6 +6625,105 @@ void drawSettingsWindow() {
     shader_resource_dialog.ClearSelected();
   }
 
+  // Sanitizes a filename for cross-platform safety - Windows forbids
+  // a stricter set of characters than Linux/macOS (< > : " / \ | ? *),
+  // silently strips trailing dots/spaces, and reserves certain device
+  // names (CON, PRN, AUX, NUL, COM1-9, LPT1-9) as invalid regardless
+  // of extension. A texture file picked on Linux/macOS could contain
+  // any of these and copy fine there, but later fail (or silently
+  // rename) on a Windows machine loading the same saved model.
+  auto sanitizeFilenameForAllPlatforms =
+      [](const std::string &name) -> std::string {
+    std::string result = name;
+    for (char &c : result) {
+      if (c == '<' || c == '>' || c == ':' || c == '"' || c == '/' ||
+          c == '\\' || c == '|' || c == '?' || c == '*')
+        c = '_';
+    }
+    while (!result.empty() && (result.back() == '.' || result.back() == ' '))
+      result.pop_back();
+    if (result.empty())
+      result = "texture";
+
+    std::string stem = std::filesystem::path(result).stem().string();
+    std::string stemUpper = stem;
+    for (char &c : stemUpper)
+      c = (char)std::toupper((unsigned char)c);
+    static const std::set<std::string> reserved = {
+        "CON",  "PRN",  "AUX",  "NUL",  "COM1", "COM2", "COM3", "COM4",
+        "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3",
+        "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"};
+    if (reserved.count(stemUpper)) {
+      std::string ext = std::filesystem::path(result).extension().string();
+      result = stem + "_" + ext;
+    }
+    return result;
+  };
+
+  // Copies a user-selected texture file into <model folder>/textures/
+  // (sanitized filename, collision-avoided), so the model no longer
+  // depends on the original file continuing to exist at its original,
+  // often arbitrary location (Downloads, Desktop, another drive) -
+  // moving or deleting that original used to break the texture
+  // immediately, with no warning until the model failed to render
+  // right. Falls back to returning srcPath unchanged if the model has
+  // no folder yet or the copy fails for any reason, so a failed copy
+  // never leaves a completely broken texture reference.
+  auto copyTextureIntoModelFolder =
+      [&sanitizeFilenameForAllPlatforms](
+          const std::string &modelPath,
+          const std::string &srcPath) -> std::string {
+    if (modelPath.empty())
+      return srcPath;
+    std::string texturesDir = modelPath + "/textures";
+    std::error_code dirEc;
+    std::filesystem::create_directories(texturesDir, dirEc);
+    if (dirEc) {
+      spdlog::warn("Could not create textures folder '{}': {} - texture "
+                   "will keep referencing its original location instead.",
+                   texturesDir, dirEc.message());
+      return srcPath;
+    }
+
+    std::string filename = sanitizeFilenameForAllPlatforms(
+        std::filesystem::path(srcPath).filename().string());
+    std::string stem = std::filesystem::path(filename).stem().string();
+    std::string ext = std::filesystem::path(filename).extension().string();
+    std::string destPath = texturesDir + "/" + filename;
+
+    if (std::filesystem::exists(destPath)) {
+      std::error_code sizeEc1, sizeEc2;
+      auto destSize = std::filesystem::file_size(destPath, sizeEc1);
+      auto srcSize = std::filesystem::file_size(srcPath, sizeEc2);
+      if (!sizeEc1 && !sizeEc2 && destSize == srcSize) {
+        // Same name, same size - almost certainly this exact source
+        // file copied in before (e.g. re-adding it after removing it
+        // from one mesh). Reuse it instead of making a needless
+        // duplicate.
+        return destPath;
+      }
+      // Different file that happens to sanitize to the same name -
+      // find a free suffix rather than overwriting it.
+      int suffix = 1;
+      do {
+        destPath =
+            texturesDir + "/" + stem + "_" + std::to_string(suffix) + ext;
+        suffix++;
+      } while (std::filesystem::exists(destPath));
+    }
+
+    try {
+      std::filesystem::copy_file(srcPath, destPath);
+      return destPath;
+    } catch (const std::exception &e) {
+      spdlog::warn("Failed to copy texture '{}' into model folder: {} - "
+                   "texture will keep referencing its original location "
+                   "instead.",
+                   srcPath, e.what());
+      return srcPath;
+    }
+  };
+
   if (texture_dialog.HasSelected()) {
     controller_window *ctrl = getControllerWindow(tabs[selected_tab].ID);
     if (!ctrl) {
@@ -6305,12 +6736,14 @@ void drawSettingsWindow() {
       spdlog::error("Texture mesh index out of range.");
       texture_dialog.ClearSelected();
     } else {
-      spdlog::debug("Selected texture file: {}",
-                    texture_dialog.GetSelected().string());
+      std::string selectedPath = texture_dialog.GetSelected().string();
+      spdlog::debug("Selected texture file: {}", selectedPath);
       glfwMakeContextCurrent(ctrl->glfw_window);
       Texture t;
-      loadTexture(t.id, texture_dialog.GetSelected().string());
-      t.path = texture_dialog.GetSelected().string();
+      std::string copiedPath =
+          copyTextureIntoModelFolder(ctrl->model.path, selectedPath);
+      loadTexture(t.id, copiedPath);
+      t.path = copiedPath;
       t.name =
           std::to_string(ctrl->model.meshes[texture_mesh].textures.size() + 1) +
           ": " + t.path;
@@ -6327,16 +6760,19 @@ void drawSettingsWindow() {
       spdlog::error("No controller window for global texture import.");
       global_texture_dialog.ClearSelected();
     } else {
-      spdlog::debug("Selected global texture file: {}",
-                    global_texture_dialog.GetSelected().string());
+      std::string selectedGlobalPath =
+          global_texture_dialog.GetSelected().string();
+      spdlog::debug("Selected global texture file: {}", selectedGlobalPath);
       glfwMakeContextCurrent(ctrl->glfw_window);
       // Appends, same as the per-part texture list above - a model
       // can reasonably want more than one global texture now (one
       // Diffuse, one Normal Map, one AO, ...), so picking a new file
       // always means "add another", not "replace the only one".
       Texture t;
-      loadTexture(t.id, global_texture_dialog.GetSelected().string());
-      t.path = global_texture_dialog.GetSelected().string();
+      std::string copiedGlobalPath =
+          copyTextureIntoModelFolder(ctrl->model.path, selectedGlobalPath);
+      loadTexture(t.id, copiedGlobalPath);
+      t.path = copiedGlobalPath;
       t.name =
           std::to_string(ctrl->model.globalTextures.size() + 1) + ": " + t.path;
       ctrl->model.globalTextures.push_back(t);
@@ -7097,6 +7533,7 @@ static void saveGlobalSettings() {
     // Colors
     tab["highlight_color"] = {w->highlight_color[0], w->highlight_color[1],
                               w->highlight_color[2]};
+    tab["highlight_blend_mode"] = w->highlight_blend_mode;
 
     // Gyro
     tab["gyro_debug_logging"] = w->gyro_debug_logging;
@@ -7198,6 +7635,7 @@ static void saveGlobalSettings() {
       m["custom_highlight_color"] = {mesh.custom_highlight_color[0],
                                      mesh.custom_highlight_color[1],
                                      mesh.custom_highlight_color[2]};
+      m["custom_highlight_blend_mode"] = mesh.custom_highlight_blend_mode;
       // Also store other transform data (already in info.json, but we save
       // here as well) We'll rely on info.json for transforms, but we need
       // highlight override saved.
@@ -7875,6 +8313,9 @@ static void loadGlobalSettings() {
     w->highlight_color[0] = hc[0];
     w->highlight_color[1] = hc[1];
     w->highlight_color[2] = hc[2];
+    // Defaults to 0 (Replace) for a settings file saved before this
+    // option existed - the original mix()-based behavior, unchanged.
+    w->highlight_blend_mode = tab.value("highlight_blend_mode", 0);
 
     auto tao =
         tab.value("touch_area_offset", std::array<float, 3>{0.0f, 0.01f, 0.0f});
@@ -7899,6 +8340,8 @@ static void loadGlobalSettings() {
         w->model.meshes[i].custom_highlight_color[0] = col[0];
         w->model.meshes[i].custom_highlight_color[1] = col[1];
         w->model.meshes[i].custom_highlight_color[2] = col[2];
+        w->model.meshes[i].custom_highlight_blend_mode =
+            m.value("custom_highlight_blend_mode", 0);
       }
     }
 

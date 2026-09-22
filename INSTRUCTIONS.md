@@ -2,34 +2,48 @@
 
 ## Table of Contents
 
-1. [What's New in 1.3.0](#whats-new-in-130)
-2. [What's New in 1.2.0](#whats-new-in-120)
-3. [What's New in 1.1.1](#whats-new-in-111)
-4. [What's New in 1.1.0](#whats-new-in-110)
-5. [First Launch](#first-launch)
-6. [Opening a Controller Window](#opening-a-controller-window)
-7. [Mapping Inputs](#mapping-inputs)
-8. [Gyro Support](#gyro-support)
-9. [Touchpads](#touchpads)
-10. [Highlighting & Press Feedback](#highlighting--press-feedback)
-11. [Smooth Travel Animation](#smooth-travel-animation)
-12. [Importing a Custom Model](#importing-a-custom-model)
-13. [Textures & UV Mapping](#textures--uv-mapping)
-14. [Materials](#materials)
-15. [Lighting](#lighting)
-16. [Window & Camera Settings](#window--camera-settings)
-17. [Network Functionality](#network-functionality)
-18. [Shader Effects](#shader-effects)
-19. [Input History](#input-history)
-20. [The Log Window](#the-log-window)
-21. [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode)
-22. [Theme](#theme)
-23. [Data Directory & Backups](#data-directory--backups)
-24. [Troubleshooting](#troubleshooting)
+1. [What's New in 1.3.1](#whats-new-in-131)
+2. [What's New in 1.3.0](#whats-new-in-130)
+3. [What's New in 1.2.0](#whats-new-in-120)
+4. [What's New in 1.1.1](#whats-new-in-111)
+5. [What's New in 1.1.0](#whats-new-in-110)
+6. [First Launch](#first-launch)
+7. [Opening a Controller Window](#opening-a-controller-window)
+8. [Mapping Inputs](#mapping-inputs)
+9. [Gyro Support](#gyro-support)
+10. [Touchpads](#touchpads)
+11. [Highlighting & Press Feedback](#highlighting--press-feedback)
+12. [Smooth Travel Animation](#smooth-travel-animation)
+13. [Importing a Custom Model](#importing-a-custom-model)
+14. [Textures & UV Mapping](#textures--uv-mapping)
+15. [Materials](#materials)
+16. [Lighting](#lighting)
+17. [Window & Camera Settings](#window--camera-settings)
+18. [Network Functionality](#network-functionality)
+19. [Shader Effects](#shader-effects)
+20. [Input History](#input-history)
+21. [The Log Window](#the-log-window)
+22. [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode)
+23. [Theme](#theme)
+24. [Data Directory & Backups](#data-directory--backups)
+25. [Troubleshooting](#troubleshooting)
 
 ---
 
 ![Demo](images/demo.webp)
+
+## What's New in 1.3.1
+
+Quick tour of what's new this release:
+
+- [Textures & UV Mapping](#textures--uv-mapping) – Flip Y now starts off by default for a newly-added texture, not on.
+- [Materials](#materials) – a "Reset All Meshes to Global Textures" button for applying a changed global texture across a model without clearing each mesh's own texture list by hand.
+- [Smooth Travel Animation](#smooth-travel-animation) – "Copy Travel to All Buttons" and "Copy Travel to Matching Name" for bulk-applying a button's press-offset animation, aimed at keyboards and other models with many identical parts.
+- [Highlighting & Press Feedback](#highlighting--press-feedback) – a new **Add** Highlight Blend Mode, alongside the existing Replace, that brightens the underlying texture instead of covering it.
+- [Window & Camera Settings](#window--camera-settings) – a clear ✓/✗ status line once Enable Shortcut Monitoring is on, so a shortcut that silently can't work (most commonly a Linux permissions issue) is visible and actionable instead of just never firing with no explanation.
+- Fixed: an Ignore Button rule set on a glyph style's Combine With target not taking effect while viewing the combining style.
+
+---
 
 ## What's New in 1.3.0
 
@@ -159,6 +173,8 @@ Touchpoints that go idle for 5 seconds auto‑hide.
 By default, pressing a button glows the mesh in a global highlight colour.  
 **Per‑mesh override:** set a custom colour.
 
+**Highlight Blend Mode** (next to the global highlight colour): **Replace** (default) fully covers the part's own texture with the highlight colour at full strength; **Add** layers the highlight colour on top instead, so the underlying texture stays visible and brightens/tints rather than disappearing - closer to how a real backlit key looks. Applies everywhere a highlight shows, whether it's the global colour or a mesh's own custom one.
+
 ![Dual Highlight color picker](images/highlight_dual.webp)
 
 **Dual highlighting** (for axes) – different colours for positive/negative directions, with adjustable deadzone.
@@ -177,6 +193,7 @@ Per mesh, under **Movement & Animation**:
 - **Smooth Travel Animation** – on/off.
 - **Duration (s)** – roughly how long the press/release takes to settle once enabled. Lower is snappier, higher is softer/slower.
 - **Copy to All Buttons** / **Unassign from All Buttons** – apply (or clear) the current enabled state and duration across every other button-type mesh on the controller in one click, instead of setting each one individually.
+- **Copy Travel to All Buttons** / **Copy Travel to Matching Name** – applies this mesh's own Travel and Travel Rotation values (the actual press-offset numbers, not the Smooth Travel settings above) to every other button-type mesh, or only to meshes whose name contains a text filter you type in. Aimed at keyboards and other models with many mechanically-identical parts - type a shared prefix like "Key_" to target just those, or use "All Buttons" for the whole model.
 
 **Not available on sticks, triggers, or touchpads/touchpoints** – those track a live physical position every frame (how far a trigger is actually pulled, where a finger actually is on a touchpad right now), so easing them would make the rendered part visibly lag behind the real input instead of just looking like a nice animation. The control is hidden for those mesh types for exactly that reason; regular buttons, bumpers, and paddles are unaffected and can use it normally.
 
@@ -212,16 +229,11 @@ You can bring in your own 3D model (common formats like FBX, glTF, OBJ, etc.) in
 ## Textures & UV Mapping
 
 ![Texture mapping placeholder](images/texture_demo.webp)
+_(Video coming soon)_
 
 **How texture mapping works:** 3dco+ always uses the mesh's own UV coordinates — the standard `vt` texture-coordinate data from an OBJ file, or the equivalent channel from whatever format you imported (FBX, glTF, etc.). It never uses object-space, triplanar, or normal-based mapping. If a mesh already has a proper UV unwrap from whatever 3D tool you made or exported it in, a texture applied here will follow that unwrap exactly.
 
-Note: the video example shows a per mesh assignement of the texture and this is not necesary, you can assign textures & materials globally and override them per mesh if necesary... im just too lazy to make another video.
-
 **Adding a texture to a mesh:**
-
-![Texture material example](images/texture_material_example.webp)
-
-Credits to [DAT](https://www.youtube.com/@gitardat) for the amazing 3D keyboard model and files to make this example possible!.
 
 1. Select the mesh in the Mesh List.
 2. Open its **Materials/Textures** section and click **Add Texture**.
@@ -230,15 +242,15 @@ Credits to [DAT](https://www.youtube.com/@gitardat) for the amazing 3D keyboard 
 
 **Texture types:**
 
-| Type          | What it does                                                                                                                                                                                  |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Diffuse       | The base color image.                                                                                                                                                                         |
-| Specular      | Controls highlight intensity/color.                                                                                                                                                           |
-| Emissive      | Glows regardless of lighting.                                                                                                                                                                 |
+| Type          | What it does                                                                                                                                                         |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Diffuse       | The base color image.                                                                                                                                                |
+| Specular      | Controls highlight intensity/color.                                                                                                                                  |
+| Emissive      | Glows regardless of lighting.                                                                                                                                        |
 | Normal Map    | Adds surface detail (bumps, grain, panel lines) without extra geometry. Use an image where flat areas are blue-purple (roughly RGB 128, 128, 255) — the standard format most 3D tools export. |
-| Metallic Map  | Grayscale; brighter = more metallic.                                                                                                                                                          |
-| Roughness Map | Grayscale; brighter = softer/rougher reflections, darker = sharper/glossier.                                                                                                                  |
-| AO Map        | Grayscale; darker = more occluded (crevices, contact points), brighter = more exposed to ambient light.                                                                                       |
+| Metallic Map  | Grayscale; brighter = more metallic.                                                                                                                                 |
+| Roughness Map | Grayscale; brighter = softer/rougher reflections, darker = sharper/glossier.                                                                                        |
+| AO Map        | Grayscale; darker = more occluded (crevices, contact points), brighter = more exposed to ambient light.                                                              |
 
 Any of these can also be set once for the whole model instead of per part — see [Materials](#materials).
 
@@ -256,14 +268,15 @@ Set a texture or material property once at the model level instead of assigning 
 
 1. In the Model tab, find the **Global Textures** section (above the per-part texture list).
 2. Add a texture there the same way you would for a single part — pick a file, then set its **Type** (any of the types listed in [Textures & UV Mapping](#textures--uv-mapping) above).
-3. It applies to every part that doesn't already have a texture of that same type. A part with its own texture of a given type always keeps using its own — the override is per type, so a part can use its own Diffuse while still inheriting a global Normal Map, for example.
+3. Each part has a **Use Custom Textures** checkbox: off (default) means the part uses the Global Textures list above, entirely; on means it uses its own texture list instead, entirely. This is an all-or-nothing switch per part, not a per-type merge — a part with only its own Diffuse texture set doesn't also pick up a global Normal Map alongside it, for example.
+4. **Reset All Meshes to Global Textures** button (next to the Global Texture editor) turns Use Custom Textures back off on every mesh in the model at once — useful after adding or changing a global texture on a model where several meshes already had their own, without switching to each one individually. Safe and reversible: it never touches any mesh's own texture list, only the toggle, so switching a mesh back on afterward finds its textures exactly as they were.
 
 **Global Material:**
 
 1. Set the model's **Global Material** (ambient, diffuse, specular, shininess, color) once, in the Model tab.
 2. For any part that needs different values, enable **Use Custom Material** on that part, then set its own ambient/diffuse/specular/shininess/color.
 
-Neither of these is an all-or-nothing switch for the whole model — the override is always per part (and for textures, per texture type within that part).
+The override is per part — some parts can use their own textures/material while others use the model's global ones — but for any one part, it's all-or-nothing (the whole texture list, or the whole material) rather than mixed field by field.
 
 ---
 
@@ -288,9 +301,9 @@ Each window supports **directional**, **point**, and **spot** lights. Adjust amb
 
 **Keyboard shortcuts for Click-Through/Drag to Move:**
 
-1. In Settings, enable **Enable Shortcut Monitoring** (off by default, applies to every window on every platform once on).
+1. In Settings, enable **Enable Shortcut Monitoring** (off by default, applies to every window on every platform once on). A status line appears underneath once it's on: green **✓ Working** means the app can actually see keyboard/mouse input globally; red **✗ Not working** means it can't, with a specific reason and fix underneath it — most commonly on Linux, this account not being in the `input` group (fix: `sudo usermod -aG input $USER`, then log out and back in).
 2. On any window's Click-Through and/or Drag to Move dropdown, pick any keyboard key — not limited to a fixed list.
-3. With monitoring on, holding that key toggles the setting from anywhere, without needing the window focused or hovered. If more than one window shares the same key, they react together when you press it.
+3. With monitoring on and the status line showing green, holding that key toggles the setting from anywhere, without needing the window focused or hovered. If more than one window shares the same key, they react together when you press it.
 
 ---
 
@@ -330,6 +343,7 @@ Shader files live in your [data directory](#data-directory--backups), under `sha
 ## Input History
 
 ![Input History demo placeholder](images/input_history_demo.webp)
+_(Video coming soon)_
 
 A separate always-on-top window per controller/keyboard/mouse window, showing a scrolling list of recent presses — the input-display style fighting games like Street Fighter and Tekken use, equally handy for tutorials. Toggle it per-window from that window's **Input History** section in Settings.
 
@@ -361,14 +375,8 @@ Build your own icon set instead of (or alongside) the bundled ones, in its own w
 
 1. In the Display Style area, click **New Glyph Mapping...** and enter a name, or pick **Edit Existing Mapping** to modify one of the bundled styles (or one you made earlier) — this opens the Glyph Mapping Editor in its own window, separate from Settings.
 2. An empty table appears. Click **Add Row** for each input you want to map: choose its type (Gamepad Button, D-Pad Direction, Gamepad Motion, Trigger, Keyboard, or Mouse), the specific input, then **Browse...** (the last column) to assign an image — either an existing glyph from the `glyphs/` folder or your own picture, which gets automatically converted and resized. **Gamepad Motion** is a fixed dropdown of the compound sequences the bundled FGC Motion art has icons for (`236`, `623`, `360`, and similar) — worth being clear-eyed about what this is: there's no actual runtime detection of a player performing a multi-direction motion to match against, so this only lets you assign a glyph to one of those known strings for whatever other use, not a claim the app recognizes them during play.
-3. Optionally set **Combine With** to another style, so anything you don't define yourself falls back to that style's glyphs instead of a bare text label — a mapping can also exclude specific input types from that fallback (FGC Motion does this for D-Pad glyphs, since it already represents direction its own way).
+3. Optionally set **Combine With** to another style, so anything you don't define yourself falls back to that style's glyphs instead of a bare text label — a mapping can also exclude specific input types from that fallback (FGC Motion does this for D-Pad glyphs, since it already represents direction its own way). An **Ignore Button** rule (inputs this style should never show or track at all, set elsewhere in the mapping editor) follows this same Combine With chain — a rule set on either half of a combined pair applies while viewing the other.
 4. **Save Mapping** — it's written to its own folder under `glyphs/` and immediately shows up as a Display Style choice, for any window. If a standard bundled style's folder ever goes missing (deleted by accident, an interrupted install), it's silently restored from the bundled pack the next time you launch.
-
-And for controllers like the "Steam Controller 2026" you can explicitley add rows to ignore specific buttons. since some buttons are based on touch like button 22 and button 23 which are the surface of the thumbsticks on this controller or the grip sensors which are buttons 24 and 25 that will trigger only when you hold the controller. To tackle this situation you just add these buttons to be ignored so that the input history does not get filled with buttons that are being hold because of the nature of their functionality.
-
-Note that these need to be specified per glyph mapping. So you need to pay attention on which button is being detected and map it according to your needs. In the mapping of your preference.
-
-![Example ignore button](images/ignore_buttons.png)
 
 ---
 
