@@ -36,12 +36,15 @@
 
 Quick tour of what's new this release:
 
-- [Textures & UV Mapping](#textures--uv-mapping) – Flip Y now starts off by default for a newly-added texture, not on.
-- [Materials](#materials) – a "Reset All Meshes to Global Textures" button for applying a changed global texture across a model without clearing each mesh's own texture list by hand.
-- [Smooth Travel Animation](#smooth-travel-animation) – "Copy Travel to All Buttons" and "Copy Travel to Matching Name" for bulk-applying a button's press-offset animation, aimed at keyboards and other models with many identical parts.
-- [Highlighting & Press Feedback](#highlighting--press-feedback) – a new **Add** Highlight Blend Mode, alongside the existing Replace, that brightens the underlying texture instead of covering it.
+- [Textures & UV Mapping](#textures--uv-mapping) – Flip Y now starts off by default for a newly-added texture, not on. A texture you add is now copied into the model's own folder instead of depending on the original file's location forever, so moving or deleting that original doesn't break the model; a texture you remove has its own copy cleaned up too, as long as nothing else in the model still uses it. A model that ships with textures (a bundled example, or one copied between machines) now finds them correctly even if their saved path points somewhere that no longer exists.
+- [Materials](#materials) – "Reset All Meshes to Global Textures" now shares a line with "New Global Texture", and there's a matching **Reset All Meshes to Global Material** for the same kind of bulk cleanup on the material side.
+- [Smooth Travel Animation](#smooth-travel-animation) – a new **Remove Travel from All Buttons**, the opposite of Copy; and Copy now targets specific meshes through a checkbox picker instead of a name-substring filter, so you can select exactly which ones without relying on a shared naming convention.
+- [Highlighting & Press Feedback](#highlighting--press-feedback) – **Add** is now the default Highlight Blend Mode (Replace was the default before), and it can now be set per-mesh under Highlight Override, not just globally for the whole model.
 - [Window & Camera Settings](#window--camera-settings) – a clear ✓/✗ status line once Enable Shortcut Monitoring is on, so a shortcut that silently can't work (most commonly a Linux permissions issue) is visible and actionable instead of just never firing with no explanation.
+- [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode) – **(Linux only, for now)** Click-Through and Drag to Move can be toggled per controller window, and per its Input History window if one is open, straight from the tray icon's menu — a reachable fallback for enabling either one when the shortcut-based version can't be used because its underlying OS permission was never granted.
+- Fixed: a model reloaded from its saved file could silently lose its per-mesh Highlight Override toggle — the color and blend mode underneath it loaded correctly, but the toggle controlling whether they were actually used didn't, and reset to off every time.
 - Fixed: an Ignore Button rule set on a glyph style's Combine With target not taking effect while viewing the combining style.
+- Noticeably lower baseline CPU usage, especially on models with many meshes or several texture maps per part — shader compilation, uniform lookups, and texture-uniform bookkeeping that used to be rebuilt from scratch on every mesh, every single frame, are now cached instead.
 
 ---
 
@@ -193,7 +196,7 @@ Per mesh, under **Movement & Animation**:
 - **Smooth Travel Animation** – on/off.
 - **Duration (s)** – roughly how long the press/release takes to settle once enabled. Lower is snappier, higher is softer/slower.
 - **Copy to All Buttons** / **Unassign from All Buttons** – apply (or clear) the current enabled state and duration across every other button-type mesh on the controller in one click, instead of setting each one individually.
-- **Copy Travel to All Buttons** / **Copy Travel to Matching Name** – applies this mesh's own Travel and Travel Rotation values (the actual press-offset numbers, not the Smooth Travel settings above) to every other button-type mesh, or only to meshes whose name contains a text filter you type in. Aimed at keyboards and other models with many mechanically-identical parts - type a shared prefix like "Key_" to target just those, or use "All Buttons" for the whole model.
+- **Copy Travel to All Buttons** / **Copy Travel to Matching Name** – applies this mesh's own Travel and Travel Rotation values (the actual press-offset numbers, not the Smooth Travel settings above) to every other button-type mesh, or only to meshes whose name contains a text filter you type in. Aimed at keyboards and other models with many mechanically-identical parts - type a shared prefix like "Key\_" to target just those, or use "All Buttons" for the whole model.
 
 **Not available on sticks, triggers, or touchpads/touchpoints** – those track a live physical position every frame (how far a trigger is actually pulled, where a finger actually is on a touchpad right now), so easing them would make the rendered part visibly lag behind the real input instead of just looking like a nice animation. The control is hidden for those mesh types for exactly that reason; regular buttons, bumpers, and paddles are unaffected and can use it normally.
 
@@ -233,7 +236,13 @@ _(Video coming soon)_
 
 **How texture mapping works:** 3dco+ always uses the mesh's own UV coordinates — the standard `vt` texture-coordinate data from an OBJ file, or the equivalent channel from whatever format you imported (FBX, glTF, etc.). It never uses object-space, triplanar, or normal-based mapping. If a mesh already has a proper UV unwrap from whatever 3D tool you made or exported it in, a texture applied here will follow that unwrap exactly.
 
+Note: the video example shows a per mesh assignement of the texture and this is not necesary, you can assign textures & materials globally and override them per mesh if necesary... im just too lazy to make another video.
+
 **Adding a texture to a mesh:**
+
+![Texture material example](images/texture_material_example.webp)
+
+Credits to [DAT](https://www.youtube.com/@gitardat) for the amazing 3D keyboard model and files to make this example possible!.
 
 1. Select the mesh in the Mesh List.
 2. Open its **Materials/Textures** section and click **Add Texture**.
@@ -242,15 +251,15 @@ _(Video coming soon)_
 
 **Texture types:**
 
-| Type          | What it does                                                                                                                                                         |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Diffuse       | The base color image.                                                                                                                                                |
-| Specular      | Controls highlight intensity/color.                                                                                                                                  |
-| Emissive      | Glows regardless of lighting.                                                                                                                                        |
+| Type          | What it does                                                                                                                                                                                  |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Diffuse       | The base color image.                                                                                                                                                                         |
+| Specular      | Controls highlight intensity/color.                                                                                                                                                           |
+| Emissive      | Glows regardless of lighting.                                                                                                                                                                 |
 | Normal Map    | Adds surface detail (bumps, grain, panel lines) without extra geometry. Use an image where flat areas are blue-purple (roughly RGB 128, 128, 255) — the standard format most 3D tools export. |
-| Metallic Map  | Grayscale; brighter = more metallic.                                                                                                                                 |
-| Roughness Map | Grayscale; brighter = softer/rougher reflections, darker = sharper/glossier.                                                                                        |
-| AO Map        | Grayscale; darker = more occluded (crevices, contact points), brighter = more exposed to ambient light.                                                              |
+| Metallic Map  | Grayscale; brighter = more metallic.                                                                                                                                                          |
+| Roughness Map | Grayscale; brighter = softer/rougher reflections, darker = sharper/glossier.                                                                                                                  |
+| AO Map        | Grayscale; darker = more occluded (crevices, contact points), brighter = more exposed to ambient light.                                                                                       |
 
 Any of these can also be set once for the whole model instead of per part — see [Materials](#materials).
 
@@ -343,7 +352,6 @@ Shader files live in your [data directory](#data-directory--backups), under `sha
 ## Input History
 
 ![Input History demo placeholder](images/input_history_demo.webp)
-_(Video coming soon)_
 
 A separate always-on-top window per controller/keyboard/mouse window, showing a scrolling list of recent presses — the input-display style fighting games like Street Fighter and Tekken use, equally handy for tutorials. Toggle it per-window from that window's **Input History** section in Settings.
 
@@ -377,6 +385,12 @@ Build your own icon set instead of (or alongside) the bundled ones, in its own w
 2. An empty table appears. Click **Add Row** for each input you want to map: choose its type (Gamepad Button, D-Pad Direction, Gamepad Motion, Trigger, Keyboard, or Mouse), the specific input, then **Browse...** (the last column) to assign an image — either an existing glyph from the `glyphs/` folder or your own picture, which gets automatically converted and resized. **Gamepad Motion** is a fixed dropdown of the compound sequences the bundled FGC Motion art has icons for (`236`, `623`, `360`, and similar) — worth being clear-eyed about what this is: there's no actual runtime detection of a player performing a multi-direction motion to match against, so this only lets you assign a glyph to one of those known strings for whatever other use, not a claim the app recognizes them during play.
 3. Optionally set **Combine With** to another style, so anything you don't define yourself falls back to that style's glyphs instead of a bare text label — a mapping can also exclude specific input types from that fallback (FGC Motion does this for D-Pad glyphs, since it already represents direction its own way). An **Ignore Button** rule (inputs this style should never show or track at all, set elsewhere in the mapping editor) follows this same Combine With chain — a rule set on either half of a combined pair applies while viewing the other.
 4. **Save Mapping** — it's written to its own folder under `glyphs/` and immediately shows up as a Display Style choice, for any window. If a standard bundled style's folder ever goes missing (deleted by accident, an interrupted install), it's silently restored from the bundled pack the next time you launch.
+
+And for controllers like the "Steam Controller 2026" you can explicitley add rows to ignore specific buttons. since some buttons are based on touch like button 22 and button 23 which are the surface of the thumbsticks on this controller or the grip sensors which are buttons 24 and 25 that will trigger only when you hold the controller. To tackle this situation you just add these buttons to be ignored so that the input history does not get filled with buttons that are being hold because of the nature of their functionality.
+
+Note that these need to be specified per glyph mapping. So you need to pay attention on which button is being detected and map it according to your needs. In the mapping of your preference.
+
+![Example ignore button](images/ignore_buttons.png)
 
 ---
 

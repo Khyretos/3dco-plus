@@ -13,12 +13,16 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 
 ## What's new in 1.3.1
 
+- **Texture files now live inside your model's own folder.** Add a texture and it's copied into the model's own `textures` folder instead of being read from wherever you originally picked it from forever after - so moving or deleting that original file (often somewhere generic like Downloads) no longer breaks the model. Remove a texture and its own copy is cleaned up too, as long as nothing else in the model still references it. And if a model's saved texture path doesn't resolve on this machine - a bundled example, or a model copied over from somewhere else - the app now looks for the same filename in the model's own textures folder before giving up on it. Filenames are sanitized for cross-platform safety along the way (Windows forbids some characters and names that Linux/macOS allow).
 - **Flip Y now off by default** for a newly-added texture, replacing the previous default of on. The original default was tuned against a single real model+texture pair early on; broader use since showed that combination wrong more often than right for the images people actually import.
-- **"Reset All Meshes to Global Textures"** button next to the Global Texture editor, for applying a new or changed global texture across a model where many meshes already have their own custom textures, without switching to each one individually and clearing it by hand. See [Materials](#materials).
-- **Bulk Travel/Travel Rotation copy** in Movement & Animation - "Copy Travel to All Buttons" and "Copy Travel to Matching Name" (a substring filter on the mesh's own name), aimed squarely at keyboards and other models with many mechanically-identical parts that would otherwise mean setting the same six numbers by hand, once per key.
-- **Highlight Blend Mode**: alongside the existing **Replace** (the highlight color fully covers the part's own texture at full strength), a new **Add** mode layers the highlight color on top instead, so the underlying texture stays visible and brightens/tints rather than disappearing.
+- **"Reset All Meshes to Global Textures"** now sits on the same line as "New Global Texture" next to the Global Texture editor, and there's a matching **"Reset All Meshes to Global Material"** for the same kind of bulk cleanup on the material side - both for applying a changed global texture or material across a model where many meshes already have their own overrides, without switching to each one and clearing it by hand. See [Materials](#materials).
+- **Bulk Travel/Travel Rotation tools** in Movement & Animation, reworked - alongside "Copy Travel to All Buttons" there's now a **"Remove Travel from All Buttons"** (the opposite: zeroes it back out), and copying to specific meshes now uses a checkbox picker instead of a name-substring filter, so you can select exactly the meshes you want without depending on a shared naming convention.
+- **Highlight Blend Mode**: **Add** is now the default (layers the highlight color on top of the part's own texture, so the underlying detail stays visible and brightens/tints rather than disappearing) instead of **Replace** (fully covers the texture at full strength) - and it can now be set per-mesh under Highlight Override, not just globally for the whole model.
+- **Tray icon toggles for Click-Through and Drag to Move (Linux only, for now).** Each open controller window - and its Input History window, if one's open - gets its own submenu in the tray icon's right-click menu with these two toggles, reachable without the OS-level permission that the shortcut-based version needs (see the Linux shortcuts fix below - this is a fallback for setups where that permission was never granted).
 - **Fixed: shortcuts silently not working on some Linux setups.** The underlying cause was a permission issue (this app's account not being in the `input` group, needed to read raw input devices) that produced no error or indication anywhere - Settings now shows a clear ✓/✗ status line under Enable Shortcut Monitoring once it's on, and the ✗ case explains exactly how to fix it.
 - **Fixed: an Ignore Button rule on a glyph style's Combine With target not taking effect.** Glyph lookup itself already followed a style's Combine With chain (so a style missing a glyph could inherit one from what it combines with) - the ignore-rule check didn't follow that same chain, so a rule set on the combine target silently never applied while viewing the combining style.
+- **Fixed: a per-mesh Highlight Override could silently reset itself.** Its color and blend mode were always saved and loaded correctly, but the toggle controlling whether they were actually used was only ever saved, never loaded back - so it quietly reset to off every time the model reloaded from its file.
+- **Lower baseline CPU usage**, especially noticeable on models with many meshes or several texture maps per part. Shader compilation, GL uniform lookups, and texture-uniform name bookkeeping used to be rebuilt from scratch on every mesh, every single frame, regardless of whether anything had actually changed; all of it is now cached.
 
 ## What's new in 1.3.0
 
@@ -28,7 +32,7 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 - **Fully configurable shortcuts.** Click-Through and Drag-to-Move can each be bound to any keyboard key now, not a fixed short list — pick whatever's comfortable and doesn't collide with anything else you use. A single **Enable Shortcut Monitoring** toggle (off by default) turns this on for every window, on every platform, rather than the feature working differently depending on your OS.
 - **Model Description field**, alongside the existing Source URL, for crediting a model's contributors, leaving setup notes, or anything else worth keeping with the model — saves and loads with the model itself and has no effect on how it looks or behaves.
 - **Unsaved-changes confirmation before quitting.** Pressing Escape, closing a controller window, and the tray icon's Quit now all check for pending changes first and offer **Quit Anyway**/**Cancel**, instead of silently discarding an accidental close.
-- **Fixed: Source URL and Description not resetting when switching models.** Switching to a model whose own file doesn't set one of these fields used to leave the *previous* model's value displayed, since the same in-memory model object is reused across a switch rather than rebuilt from scratch — now correctly resets to blank.
+- **Fixed: Source URL and Description not resetting when switching models.** Switching to a model whose own file doesn't set one of these fields used to leave the _previous_ model's value displayed, since the same in-memory model object is reused across a switch rather than rebuilt from scratch — now correctly resets to blank.
 - **Fixed: crashes when adding or removing textures**, including removing the last texture left in a mesh's list.
 - **Fixed: texture GPU memory not being freed** on window close or when switching to a different model — affected both per-part and global textures.
 - **Fixed: repeated Wayland log spam** from a window-position query this app has no way to answer on that platform (a deliberate Wayland restriction, not a bug) — now queried once and skipped afterward instead of every frame.
@@ -306,6 +310,10 @@ If a texture looks wrong (one flat color, smeared, misaligned), that's almost al
 Any of the above types can also be set once at the model level instead of per part — see [Materials](#materials) for global textures and how the per-part override works.
 
 ## Materials
+
+![Texture material showcase](images/texture_material_showcase.webp)
+
+Credits to [DAT](https://www.youtube.com/@gitardat) for the amazing 3D keyboard model and files to make this example possible!.
 
 Set a texture or a material property once at the model level instead of assigning it to every part by hand:
 
