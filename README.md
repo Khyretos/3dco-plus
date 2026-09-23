@@ -11,6 +11,11 @@ This is a **fork, not a replacement**. It exists as an homage to the original to
 
 The **`+`** in the name means exactly that: **improvements and extra features** layered on top of the original — more controllers, more rendering features, more input paths, more build tooling — while keeping the same "point it at your input device and it just works" spirit. It's also a personal passion project: a way for me to see what I'm actually capable of building and maintaining with AI as a collaborator rather than a crutch.
 
+## What's new in 1.3.2
+
+- **Fixed: a hard crash on Windows when closing a controller window.** Dear ImGui's OpenGL backend bundles its own, separate GL function loader by default, independent of the GLAD loader the rest of the app uses - it only ever initializes those function pointers once, globally, for the whole process, and resets that same shared state every time a window's ImGui backend shuts down (exactly what happens on close). The next window to render anywhere afterward silently rebound every one of those pointers to its own context instead, leaving every other already-open window calling through pointers that were no longer valid for it - the app is now told to use the same GLAD loader everywhere instead, so there's only ever one, correctly-synced set of pointers. Windows/AMD hardware surfaced this one first, but the underlying issue wasn't platform-specific.
+- **Fixed: bundled example models (DAT Keyboard, 60% Keyboard) not showing their textures on a fresh install.** Their saved texture paths pointed at the original author's own machine, meaningless anywhere else - the app already had logic to fall back to a model's own `textures` folder when a saved path doesn't resolve, but the bundled files themselves still carried that now-meaningless absolute path. They're now shipped with a plain, portable path instead, so textures show up correctly the first time, on any machine.
+
 ## What's new in 1.3.1
 
 - **Texture files now live inside your model's own folder.** Add a texture and it's copied into the model's own `textures` folder instead of being read from wherever you originally picked it from forever after - so moving or deleting that original file (often somewhere generic like Downloads) no longer breaks the model. Remove a texture and its own copy is cleaned up too, as long as nothing else in the model still references it. And if a model's saved texture path doesn't resolve on this machine - a bundled example, or a model copied over from somewhere else - the app now looks for the same filename in the model's own textures folder before giving up on it. Filenames are sanitized for cross-platform safety along the way (Windows forbids some characters and names that Linux/macOS allow).
@@ -98,6 +103,7 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 
 - [What stayed the same](#what-stayed-the-same)
 - [What's new in the `+`](#whats-new-in-the-)
+- [What's new in 1.3.2](#whats-new-in-132)
 - [What's new in 1.3.1](#whats-new-in-131)
 - [What's new in 1.3.0](#whats-new-in-130)
 - [What's new in 1.2.0](#whats-new-in-120)

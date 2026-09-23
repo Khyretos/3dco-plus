@@ -43,6 +43,20 @@ constexpr UINT kIdQuit = 2;
 // an actual controller_window ID.
 constexpr UINT kControllerIdBase = 1000;
 constexpr UINT kMaxControllers = 900; // generous headroom, arbitrary cap
+// Click-Through/Drag to Move toggles for a controller window, and the
+// same two for its Input History window if one's open - see
+// ControllerEntry's own doc comment (tray_icon.h) for why these
+// exist. Each range is the same width as kMaxControllers so every
+// range can hold one entry per possible controller with no risk of
+// overlap. Unlike the Linux dbusmenu implementation, a Win32 popup
+// submenu is identified by its own HMENU handle, not a numeric
+// command id - only these four ranges (plus kControllerIdBase,
+// already above) need unique ids at all; the per-controller and
+// per-Input-History submenu containers themselves don't.
+constexpr UINT kControllerClickThroughIdBase = 2000;
+constexpr UINT kControllerDragToMoveIdBase = 3000;
+constexpr UINT kInputHistoryClickThroughIdBase = 4000;
+constexpr UINT kInputHistoryDragToMoveIdBase = 5000;
 
 const wchar_t *kTrayClassName = L"3dcoPlusTrayIcon";
 
@@ -58,12 +72,11 @@ VoidCallback g_onLeftClick = nullptr;
 VoidCallback g_onShowMainWindow = nullptr;
 VoidCallback g_onQuit = nullptr;
 ControllerCallback g_onToggleController = nullptr;
-// Stored but not yet wired into this platform's own native menu -
-// see the Linux implementation (elsewhere in this file, #elif
-// defined(__linux__) && defined(HAVE_DBUS)) for the real, working
-// version of this feature. Stored rather than left undeclared so a
-// future pass extending the Windows menu to match doesn't also need
-// to revisit these setters.
+// Click-Through/Drag to Move toggles for a controller window and its
+// Input History window, if open - see ControllerEntry's own doc
+// comment (tray_icon.h) for why these exist. Wired into this
+// platform's own native menu in showContextMenu() and the WM_COMMAND
+// handler further down.
 ControllerCallback g_onToggleControllerClickThrough = nullptr;
 ControllerCallback g_onToggleControllerDragToMove = nullptr;
 ControllerCallback g_onToggleInputHistoryClickThrough = nullptr;
@@ -182,10 +195,45 @@ void showContextMenu(HWND hwnd) {
     UINT count = (UINT)std::min(g_controllers.size(), (size_t)kMaxControllers);
     for (UINT i = 0; i < count; ++i) {
       const ControllerEntry &c = g_controllers[i];
-      std::wstring label =
-          toWide(c.title) + (c.minimized ? L"  (Restore)" : L"  (Minimize)");
-      AppendMenuW(controllersMenu, MF_STRING, kControllerIdBase + i,
-                  label.c_str());
+      // Each controller is its own submenu (Minimize/Restore, Click-
+      // Through, Drag to Move, and - if that controller has its own
+      // Input History window open - a nested Input History submenu
+      // with its own Click-Through/Drag to Move) - see
+      // ControllerEntry's own doc comment (tray_icon.h) for why. A
+      // Win32 popup submenu doesn't need its own unique command id
+      // (unlike the Linux dbusmenu implementation) - it's identified
+      // by its own HMENU handle, appended via MF_POPUP, so there's no
+      // equivalent of that implementation's id-collision bug to guard
+      // against here.
+      HMENU controllerMenu = CreatePopupMenu();
+
+      std::wstring minimizeLabel = c.minimized ? L"Restore" : L"Minimize";
+      AppendMenuW(controllerMenu, MF_STRING, kControllerIdBase + i,
+                  minimizeLabel.c_str());
+
+      AppendMenuW(controllerMenu,
+                  MF_STRING | (c.click_through ? MF_CHECKED : MF_UNCHECKED),
+                  kControllerClickThroughIdBase + i, L"Click-Through");
+      AppendMenuW(controllerMenu,
+                  MF_STRING | (c.drag_to_move ? MF_CHECKED : MF_UNCHECKED),
+                  kControllerDragToMoveIdBase + i, L"Drag to Move");
+
+      if (c.has_input_history) {
+        HMENU inputHistoryMenu = CreatePopupMenu();
+        AppendMenuW(inputHistoryMenu,
+                    MF_STRING | (c.input_history_click_through ? MF_CHECKED
+                                                               : MF_UNCHECKED),
+                    kInputHistoryClickThroughIdBase + i, L"Click-Through");
+        AppendMenuW(inputHistoryMenu,
+                    MF_STRING | (c.input_history_drag_to_move ? MF_CHECKED
+                                                               : MF_UNCHECKED),
+                    kInputHistoryDragToMoveIdBase + i, L"Drag to Move");
+        AppendMenuW(controllerMenu, MF_POPUP, (UINT_PTR)inputHistoryMenu,
+                    L"Input History");
+      }
+
+      AppendMenuW(controllersMenu, MF_POPUP, (UINT_PTR)controllerMenu,
+                  toWide(c.title).c_str());
     }
   }
   AppendMenuW(menu, MF_POPUP, (UINT_PTR)controllersMenu, L"Controllers");
@@ -262,6 +310,26 @@ LRESULT CALLBACK TrayWndProc(HWND hwnd, UINT msg, WPARAM wParam,
       UINT idx = id - kControllerIdBase;
       if (idx < g_controllers.size() && g_onToggleController)
         g_onToggleController(g_controllers[idx].id);
+    } else if (id >= kControllerClickThroughIdBase &&
+               id < kControllerClickThroughIdBase + kMaxControllers) {
+      UINT idx = id - kControllerClickThroughIdBase;
+      if (idx < g_controllers.size() && g_onToggleControllerClickThrough)
+        g_onToggleControllerClickThrough(g_controllers[idx].id);
+    } else if (id >= kControllerDragToMoveIdBase &&
+               id < kControllerDragToMoveIdBase + kMaxControllers) {
+      UINT idx = id - kControllerDragToMoveIdBase;
+      if (idx < g_controllers.size() && g_onToggleControllerDragToMove)
+        g_onToggleControllerDragToMove(g_controllers[idx].id);
+    } else if (id >= kInputHistoryClickThroughIdBase &&
+               id < kInputHistoryClickThroughIdBase + kMaxControllers) {
+      UINT idx = id - kInputHistoryClickThroughIdBase;
+      if (idx < g_controllers.size() && g_onToggleInputHistoryClickThrough)
+        g_onToggleInputHistoryClickThrough(g_controllers[idx].id);
+    } else if (id >= kInputHistoryDragToMoveIdBase &&
+               id < kInputHistoryDragToMoveIdBase + kMaxControllers) {
+      UINT idx = id - kInputHistoryDragToMoveIdBase;
+      if (idx < g_controllers.size() && g_onToggleInputHistoryDragToMove)
+        g_onToggleInputHistoryDragToMove(g_controllers[idx].id);
     }
     return 0;
   }

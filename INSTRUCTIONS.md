@@ -2,35 +2,43 @@
 
 ## Table of Contents
 
-1. [What's New in 1.3.1](#whats-new-in-131)
-2. [What's New in 1.3.0](#whats-new-in-130)
-3. [What's New in 1.2.0](#whats-new-in-120)
-4. [What's New in 1.1.1](#whats-new-in-111)
-5. [What's New in 1.1.0](#whats-new-in-110)
-6. [First Launch](#first-launch)
-7. [Opening a Controller Window](#opening-a-controller-window)
-8. [Mapping Inputs](#mapping-inputs)
-9. [Gyro Support](#gyro-support)
-10. [Touchpads](#touchpads)
-11. [Highlighting & Press Feedback](#highlighting--press-feedback)
-12. [Smooth Travel Animation](#smooth-travel-animation)
-13. [Importing a Custom Model](#importing-a-custom-model)
-14. [Textures & UV Mapping](#textures--uv-mapping)
-15. [Materials](#materials)
-16. [Lighting](#lighting)
-17. [Window & Camera Settings](#window--camera-settings)
-18. [Network Functionality](#network-functionality)
-19. [Shader Effects](#shader-effects)
-20. [Input History](#input-history)
-21. [The Log Window](#the-log-window)
-22. [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode)
-23. [Theme](#theme)
-24. [Data Directory & Backups](#data-directory--backups)
-25. [Troubleshooting](#troubleshooting)
+1. [What's New in 1.3.2](#whats-new-in-132)
+2. [What's New in 1.3.1](#whats-new-in-131)
+3. [What's New in 1.3.0](#whats-new-in-130)
+4. [What's New in 1.2.0](#whats-new-in-120)
+5. [What's New in 1.1.1](#whats-new-in-111)
+6. [What's New in 1.1.0](#whats-new-in-110)
+7. [First Launch](#first-launch)
+8. [Opening a Controller Window](#opening-a-controller-window)
+9. [Mapping Inputs](#mapping-inputs)
+10. [Gyro Support](#gyro-support)
+11. [Touchpads](#touchpads)
+12. [Highlighting & Press Feedback](#highlighting--press-feedback)
+13. [Smooth Travel Animation](#smooth-travel-animation)
+14. [Importing a Custom Model](#importing-a-custom-model)
+15. [Textures & UV Mapping](#textures--uv-mapping)
+16. [Materials](#materials)
+17. [Lighting](#lighting)
+18. [Window & Camera Settings](#window--camera-settings)
+19. [Network Functionality](#network-functionality)
+20. [Shader Effects](#shader-effects)
+21. [Input History](#input-history)
+22. [The Log Window](#the-log-window)
+23. [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode)
+24. [Theme](#theme)
+25. [Data Directory & Backups](#data-directory--backups)
+26. [Troubleshooting](#troubleshooting)
 
 ---
 
 ![Demo](images/demo.webp)
+
+## What's New in 1.3.2
+
+- Fixed: a hard crash on Windows when closing a controller window. The underlying cause was Dear ImGui's OpenGL backend using its own, separate function loader instead of the one the rest of the app uses, which could end up bound to the wrong window's context after a close - it's now told to use the app's own loader everywhere, so this no longer happens.
+- Fixed: the bundled example models (DAT Keyboard, 60% Keyboard) not showing their textures the first time you open them. Their texture paths now point somewhere that resolves correctly on any machine, instead of wherever they happened to be saved from originally.
+
+---
 
 ## What's New in 1.3.1
 

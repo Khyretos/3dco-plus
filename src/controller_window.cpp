@@ -105,6 +105,23 @@ void logNetworkMessage(controller_window &w, const std::string &direction,
 // Fullscreen-Optimizations problem doesn't apply), or as a fallback if
 // the companion window failed to be created for some reason.
 // ------------------------------------------------------------------
+// See this function's own doc comment in controller_window.h for the
+// full explanation of why it exists.
+static GLFWwindow *g_gladLoadedFor = nullptr;
+
+void makeContextCurrentSafe(GLFWwindow *window) {
+  glfwMakeContextCurrent(window);
+  if (window == g_gladLoadedFor)
+    return; // GLAD's global table is already valid for this context
+  if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+    spdlog::error("makeContextCurrentSafe: failed to reload GLAD for a "
+                 "context switch - GL calls against this context may not "
+                 "work correctly.");
+    return; // don't mark it as loaded if the reload itself failed
+  }
+  g_gladLoadedFor = window;
+}
+
 void setWindowClickThrough(GLFWwindow *window, bool enable) {
 #if defined(_WIN32)
   for (auto &w : windows) {
@@ -179,14 +196,19 @@ bool isShortcutPhysicallyActive(int shortcutId) {
 }
 
 bool updateShortcutToggle(bool &persistentValue, bool &wasActiveLastFrame,
-                          int shortcutId, GLFWwindow *window) {
+                          int shortcutId, GLFWwindow *window,
+                          bool *outIsCurrentlyHeld) {
   ShortcutKind kind = getShortcutKind(shortcutId);
   if (kind == ShortcutKind::None) {
     wasActiveLastFrame = false;
+    if (outIsCurrentlyHeld)
+      *outIsCurrentlyHeld = false;
     return persistentValue;
   }
   bool active = isMouseGloballyHoveringWindow(window) &&
                 isShortcutPhysicallyActive(shortcutId);
+  if (outIsCurrentlyHeld)
+    *outIsCurrentlyHeld = active;
   bool effective = persistentValue;
   if (kind == ShortcutKind::Hold) {
     // Live override for exactly as long as it's held - the stored
@@ -1534,7 +1556,7 @@ void createCompanionWindow(CompanionWindow &cw, GLFWwindow *source_window,
 void destroyCompanionWindow(CompanionWindow &cw) {
   if (!cw.hwnd)
     return;
-  glfwMakeContextCurrent(cw.source_window);
+  makeContextCurrentSafe(cw.source_window);
   for (int i = 0; i < 2; ++i) {
     if (cw.fence[i]) {
       glDeleteSync(cw.fence[i]);
@@ -1672,7 +1694,7 @@ void updateCompanionWindow(CompanionWindow &cw, bool always_on_top,
   SetWindowPos(hwnd, always_on_top ? HWND_TOPMOST : HWND_NOTOPMOST, wx, wy, ww,
                wh, SWP_NOACTIVATE);
 
-  glfwMakeContextCurrent(cw.source_window);
+  makeContextCurrentSafe(cw.source_window);
 
   if (cw.pbo[0] == 0)
     glGenBuffers(2, cw.pbo);
@@ -2270,7 +2292,11 @@ void createControllerWindow(std::string title, std::string model_path) {
     glfwTerminate();
     return;
   }
-  glfwMakeContextCurrent(w.glfw_window);
+  // makeContextCurrentSafe() (see its own doc comment,
+  // controller_window.h) keeps GLAD's dispatch table synced to
+  // whichever context is actually current - required here, since this
+  // window's GL context is its own, separate, non-shared one.
+  makeContextCurrentSafe(w.glfw_window);
   w.window_title = title;
   setWindowClickThrough(w.glfw_window, false); // default: no passthrough
   w.click_through_last_applied = false;
@@ -2548,7 +2574,7 @@ void createControllerWindow(std::string title, std::string model_path) {
   // side by side, neither silently overwriting the other.
   {
     GLFWwindow *previousContext = glfwGetCurrentContext();
-    glfwMakeContextCurrent(w.glfw_window);
+    makeContextCurrentSafe(w.glfw_window);
     ImGuiContext *previousImgui = ImGui::GetCurrentContext();
     w.controller_imgui_ctx = ImGui::CreateContext();
     ImGui::SetCurrentContext(w.controller_imgui_ctx);
@@ -2574,7 +2600,7 @@ void createControllerWindow(std::string title, std::string model_path) {
     if (previousImgui)
       ImGui::SetCurrentContext(previousImgui);
     if (previousContext)
-      glfwMakeContextCurrent(previousContext);
+      makeContextCurrentSafe(previousContext);
   }
 
   windows.push_back(w);
@@ -2619,7 +2645,7 @@ void recreateControllerWindow(controller_window *w) {
     spdlog::error("Failed to recreate controller window with transparency.");
     return;
   }
-  glfwMakeContextCurrent(w->glfw_window);
+  makeContextCurrentSafe(w->glfw_window);
   w->window_title = title;
 
   glfwSetWindowPos(w->glfw_window, x, y);
@@ -3782,9 +3808,11 @@ void controller_window_input() {
     // stored setting - only a Discrete-kind shortcut's fresh press
     // does that, and it does so through the function itself, not by
     // this call site assigning the return value back.
-    bool dragToMoveEffective =
-        updateShortcutToggle(w.drag_to_move, w.drag_to_move_shortcut_was_active,
-                             w.drag_to_move_shortcut, w.glfw_window);
+    bool dragToMoveShortcutCurrentlyHeld = false;
+    bool dragToMoveEffective = updateShortcutToggle(
+        w.drag_to_move, w.drag_to_move_shortcut_was_active,
+        w.drag_to_move_shortcut, w.glfw_window,
+        &dragToMoveShortcutCurrentlyHeld);
     // Middle Mouse Button on a controller window opens a small context
     // menu instead of directly toggling anything (see
     // "middleClickMenuOpen" below) - it used to hardcode toggling
@@ -3797,6 +3825,33 @@ void controller_window_input() {
     bool clickThroughEffective = updateShortcutToggle(
         w.click_through, w.click_through_shortcut_was_active,
         w.click_through_shortcut, w.glfw_window);
+    // While the Drag-to-Move shortcut is physically being held down
+    // right now, Click-Through is also forced on for that same
+    // duration, regardless of its own persistent setting or shortcut
+    // state - reported by a user whose OS-wide "hold this key to drag
+    // any window" gesture is bound to the SAME key as their Drag-to-
+    // Move shortcut here (Left GUI/Meta, a common WM-level binding on
+    // Linux). With Click-Through off, holding that shared key moved
+    // nothing - not this app's own drag logic, and not the OS's own
+    // gesture either - while Click-Through on plus the same shortcut
+    // worked correctly (their own testing showed the app's own drag
+    // logic keeps working via glfwGetMouseButton() regardless of
+    // Click-Through state, so this costs nothing on that front while
+    // unblocking the OS-level one).
+    //
+    // Deliberately gated on dragToMoveShortcutCurrentlyHeld, NOT
+    // dragToMoveEffective - an earlier version of this fix used
+    // dragToMoveEffective directly, which is also true whenever Drag
+    // to Move is simply, persistently turned on via its own checkbox/
+    // tray toggle with no shortcut held at all (updateShortcutToggle()
+    // just returns persistentValue as-is when nothing's currently
+    // pressed). That silently forced Click-Through on for anyone who
+    // just wanted Drag to Move always enabled, with no way to tell
+    // from the (still unchecked) Click-Through checkbox why their
+    // window had suddenly gone click-through - a real bug, not the
+    // intended "only while a shortcut is actively held" behavior.
+    clickThroughEffective =
+        clickThroughEffective || dragToMoveShortcutCurrentlyHeld;
     if (clickThroughEffective != w.click_through_last_applied) {
       setWindowClickThrough(w.glfw_window, clickThroughEffective);
       w.click_through_last_applied = clickThroughEffective;
@@ -3980,7 +4035,7 @@ void controller_window_input() {
       {
         GLFWwindow *previousContext = glfwGetCurrentContext();
         ImGuiContext *previousImgui = ImGui::GetCurrentContext();
-        glfwMakeContextCurrent(w.glfw_window);
+        makeContextCurrentSafe(w.glfw_window);
         ImGui::SetCurrentContext(w.controller_imgui_ctx);
         if (w.controller_imgui_backend_ready) {
           ImGui_ImplOpenGL3_Shutdown();
@@ -3992,7 +4047,7 @@ void controller_window_input() {
         if (previousImgui)
           ImGui::SetCurrentContext(previousImgui);
         if (previousContext)
-          glfwMakeContextCurrent(previousContext);
+          makeContextCurrentSafe(previousContext);
       }
       if (w.is_import_preview) {
         // For import preview windows, just close the window and remove its
@@ -4295,7 +4350,7 @@ void drawControllerWindows() {
     }
 #endif
     if (!isControllerWindowMinimized(w)) {
-      glfwMakeContextCurrent(w.glfw_window);
+      makeContextCurrentSafe(w.glfw_window);
       // vsync (glfwSwapInterval) is never used for controller windows -
       // always 0. Three separate incremental attempts at narrowing the
       // trigger condition (click-through only, then also transparent
@@ -4871,7 +4926,27 @@ static void releaseControllerWindowResources(controller_window &w) {
   // wrong current context is a silent no-op, so make this window's
   // context current first - the same pattern used when it's created and
   // drawn (see createControllerWindow() / drawControllerWindows()).
-  glfwMakeContextCurrent(w.glfw_window);
+  //
+  // previousContext is saved and restored at the end of this function -
+  // same reasoning, same pattern as destroyInputHistoryWindow()'s own
+  // previousContext/previousImgui (input_history.cpp) and the ImGui-
+  // context save/restore just below this comment, which already does
+  // exactly this for the nested ImGui shutdown but stopped short of
+  // doing it for the GLFW/GL context switch here too. Without it, a
+  // controller window closed mid-frame from the Settings window's own
+  // tab bar (removeControllerWindow(), called while drawSettingsWindow()
+  // is still actively rendering with its own context current) leaves
+  // the GLFW-current context pointing at this now-destroyed window for
+  // the rest of that frame - every subsequent GL/ImGui-backend call
+  // Settings itself makes that same frame, including its own
+  // ImGui_ImplOpenGL3_RenderDrawData() at the end, then operates on a
+  // dangling context. That's undefined behavior with no guaranteed
+  // symptom - Linux's Mesa-based GLX/EGL tolerated it silently in
+  // testing, but a hard crash on close, specifically on Windows, is
+  // exactly the kind of platform-dependent result operating on a
+  // destroyed context can produce there instead.
+  GLFWwindow *previousContext = glfwGetCurrentContext();
+  makeContextCurrentSafe(w.glfw_window);
 
   // Tear down this window's own Middle Mouse Button menu context too -
   // this function runs on app shutdown (via destroyWindows()) as well
@@ -4947,6 +5022,15 @@ static void releaseControllerWindowResources(controller_window &w) {
   // until it accumulates across many sessions.
   for (Texture &tex : w.model.globalTextures)
     deleteTexture(tex.id);
+
+  // Restore whatever context was actually current before this
+  // function switched away - see previousContext's own doc comment
+  // above for why this matters. previousContext can be null (no
+  // context was current at all, e.g. very early in startup before
+  // any window exists yet) - makeContextCurrentSafe(nullptr) is valid
+  // and explicitly clears the current context, which is the correct
+  // thing to restore to in that case.
+  makeContextCurrentSafe(previousContext);
 }
 
 void destroyWindows() {

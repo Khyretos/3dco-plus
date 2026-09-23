@@ -7899,7 +7899,7 @@
   ],
   "global_textures": [
     {
-      "path": "/home/khyretos/.local/share/3dco+/models/DAT Keyboard/textures/KEYS_AO.jpg",
+      "path": "textures/KEYS_AO.jpg",
       "name": "1: /home/khyretos/.local/share/3dco+/models/DAT Keyboard/textures/KEYS_AO.jpg",
       "type": 6,
       "wrapX": 0,
@@ -7915,7 +7915,7 @@
     },
 
     {
-      "path": "/home/khyretos/.local/share/3dco+/models/DAT Keyboard/textures/KEYS_Diffuse.jpg",
+      "path": "textures/KEYS_Diffuse.jpg",
       "name": "2: /home/khyretos/.local/share/3dco+/models/DAT Keyboard/textures/KEYS_Diffuse.jpg",
       "type": 0,
       "wrapX": 0,
@@ -7931,7 +7931,7 @@
     },
 
     {
-      "path": "/home/khyretos/.local/share/3dco+/models/DAT Keyboard/textures/KEYS_Normal.jpg",
+      "path": "textures/KEYS_Normal.jpg",
       "name": "3: /home/khyretos/.local/share/3dco+/models/DAT Keyboard/textures/KEYS_Normal.jpg",
       "type": 3,
       "wrapX": 0,
@@ -7947,7 +7947,7 @@
     },
 
     {
-      "path": "/home/khyretos/.local/share/3dco+/models/DAT Keyboard/textures/KEYS_Roughness.jpg",
+      "path": "textures/KEYS_Roughness.jpg",
       "name": "4: /home/khyretos/.local/share/3dco+/models/DAT Keyboard/textures/KEYS_Roughness.jpg",
       "type": 5,
       "wrapX": 0,

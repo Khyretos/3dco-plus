@@ -100,6 +100,24 @@ jobs:
           path: dist/windows/3dco+.exe
           if-no-files-found: error
 
+      # 3dco+.debug (produced alongside 3dco+.exe - see Dockerfile.windows)
+      # holds this exact build's debug symbols, split out of the shipped
+      # .exe to keep it small. Uploaded as its own artifact here, and
+      # attached to the release below as a separate, clearly-labeled
+      # asset - not merged into the 3dco-windows artifact above, so a
+      # normal user downloading the .exe never sees or needs it. warn
+      # (not error) if it's missing: the Dockerfile's own fallback
+      # still ships a working, unstripped .exe with debug info embedded
+      # if objcopy couldn't be found, just without a separate .debug -
+      # that's a degraded-but-fine build, not something this workflow
+      # should fail over.
+      - name: Upload debug symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: 3dco-windows-debug-symbols
+          path: dist/windows/3dco+.debug
+          if-no-files-found: warn
+
   macos:
     name: macOS Universal App
     runs-on: ubuntu-latest
@@ -168,15 +186,25 @@ jobs:
         with:
           path: release-assets
           # `pattern` takes a single glob, not a list of names - this matches
-          # exactly our three build artifacts (3dco-linux-appimage,
-          # 3dco-windows, 3dco-macos) and nothing else.
+          # our four build artifacts (3dco-linux-appimage, 3dco-windows,
+          # 3dco-windows-debug-symbols, 3dco-macos) and nothing else.
           pattern: 3dco-*
           merge-multiple: false
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
+          # By default this action fails the whole step if any one
+          # files: entry matches nothing. The debug symbols entry below
+          # legitimately can be absent - Dockerfile.windows's own
+          # fallback still ships a working .exe (just unstripped, with
+          # debug info embedded rather than split out) if objcopy
+          # couldn't be found - and that's a degraded-but-fine build,
+          # not something that should block the other three, guaranteed
+          # -to-exist platform assets from being released.
+          fail_on_unmatched_files: false
           files: |
             release-assets/3dco-linux-appimage/*.AppImage
             release-assets/3dco-windows/3dco+.exe
+            release-assets/3dco-windows-debug-symbols/3dco+.debug
             release-assets/3dco-macos/3dco+-macos.zip

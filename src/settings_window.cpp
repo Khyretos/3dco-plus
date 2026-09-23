@@ -34,7 +34,6 @@ extern bool gQuit;
 #include "tray_icon.h"
 #include <SDL3/SDL_joystick.h>
 #include <algorithm>
-#include <cctype> // std::toupper, for the texture-filename sanitizer's reserved-name check
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -42,6 +41,7 @@ extern bool gQuit;
 #include <iostream>
 #include <map>
 #include <nlohmann/json.hpp>
+#include <cctype> // std::toupper, for the texture-filename sanitizer's reserved-name check
 #include <set>
 #include <spdlog/spdlog.h>
 #include <stdio.h>
@@ -954,7 +954,12 @@ static void deleteOrphanedTextureFile(const std::string &modelPath,
                                       const Model &model) {
   if (modelPath.empty() || deletedPath.empty())
     return;
-  std::string texturesDir = modelPath + "/textures";
+  // std::filesystem::path's own operator/ rather than string
+  // concatenation with a hardcoded "/" - produces this platform's own
+  // native separator, matching what copyTextureIntoModelFolder() (this
+  // file, further down) itself now uses to build the paths that get
+  // stored and compared against here.
+  std::string texturesDir = (std::filesystem::path(modelPath) / "textures").string();
   if (deletedPath.compare(0, texturesDir.size(), texturesDir) != 0)
     return; // not one of our own copies - never touch it
 
@@ -975,8 +980,8 @@ static void deleteOrphanedTextureFile(const std::string &modelPath,
                  "referenced by this model).",
                  deletedPath);
   } else if (ec) {
-    spdlog::warn("Could not remove orphaned texture file '{}': {}", deletedPath,
-                 ec.message());
+    spdlog::warn("Could not remove orphaned texture file '{}': {}",
+                 deletedPath, ec.message());
   }
 }
 
@@ -1017,7 +1022,7 @@ static void drawTextureEditor(Texture *t, controller_window *current_window) {
                                         "Clamp to Edge", "Clamp to Border"};
   if (ImGui::Combo("X Wrap", &t->wrapX, wrap_names, wrap_count)) {
     current_window->unsaved_change_count++;
-    glfwMakeContextCurrent(current_window->glfw_window);
+    makeContextCurrentSafe(current_window->glfw_window);
     glBindTexture(GL_TEXTURE_2D, t->id);
     switch (t->wrapX) {
     case repeat:
@@ -1034,12 +1039,12 @@ static void drawTextureEditor(Texture *t, controller_window *current_window) {
       glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, t->border);
       break;
     }
-    glfwMakeContextCurrent(glfw_settings_window);
+    makeContextCurrentSafe(glfw_settings_window);
   }
   WrappedTooltip("Horizontal texture wrapping mode.");
   if (ImGui::Combo("Y Wrap", &t->wrapY, wrap_names, wrap_count)) {
     current_window->unsaved_change_count++;
-    glfwMakeContextCurrent(current_window->glfw_window);
+    makeContextCurrentSafe(current_window->glfw_window);
     glBindTexture(GL_TEXTURE_2D, t->id);
     switch (t->wrapY) {
     case repeat:
@@ -1056,15 +1061,15 @@ static void drawTextureEditor(Texture *t, controller_window *current_window) {
       glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, t->border);
       break;
     }
-    glfwMakeContextCurrent(glfw_settings_window);
+    makeContextCurrentSafe(glfw_settings_window);
   }
   WrappedTooltip("Vertical texture wrapping mode.");
   if (ImGui::ColorEdit3("Border Color", t->border)) {
     current_window->unsaved_change_count++;
-    glfwMakeContextCurrent(current_window->glfw_window);
+    makeContextCurrentSafe(current_window->glfw_window);
     glBindTexture(GL_TEXTURE_2D, t->id);
     glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, t->border);
-    glfwMakeContextCurrent(glfw_settings_window);
+    makeContextCurrentSafe(glfw_settings_window);
   }
   WrappedTooltip("Border color used when clamp‑to‑border is selected.");
   if (ImGui::InputFloat("Offset X", &t->offsetX, 0.01f, 1.0f, "%.3f"))
@@ -1678,13 +1683,13 @@ void resetGlyphMappingEditor() {
   if (g_glyphMappingEditorGlfwWindow) {
     GLFWwindow *previous_context = glfwGetCurrentContext();
     ImGuiContext *previous_imgui_ctx = ImGui::GetCurrentContext();
-    glfwMakeContextCurrent(g_glyphMappingEditorGlfwWindow);
+    makeContextCurrentSafe(g_glyphMappingEditorGlfwWindow);
     for (auto &[path, id] : g_glyphMappingThumbnailCache) {
       if (id != 0)
         glDeleteTextures(1, &id);
     }
     if (previous_context)
-      glfwMakeContextCurrent(previous_context);
+      makeContextCurrentSafe(previous_context);
     if (previous_imgui_ctx)
       ImGui::SetCurrentContext(previous_imgui_ctx);
   }
@@ -1858,7 +1863,7 @@ static void ensureGlyphMappingEditorWindowCreated() {
   }
 
   GLFWwindow *previous_context = glfwGetCurrentContext();
-  glfwMakeContextCurrent(g_glyphMappingEditorGlfwWindow);
+  makeContextCurrentSafe(g_glyphMappingEditorGlfwWindow);
   glfwSwapInterval(0);
 
   ImGuiContext *previous_imgui_ctx = ImGui::GetCurrentContext();
@@ -1878,7 +1883,7 @@ static void ensureGlyphMappingEditorWindowCreated() {
   if (previous_imgui_ctx)
     ImGui::SetCurrentContext(previous_imgui_ctx);
   if (previous_context)
-    glfwMakeContextCurrent(previous_context);
+    makeContextCurrentSafe(previous_context);
 }
 
 void setGlyphMappingEditorOpen(bool open) {
@@ -2305,7 +2310,7 @@ void drawGlyphMappingEditorWindow() {
   GLFWwindow *previous_context = glfwGetCurrentContext();
   ImGuiContext *previous_imgui_ctx = ImGui::GetCurrentContext();
 
-  glfwMakeContextCurrent(g_glyphMappingEditorGlfwWindow);
+  makeContextCurrentSafe(g_glyphMappingEditorGlfwWindow);
   ImGui::SetCurrentContext(g_glyphMappingEditorImguiCtx);
   applyCustomImGuiTheme(); // re-applied every frame - see its doc comment
 
@@ -2352,7 +2357,7 @@ void drawGlyphMappingEditorWindow() {
   if (previous_imgui_ctx)
     ImGui::SetCurrentContext(previous_imgui_ctx);
   if (previous_context)
-    glfwMakeContextCurrent(previous_context);
+    makeContextCurrentSafe(previous_context);
 }
 
 std::vector<window_tab> tabs;
@@ -2465,7 +2470,7 @@ void createSettingsWindow() {
     exit(1);
   }
 
-  glfwMakeContextCurrent(glfw_settings_window);
+  makeContextCurrentSafe(glfw_settings_window);
   glfwSwapInterval(1);
   glfwSetFramebufferSizeCallback(glfw_settings_window,
                                  settings_framebuffer_size_callback);
@@ -2604,7 +2609,7 @@ void SaveImportedModel(controller_window &w);
 void writeOBJ(const std::string &path, const ImportedMesh &mesh);
 
 void drawSettingsWindow() {
-  glfwMakeContextCurrent(glfw_settings_window);
+  makeContextCurrentSafe(glfw_settings_window);
   ImGui::SetCurrentContext(g_settings_imgui_ctx);
   glfwSwapInterval(1);
   // Re-applied every frame (not just once at context creation) so a
@@ -2921,12 +2926,12 @@ void drawSettingsWindow() {
         // out of the way.
         if (g_shortcut_monitoring_enabled) {
           std::string backend = GlobalKeyboard::backendName();
-          bool isProblem =
-              backend.find("permission denied") != std::string::npos ||
-              backend.find("unavailable") != std::string::npos ||
-              backend.find("failed") != std::string::npos ||
-              backend.find("unsupported") != std::string::npos ||
-              backend.find("not initialized") != std::string::npos;
+          bool isProblem = backend.find("permission denied") !=
+                                std::string::npos ||
+                            backend.find("unavailable") != std::string::npos ||
+                            backend.find("failed") != std::string::npos ||
+                            backend.find("unsupported") != std::string::npos ||
+                            backend.find("not initialized") != std::string::npos;
           if (isProblem) {
             ImGui::PushStyleColor(ImGuiCol_Text,
                                   ImVec4(0.95f, 0.25f, 0.25f, 1.0f));
@@ -3627,10 +3632,10 @@ void drawSettingsWindow() {
                   std::string model_path = models_root;
                   model_path.append("/");
                   model_path.append(model_dir);
-                  glfwMakeContextCurrent(current_window->glfw_window);
+                  makeContextCurrentSafe(current_window->glfw_window);
                   loadModel(current_window->model, model_path);
                   // Update mesh_count
-                  glfwMakeContextCurrent(glfw_settings_window);
+                  makeContextCurrentSafe(glfw_settings_window);
                 }
               }
             }
@@ -3723,9 +3728,9 @@ void drawSettingsWindow() {
                       std::filesystem::copy_options::recursive |
                           std::filesystem::copy_options::overwrite_existing);
                   // Load the new model
-                  glfwMakeContextCurrent(current_window->glfw_window);
+                  makeContextCurrentSafe(current_window->glfw_window);
                   loadModel(current_window->model, dest_path);
-                  glfwMakeContextCurrent(glfw_settings_window);
+                  makeContextCurrentSafe(glfw_settings_window);
                   current_window->model_name = name;
                   current_window->model.path = dest_path;
                   spdlog::info("Duplicated model to '{}'", dest_path);
@@ -3768,9 +3773,9 @@ void drawSettingsWindow() {
               }
             }
             if (model_folders.size() > 0) {
-              glfwMakeContextCurrent(current_window->glfw_window);
+              makeContextCurrentSafe(current_window->glfw_window);
               loadModel(current_window->model, model_folders.front().c_str());
-              glfwMakeContextCurrent(glfw_settings_window);
+              makeContextCurrentSafe(glfw_settings_window);
               current_window->model_name =
                   get_top_folder(model_folders.front());
             } else {
@@ -3996,7 +4001,7 @@ void drawSettingsWindow() {
               // - guard the rest of this block on a delete having
               // just happened this frame.
               if (ImGui::Button("Delete Global Texture")) {
-                glfwMakeContextCurrent(current_window->glfw_window);
+                makeContextCurrentSafe(current_window->glfw_window);
                 deleteTexture(
                     gtModel.globalTextures[current_global_texture].id);
                 std::string deletedGlobalTexPath =
@@ -4006,7 +4011,7 @@ void drawSettingsWindow() {
                 deleteOrphanedTextureFile(gtModel.path, deletedGlobalTexPath,
                                           gtModel);
                 current_window->unsaved_change_count++;
-                glfwMakeContextCurrent(glfw_settings_window);
+                makeContextCurrentSafe(glfw_settings_window);
                 current_global_texture = 0;
                 for (size_t i = 0; i < gtModel.globalTextures.size(); i++) {
                   gtModel.globalTextures[i].name =
@@ -4048,8 +4053,7 @@ void drawSettingsWindow() {
                 "textures afterward via its own checkbox below, and its "
                 "textures will be exactly as they were.");
 
-            if (!just_deleted_global_texture &&
-                !gtModel.globalTextures.empty() &&
+            if (!just_deleted_global_texture && !gtModel.globalTextures.empty() &&
                 current_global_texture < gtModel.globalTextures.size()) {
               Texture *gt = &gtModel.globalTextures[current_global_texture];
               ImGui::NewLine();
@@ -4149,7 +4153,7 @@ void drawSettingsWindow() {
                 bool just_deleted_texture = false;
 
                 if (ImGui::Button("Delete Texture")) {
-                  glfwMakeContextCurrent(current_window->glfw_window);
+                  makeContextCurrentSafe(current_window->glfw_window);
                   deleteTexture(texMesh.textures[current_texture].id);
                   std::string deletedTexPath =
                       texMesh.textures[current_texture].path;
@@ -4159,7 +4163,7 @@ void drawSettingsWindow() {
                                             deletedTexPath,
                                             current_window->model);
                   current_window->unsaved_change_count++;
-                  glfwMakeContextCurrent(glfw_settings_window);
+                  makeContextCurrentSafe(glfw_settings_window);
                   current_texture = 0;
                   for (size_t i = 0; i < texMesh.textures.size(); i++) {
                     texMesh.textures[i].name =
@@ -4776,8 +4780,7 @@ void drawSettingsWindow() {
               std::string travelComboPreview =
                   travelSelectedCount == 0
                       ? "Pick meshes..."
-                      : (std::to_string(travelSelectedCount) +
-                         " mesh(es) selected");
+                      : (std::to_string(travelSelectedCount) + " mesh(es) selected");
               if (ImGui::BeginCombo("##TravelMeshPicker",
                                     travelComboPreview.c_str())) {
                 for (int i = 0; i < (int)current_window->model.meshes.size();
@@ -4785,9 +4788,9 @@ void drawSettingsWindow() {
                   Mesh &pickMesh = current_window->model.meshes[i];
                   if (isAnalogTravelMesh(pickMesh))
                     continue;
-                  std::string displayName = pickMesh.name.empty()
-                                                ? ("Mesh " + std::to_string(i))
-                                                : pickMesh.name;
+                  std::string displayName =
+                      pickMesh.name.empty() ? ("Mesh " + std::to_string(i))
+                                            : pickMesh.name;
                   bool checked = travelSelectedMeshes[i];
                   ImGui::PushID(i);
                   if (ImGui::Checkbox(displayName.c_str(), &checked))
@@ -4967,7 +4970,8 @@ void drawSettingsWindow() {
                 if (ImGui::IsItemHovered())
                   DraggableTooltip("Custom Highlight Color");
                 drawHighlightBlendModeCombo(
-                    &selectedMesh.custom_highlight_blend_mode, current_window);
+                    &selectedMesh.custom_highlight_blend_mode,
+                    current_window);
               }
 
               // ---- Dual highlight for axes ----
@@ -6472,7 +6476,7 @@ void drawSettingsWindow() {
         ImGui::TextColored(ImVec4(0.8f, 0.4f, 1.0f, 1.0f),
                            "3D Controller Overlay +");
         ImGui::SameLine();
-        ImGui::TextDisabled("v1.3.1");
+        ImGui::TextDisabled("v1.2.0");
 
         ImGui::NewLine();
         ImGui::Text(
@@ -6650,9 +6654,9 @@ void drawSettingsWindow() {
     for (char &c : stemUpper)
       c = (char)std::toupper((unsigned char)c);
     static const std::set<std::string> reserved = {
-        "CON",  "PRN",  "AUX",  "NUL",  "COM1", "COM2", "COM3", "COM4",
-        "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3",
-        "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"};
+        "CON",  "PRN",  "AUX",  "NUL",  "COM1", "COM2", "COM3",
+        "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1",
+        "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"};
     if (reserved.count(stemUpper)) {
       std::string ext = std::filesystem::path(result).extension().string();
       result = stem + "_" + ext;
@@ -6675,13 +6679,20 @@ void drawSettingsWindow() {
           const std::string &srcPath) -> std::string {
     if (modelPath.empty())
       return srcPath;
-    std::string texturesDir = modelPath + "/textures";
+    // std::filesystem::path's own operator/ rather than string
+    // concatenation with a hardcoded "/" throughout this function -
+    // produces this platform's own native separator, so a path built
+    // here (and later stored in info.json) is unambiguous about which
+    // platform it came from when read back by readInfoJson()'s own
+    // path-healing logic (model.cpp) on a possibly different one.
+    std::filesystem::path texturesDir =
+        std::filesystem::path(modelPath) / "textures";
     std::error_code dirEc;
     std::filesystem::create_directories(texturesDir, dirEc);
     if (dirEc) {
       spdlog::warn("Could not create textures folder '{}': {} - texture "
                    "will keep referencing its original location instead.",
-                   texturesDir, dirEc.message());
+                   texturesDir.string(), dirEc.message());
       return srcPath;
     }
 
@@ -6689,7 +6700,7 @@ void drawSettingsWindow() {
         std::filesystem::path(srcPath).filename().string());
     std::string stem = std::filesystem::path(filename).stem().string();
     std::string ext = std::filesystem::path(filename).extension().string();
-    std::string destPath = texturesDir + "/" + filename;
+    std::string destPath = (texturesDir / filename).string();
 
     if (std::filesystem::exists(destPath)) {
       std::error_code sizeEc1, sizeEc2;
@@ -6707,7 +6718,8 @@ void drawSettingsWindow() {
       int suffix = 1;
       do {
         destPath =
-            texturesDir + "/" + stem + "_" + std::to_string(suffix) + ext;
+            (texturesDir / (stem + "_" + std::to_string(suffix) + ext))
+                .string();
         suffix++;
       } while (std::filesystem::exists(destPath));
     }
@@ -6738,7 +6750,7 @@ void drawSettingsWindow() {
     } else {
       std::string selectedPath = texture_dialog.GetSelected().string();
       spdlog::debug("Selected texture file: {}", selectedPath);
-      glfwMakeContextCurrent(ctrl->glfw_window);
+      makeContextCurrentSafe(ctrl->glfw_window);
       Texture t;
       std::string copiedPath =
           copyTextureIntoModelFolder(ctrl->model.path, selectedPath);
@@ -6749,7 +6761,7 @@ void drawSettingsWindow() {
           ": " + t.path;
       ctrl->model.meshes[texture_mesh].textures.push_back(t);
       ctrl->unsaved_change_count++;
-      glfwMakeContextCurrent(glfw_settings_window);
+      makeContextCurrentSafe(glfw_settings_window);
       texture_dialog.ClearSelected();
     }
   }
@@ -6760,10 +6772,9 @@ void drawSettingsWindow() {
       spdlog::error("No controller window for global texture import.");
       global_texture_dialog.ClearSelected();
     } else {
-      std::string selectedGlobalPath =
-          global_texture_dialog.GetSelected().string();
+      std::string selectedGlobalPath = global_texture_dialog.GetSelected().string();
       spdlog::debug("Selected global texture file: {}", selectedGlobalPath);
-      glfwMakeContextCurrent(ctrl->glfw_window);
+      makeContextCurrentSafe(ctrl->glfw_window);
       // Appends, same as the per-part texture list above - a model
       // can reasonably want more than one global texture now (one
       // Diffuse, one Normal Map, one AO, ...), so picking a new file
@@ -6777,7 +6788,7 @@ void drawSettingsWindow() {
           std::to_string(ctrl->model.globalTextures.size() + 1) + ": " + t.path;
       ctrl->model.globalTextures.push_back(t);
       ctrl->unsaved_change_count++;
-      glfwMakeContextCurrent(glfw_settings_window);
+      makeContextCurrentSafe(glfw_settings_window);
       global_texture_dialog.ClearSelected();
     }
   }
@@ -6802,9 +6813,9 @@ void drawSettingsWindow() {
       to_path.append(mesh_filenames[selected_mesh]);
       std::filesystem::copy(from_path, to_path, copy_options);
 
-      glfwMakeContextCurrent(ctrl_win->glfw_window);
+      makeContextCurrentSafe(ctrl_win->glfw_window);
       loadMesh(ctrl_win->model.meshes[selected_mesh], to_path.string());
-      glfwMakeContextCurrent(glfw_settings_window);
+      makeContextCurrentSafe(glfw_settings_window);
 
       writeJson(ctrl_win->model, ctrl_win->model.path + "/info.json");
       ctrl_win->unsaved_change_count = 0;

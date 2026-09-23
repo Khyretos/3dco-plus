@@ -256,6 +256,25 @@ void writeJson(Model &m, const std::string &path) {
   json << "}\n";
 }
 
+// Manually extracts a path string's filename portion, recognizing
+// BOTH '/' and '\' as separators regardless of the current platform -
+// used instead of std::filesystem::path(...).filename() specifically
+// for texture-path healing (readInfoJson(), just below) because the
+// path being parsed here isn't necessarily in this platform's own
+// native format: a texture healed on Windows might be reading a path
+// saved on Linux (a bundled example, or a model moved between
+// machines), and this project has no way to verify std::filesystem
+// ::path's own parsing behavior for a foreign-OS-style path string
+// without testing directly on every platform - an explicit,
+// dependency-free split on both possible separators sidesteps that
+// question entirely rather than resting on an assumption about it.
+std::string extractFilenameCrossPlatform(const std::string &p) {
+  size_t lastSlash = p.find_last_of("/\\");
+  if (lastSlash == std::string::npos)
+    return p;
+  return p.substr(lastSlash + 1);
+}
+
 void readInfoJson(Model &m, const std::string &path) {
   std::ifstream f(path);
   if (!f)
@@ -494,9 +513,23 @@ void readInfoJson(Model &m, const std::string &path) {
           // (settings_window.cpp) for where new textures get placed;
           // this is the read-side counterpart of that same
           // convention - before giving up on the texture entirely.
+          // path (this function's own parameter) is the full path to
+          // info.json itself, not the model's folder - readInfoJson()
+          // is called as readInfoJson(m, jsonPath) where the caller
+          // built jsonPath as path + "/info.json" (see loadModel()/
+          // whatever reads info.json, further down this file). Using
+          // path directly here (as an earlier version of this fix
+          // did) treats "info.json" as if it were a directory,
+          // producing a malformed, never-existing healedPath like
+          // ".../info.json/textures/Y.jpg" - silently defeating this
+          // healing entirely even when the real texture file is sitting
+          // exactly where it should be. parent_path() strips the
+          // "info.json" filename back off, leaving the actual model
+          // folder.
           std::string healedPath =
-              path + "/textures/" +
-              std::filesystem::path(tex_path).filename().string();
+              (std::filesystem::path(path).parent_path() / "textures" /
+               extractFilenameCrossPlatform(tex_path))
+                  .string();
           if (std::filesystem::exists(healedPath)) {
             spdlog::info(
                 "Texture for mesh '{}' not found at its saved path '{}' - "
@@ -583,10 +616,13 @@ void readInfoJson(Model &m, const std::string &path) {
       // Path healing - see the per-mesh version of this same fix just
       // above for the full reasoning (bundled example assets ship
       // with their original author's own absolute path baked in, or
-      // a user simply moved/renamed their own model folder).
+      // a user simply moved/renamed their own model folder), and for
+      // why parent_path() is required here (path is info.json's own
+      // full file path, not the model's folder).
       std::string healedPath =
-          path + "/textures/" +
-          std::filesystem::path(tex_path).filename().string();
+          (std::filesystem::path(path).parent_path() / "textures" /
+           extractFilenameCrossPlatform(tex_path))
+              .string();
       if (std::filesystem::exists(healedPath)) {
         spdlog::info("Global texture not found at its saved path '{}' - "
                      "found it instead at '{}' (this model's own textures "

@@ -1379,7 +1379,7 @@ void ensureInputHistoryWindowCreated(controller_window &w) {
   w.input_history_click_through_last_applied = w.input_history_click_through;
 
   GLFWwindow *previousContext = glfwGetCurrentContext();
-  glfwMakeContextCurrent(w.input_history_glfw_window);
+  makeContextCurrentSafe(w.input_history_glfw_window);
   glfwSwapInterval(0);
 
   ImGuiContext *previousImgui = ImGui::GetCurrentContext();
@@ -1399,7 +1399,7 @@ void ensureInputHistoryWindowCreated(controller_window &w) {
   if (previousImgui)
     ImGui::SetCurrentContext(previousImgui);
   if (previousContext)
-    glfwMakeContextCurrent(previousContext);
+    makeContextCurrentSafe(previousContext);
 
 #if defined(_WIN32)
   // Needed unconditionally on Windows, not just as a fallback -
@@ -1435,7 +1435,7 @@ void destroyInputHistoryWindow(controller_window &w) {
   GLFWwindow *previousContext = glfwGetCurrentContext();
   ImGuiContext *previousImgui = ImGui::GetCurrentContext();
 
-  glfwMakeContextCurrent(w.input_history_glfw_window);
+  makeContextCurrentSafe(w.input_history_glfw_window);
   ImGui::SetCurrentContext(w.input_history_imgui_ctx);
   if (w.input_history_backend_ready) {
     ImGui_ImplOpenGL3_Shutdown();
@@ -1464,7 +1464,7 @@ void destroyInputHistoryWindow(controller_window &w) {
   if (previousImgui)
     ImGui::SetCurrentContext(previousImgui);
   if (previousContext)
-    glfwMakeContextCurrent(previousContext);
+    makeContextCurrentSafe(previousContext);
 }
 
 void drawOneInputHistoryWindow(controller_window &w) {
@@ -1524,7 +1524,7 @@ void drawOneInputHistoryWindow(controller_window &w) {
   GLFWwindow *previousContext = glfwGetCurrentContext();
   ImGuiContext *previousImgui = ImGui::GetCurrentContext();
 
-  glfwMakeContextCurrent(w.input_history_glfw_window);
+  makeContextCurrentSafe(w.input_history_glfw_window);
   ImGui::SetCurrentContext(w.input_history_imgui_ctx);
   applyCustomImGuiTheme(); // re-applied every frame - see its doc comment
 
@@ -1542,9 +1542,11 @@ void drawOneInputHistoryWindow(controller_window &w) {
   // This window's own hover check (via its own glfw_window) is
   // completely independent of any controller window's, so a
   // shortcut fired while hovering here never affects one there.
+  bool dragToMoveShortcutCurrentlyHeld = false;
   bool dragToMoveEffective = updateShortcutToggle(
       w.input_history_drag_to_move, w.input_history_drag_to_move_shortcut_was_active,
-      w.input_history_drag_to_move_shortcut, w.input_history_glfw_window);
+      w.input_history_drag_to_move_shortcut, w.input_history_glfw_window,
+      &dragToMoveShortcutCurrentlyHeld);
   // Middle Mouse Button built-in - see its doc comment on controller
   // windows' own click_through_middle_mouse_was_active for the full
   // explanation. Applied first, same layering as there.
@@ -1555,6 +1557,20 @@ void drawOneInputHistoryWindow(controller_window &w) {
       w.input_history_click_through,
       w.input_history_click_through_shortcut_was_active,
       w.input_history_click_through_shortcut, w.input_history_glfw_window);
+  // Same reasoning as the controller-window version of this line
+  // (controller_window.cpp, right after its own clickThroughEffective
+  // is computed) - while the Drag-to-Move shortcut is PHYSICALLY,
+  // ACTIVELY held right now, Click-Through is also forced on for that
+  // same duration, so an OS-level "hold this key to drag any window"
+  // gesture bound to the same key as this shortcut isn't blocked by
+  // this window's own Click-Through being off. Gated on
+  // dragToMoveShortcutCurrentlyHeld, not dragToMoveEffective - see the
+  // controller-window version's own comment for why: the latter is
+  // also true whenever Drag to Move is simply, persistently enabled
+  // with no shortcut held at all, which would otherwise force Click-
+  // Through on for anyone who just wanted this feature always on.
+  clickThroughEffective =
+      clickThroughEffective || dragToMoveShortcutCurrentlyHeld;
   if (clickThroughEffective != w.input_history_click_through_last_applied) {
     setWindowClickThrough(w.input_history_glfw_window, clickThroughEffective);
     w.input_history_click_through_last_applied = clickThroughEffective;
@@ -1822,7 +1838,7 @@ void drawOneInputHistoryWindow(controller_window &w) {
   if (previousImgui)
     ImGui::SetCurrentContext(previousImgui);
   if (previousContext)
-    glfwMakeContextCurrent(previousContext);
+    makeContextCurrentSafe(previousContext);
 }
 
 } // namespace

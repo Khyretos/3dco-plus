@@ -62,6 +62,49 @@ set(IMGUI_SRC
 )
 list(APPEND SRC_FILES ${IMGUI_SRC})
 
+# Dear ImGui's OpenGL3 backend normally bundles its own, separate GL
+# function loader ("imgl3w") instead of using GLAD like the rest of
+# this app. imgl3w only ever loads its function pointers once,
+# globally, for the whole process (lazy init: skips re-running if its
+# own glGetIntegerv is already non-null) - never re-validated against
+# whichever of this app's several separate, non-shared GL contexts is
+# actually current when a given window's ImGui draw call runs. Worse,
+# ImGui_ImplOpenGL3_Shutdown() (called whenever a window's own ImGui
+# backend tears down, e.g. on close) resets that same global state,
+# so the next window to render anywhere silently rebinds every
+# pointer to ITS context instead, invalidating them for every other
+# already-open window. Confirmed, reproduced root cause of a hard,
+# deterministic Windows crash (null function pointer call) inside
+# ImGui_ImplOpenGL3_RenderDrawData(), following a controller window
+# close.
+#
+# IMGUI_IMPL_OPENGL_LOADER_CUSTOM (documented in
+# imgui_impl_opengl3.cpp's own comments as the supported way to use
+# an external loader) makes it skip imgl3w entirely and rely on
+# whatever GL declarations are already visible - the forced glad.h
+# include below provides those, so ImGui's GL calls go through the
+# exact same, already-context-synced GLAD pointers as the rest of the
+# app (see makeContextCurrentSafe(), controller_window.h).
+#
+# Scoped to only this one file, not a blanket force-include on every
+# translation unit (that was tried first and broke the test targets,
+# which compile some src/ files standalone without GLAD's own include
+# path configured, and have no reason to need it - nothing in
+# shortcut_logic.cpp or model_persistence.cpp touches GL).
+# Only a -D define here, not a second -include flag: this target
+# already applies one -include (src/preinclude.h, further down) to
+# every .cpp file, and a second, separate -include specifically for
+# this one file risks the same CMake compile-option deduplication
+# issue already hit and fixed once this session for tests/
+# CMakeLists.txt's -iquote flags (two distinct two-token flags
+# sharing the same flag name got incorrectly deduplicated down to
+# one). A single -D token has no such risk, and preinclude.h below
+# does the actual conditional glad.h include/define from there.
+set_source_files_properties(third_party/imgui/backends/imgui_impl_opengl3.cpp
+    PROPERTIES
+    COMPILE_DEFINITIONS "IMGUI_NEEDS_GLAD_LOADER"
+)
+
 # Add ImGuiFileBrowser source if any
 if(IMGUI_FILE_BROWSER_SRC)
     list(APPEND SRC_FILES ${IMGUI_FILE_BROWSER_SRC})

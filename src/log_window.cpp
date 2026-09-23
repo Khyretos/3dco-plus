@@ -127,7 +127,7 @@ static void ensureLogWindowCreated() {
   }
 
   GLFWwindow *previous_context = glfwGetCurrentContext();
-  glfwMakeContextCurrent(g_log_glfw_window);
+  makeContextCurrentSafe(g_log_glfw_window);
   glfwSwapInterval(0); // don't force vsync stalls on top of the main window's
 
   ImGuiContext *previous_imgui_ctx = ImGui::GetCurrentContext();
@@ -149,7 +149,7 @@ static void ensureLogWindowCreated() {
   if (previous_imgui_ctx)
     ImGui::SetCurrentContext(previous_imgui_ctx);
   if (previous_context)
-    glfwMakeContextCurrent(previous_context);
+    makeContextCurrentSafe(previous_context);
 }
 
 void toggleLogWindow() { setLogWindowOpen(!g_log_window_open); }
@@ -211,7 +211,7 @@ void drawLogWindow() {
   GLFWwindow *previous_context = glfwGetCurrentContext();
   ImGuiContext *previous_imgui_ctx = ImGui::GetCurrentContext();
 
-  glfwMakeContextCurrent(g_log_glfw_window);
+  makeContextCurrentSafe(g_log_glfw_window);
   ImGui::SetCurrentContext(g_log_imgui_ctx);
   applyCustomImGuiTheme(); // re-applied every frame - see its doc comment
 
@@ -301,5 +301,5 @@ void drawLogWindow() {
   if (previous_imgui_ctx)
     ImGui::SetCurrentContext(previous_imgui_ctx);
   if (previous_context)
-    glfwMakeContextCurrent(previous_context);
+    makeContextCurrentSafe(previous_context);
 }

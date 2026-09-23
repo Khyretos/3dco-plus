@@ -90,11 +90,79 @@ RUN for pc in assimp glfw3 sdl3 fmt spdlog nlohmann_json; do \
 WORKDIR /app
 COPY . /app
 
+# RelWithDebInfo instead of Release: keeps the same optimization level
+# (-O2, effectively identical performance and behavior to Release) but
+# additionally passes -g, embedding DWARF debug info directly in the
+# .exe - no separate .pdb needed for a MinGW/GCC build. Without this,
+# a crash dump can only ever be resolved to raw module+offset, useless
+# for actually diagnosing a bug. Debug info gets split back out below
+# (see the CMD) so the .exe actually shipped to testers stays small.
 RUN mkdir build && cd build && \
     cmake .. \
-    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DCMAKE_CXX_FLAGS="-static-libgcc -static-libstdc++" \
     -DBUILD_STATIC=ON && \
     make -j$(nproc)
 
-CMD ["sh", "-c", "mkdir -p /dist/windows && cp /app/build/3dco+.exe /dist/windows/"]
+# Split debug info out of the shipped .exe rather than going back to a
+# plain Release build and losing it entirely: 3dco+.exe below is what
+# actually goes to the tester (small again - the debug info
+# RelWithDebInfo added is removed from it), while 3dco+.debug keeps
+# every symbol from this exact build, for you to keep on your own
+# side. If a future crash report ever needs investigating again, no
+# rebuild is needed - keep that build's .exe and .debug archived
+# together (matching versions matter) and open the .dmp in WinDbg as
+# before.
+#
+# Written to its own script file (heredoc below) rather than inlined
+# directly into CMD, so its logic can use normal, multi-line shell
+# control flow without fighting Dockerfile's own line-continuation
+# rules layered on top of it - a first attempt at inlining this got
+# tangled in exactly that and silently never actually found objcopy,
+# shipping the full, unstripped .exe every time with no visible error.
+#
+# Tries several ways to locate objcopy rather than a single,
+# hardcoded name or the -print-prog-name=objcopy trick alone (which
+# didn't resolve correctly through this particular toolchain's
+# compiler wrapper) - most specific/likely first, broadest last - and
+# always prints which one it used (or that none worked) plus the
+# final /dist/windows listing, so a build log always shows plainly
+# whether the split actually happened rather than failing silently.
+RUN cat > /package.sh << 'PACKAGE_SCRIPT_EOF'
+#!/bin/sh
+set -e
+mkdir -p /dist/windows
+cp /app/build/3dco+.exe /dist/windows/3dco+.exe
+echo "Pre-strip size: $(du -h /dist/windows/3dco+.exe | cut -f1)"
+
+OBJCOPY=""
+for candidate in \
+    x86_64-w64-mingw32.static-objcopy \
+    x86_64-w64-mingw32-objcopy \
+    "$(command -v x86_64-w64-mingw32.static-objcopy 2>/dev/null)" \
+    "$(command -v x86_64-w64-mingw32-objcopy 2>/dev/null)" \
+    "$(x86_64-w64-mingw32.static-g++ -print-prog-name=objcopy 2>/dev/null)" \
+    "$(find /usr/src/mxe /usr -iname '*mingw32*objcopy*' -type f 2>/dev/null | head -1)"
+do
+    if [ -n "$candidate" ] && command -v "$candidate" >/dev/null 2>&1; then
+        OBJCOPY="$candidate"
+        echo "Found objcopy: $OBJCOPY"
+        break
+    fi
+done
+
+if [ -n "$OBJCOPY" ]; then
+    "$OBJCOPY" --only-keep-debug /dist/windows/3dco+.exe /dist/windows/3dco+.debug
+    "$OBJCOPY" --strip-debug --strip-unneeded /dist/windows/3dco+.exe
+    "$OBJCOPY" --add-gnu-debuglink=/dist/windows/3dco+.debug /dist/windows/3dco+.exe
+    echo "Split debug info using $OBJCOPY"
+else
+    echo "objcopy NOT FOUND after trying all candidates - shipping 3dco+.exe with debug info still embedded"
+fi
+
+echo "--- final /dist/windows contents ---"
+ls -la /dist/windows/
+PACKAGE_SCRIPT_EOF
+RUN chmod +x /package.sh
+
+CMD ["/bin/sh", "/package.sh"]

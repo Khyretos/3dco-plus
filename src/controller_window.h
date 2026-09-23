@@ -897,6 +897,46 @@ void createTouchAreaRect(controller_window &w);
 void recreateControllerWindow(controller_window *w);
 void setWindowClickThrough(GLFWwindow *window, bool enable);
 
+// Use this everywhere instead of calling glfwMakeContextCurrent()
+// directly. This app creates a separate, non-shared GL context per
+// window (every controller window, every Input History window, the
+// Log window, the Glyph Mapping Editor, the Settings window itself),
+// and switches between them constantly - every window's own draw
+// pass, every per-window setting applied from Settings, every model
+// preview, all do their own glfwMakeContextCurrent() to whichever
+// window they're touching, dozens of call sites across the codebase.
+// GLAD's function pointer table is a single, global set of variables,
+// populated by gladLoadGLLoader() - it is NOT automatically kept in
+// sync with whichever context is actually current. Per Microsoft's
+// own WGL documentation, extension function addresses obtained via
+// wglGetProcAddress "are not necessarily available in a separate
+// rendering context" - in practice this often still works when two
+// contexts share a GPU and pixel format, but isn't guaranteed, and on
+// this project's own confirmed Windows/AMD crash report, it wasn't
+// guaranteed: Windows' own crash analysis resolved the fault to an
+// EXECUTE access violation (Exception Data = 8, the standard Windows
+// encoding for "tried to run code from a non-executable address") -
+// the signature of calling through a stale/invalid function pointer,
+// not generic memory corruption.
+//
+// An earlier, narrower fix only reloaded GLAD once, at each window's
+// own creation - insufficient for this codebase's actual usage
+// pattern: since the dispatch table is global, creating a SECOND
+// window overwrites it with that window's own pointers, and the
+// FIRST window's very next draw pass (making its own context current
+// again, the following frame) would then be using the second
+// window's pointers instead of its own, wrong if the driver doesn't
+// happen to return identical addresses for both - reloading only at
+// creation can't catch that.
+//
+// This wrapper reloads GLAD (gladLoadGLLoader((GLADloadproc)
+// glfwGetProcAddress)) exactly when the context is actually about to
+// change to a DIFFERENT window than GLAD was last loaded for -
+// tracked internally, so calling this repeatedly for the same,
+// already-current window (the common case within one window's own
+// draw pass) costs nothing beyond the calls this already made.
+void makeContextCurrentSafe(GLFWwindow *window);
+
 // ------------------------------------------------------------------
 // On-the-fly Click-Through/Drag-to-Move shortcuts - see
 // drag_to_move_shortcut's doc comment above for the full picture.
@@ -931,9 +971,21 @@ bool isShortcutPhysicallyActive(int shortcutId);
 // shortcut while genuinely held over this window, differs from
 // persistentValue without modifying it; for a Discrete shortcut, this
 // may flip persistentValue itself (on a fresh press) and return the
-// new value.
+// new value. outIsCurrentlyHeld, if non-null, is set to whether the
+// shortcut's underlying key/button is physically down over this
+// window RIGHT NOW this frame - distinct from the returned effective
+// value, which for a persistently-enabled toggle with no shortcut
+// currently held is just persistentValue itself. A caller that needs
+// to know specifically "is this shortcut being actively pressed at
+// this instant" (as opposed to "what should this setting's value be
+// right now") needs this parameter - conflating the two was a real
+// bug: a fix meant to apply only while a shortcut is transiently held
+// instead also fired whenever the persistent setting was simply
+// enabled via its own checkbox/tray toggle, with no shortcut involved
+// at all.
 bool updateShortcutToggle(bool &persistentValue, bool &wasActiveLastFrame,
-                          int shortcutId, GLFWwindow *window);
+                          int shortcutId, GLFWwindow *window,
+                          bool *outIsCurrentlyHeld = nullptr);
 
 // Wrappers for minimize/maximize/restore that behave correctly with the
 // Windows companion window (see controller_window::overlay_minimized's
