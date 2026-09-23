@@ -34,6 +34,7 @@ extern bool gQuit;
 #include "tray_icon.h"
 #include <SDL3/SDL_joystick.h>
 #include <algorithm>
+#include <cctype> // std::toupper, for the texture-filename sanitizer's reserved-name check
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -41,7 +42,6 @@ extern bool gQuit;
 #include <iostream>
 #include <map>
 #include <nlohmann/json.hpp>
-#include <cctype> // std::toupper, for the texture-filename sanitizer's reserved-name check
 #include <set>
 #include <spdlog/spdlog.h>
 #include <stdio.h>
@@ -959,7 +959,8 @@ static void deleteOrphanedTextureFile(const std::string &modelPath,
   // native separator, matching what copyTextureIntoModelFolder() (this
   // file, further down) itself now uses to build the paths that get
   // stored and compared against here.
-  std::string texturesDir = (std::filesystem::path(modelPath) / "textures").string();
+  std::string texturesDir =
+      (std::filesystem::path(modelPath) / "textures").string();
   if (deletedPath.compare(0, texturesDir.size(), texturesDir) != 0)
     return; // not one of our own copies - never touch it
 
@@ -980,8 +981,8 @@ static void deleteOrphanedTextureFile(const std::string &modelPath,
                  "referenced by this model).",
                  deletedPath);
   } else if (ec) {
-    spdlog::warn("Could not remove orphaned texture file '{}': {}",
-                 deletedPath, ec.message());
+    spdlog::warn("Could not remove orphaned texture file '{}': {}", deletedPath,
+                 ec.message());
   }
 }
 
@@ -2926,12 +2927,12 @@ void drawSettingsWindow() {
         // out of the way.
         if (g_shortcut_monitoring_enabled) {
           std::string backend = GlobalKeyboard::backendName();
-          bool isProblem = backend.find("permission denied") !=
-                                std::string::npos ||
-                            backend.find("unavailable") != std::string::npos ||
-                            backend.find("failed") != std::string::npos ||
-                            backend.find("unsupported") != std::string::npos ||
-                            backend.find("not initialized") != std::string::npos;
+          bool isProblem =
+              backend.find("permission denied") != std::string::npos ||
+              backend.find("unavailable") != std::string::npos ||
+              backend.find("failed") != std::string::npos ||
+              backend.find("unsupported") != std::string::npos ||
+              backend.find("not initialized") != std::string::npos;
           if (isProblem) {
             ImGui::PushStyleColor(ImGuiCol_Text,
                                   ImVec4(0.95f, 0.25f, 0.25f, 1.0f));
@@ -4053,7 +4054,8 @@ void drawSettingsWindow() {
                 "textures afterward via its own checkbox below, and its "
                 "textures will be exactly as they were.");
 
-            if (!just_deleted_global_texture && !gtModel.globalTextures.empty() &&
+            if (!just_deleted_global_texture &&
+                !gtModel.globalTextures.empty() &&
                 current_global_texture < gtModel.globalTextures.size()) {
               Texture *gt = &gtModel.globalTextures[current_global_texture];
               ImGui::NewLine();
@@ -4780,7 +4782,8 @@ void drawSettingsWindow() {
               std::string travelComboPreview =
                   travelSelectedCount == 0
                       ? "Pick meshes..."
-                      : (std::to_string(travelSelectedCount) + " mesh(es) selected");
+                      : (std::to_string(travelSelectedCount) +
+                         " mesh(es) selected");
               if (ImGui::BeginCombo("##TravelMeshPicker",
                                     travelComboPreview.c_str())) {
                 for (int i = 0; i < (int)current_window->model.meshes.size();
@@ -4788,9 +4791,9 @@ void drawSettingsWindow() {
                   Mesh &pickMesh = current_window->model.meshes[i];
                   if (isAnalogTravelMesh(pickMesh))
                     continue;
-                  std::string displayName =
-                      pickMesh.name.empty() ? ("Mesh " + std::to_string(i))
-                                            : pickMesh.name;
+                  std::string displayName = pickMesh.name.empty()
+                                                ? ("Mesh " + std::to_string(i))
+                                                : pickMesh.name;
                   bool checked = travelSelectedMeshes[i];
                   ImGui::PushID(i);
                   if (ImGui::Checkbox(displayName.c_str(), &checked))
@@ -4970,8 +4973,7 @@ void drawSettingsWindow() {
                 if (ImGui::IsItemHovered())
                   DraggableTooltip("Custom Highlight Color");
                 drawHighlightBlendModeCombo(
-                    &selectedMesh.custom_highlight_blend_mode,
-                    current_window);
+                    &selectedMesh.custom_highlight_blend_mode, current_window);
               }
 
               // ---- Dual highlight for axes ----
@@ -6476,7 +6478,7 @@ void drawSettingsWindow() {
         ImGui::TextColored(ImVec4(0.8f, 0.4f, 1.0f, 1.0f),
                            "3D Controller Overlay +");
         ImGui::SameLine();
-        ImGui::TextDisabled("v1.2.0");
+        ImGui::TextDisabled("v1.3.2");
 
         ImGui::NewLine();
         ImGui::Text(
@@ -6654,9 +6656,9 @@ void drawSettingsWindow() {
     for (char &c : stemUpper)
       c = (char)std::toupper((unsigned char)c);
     static const std::set<std::string> reserved = {
-        "CON",  "PRN",  "AUX",  "NUL",  "COM1", "COM2", "COM3",
-        "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1",
-        "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"};
+        "CON",  "PRN",  "AUX",  "NUL",  "COM1", "COM2", "COM3", "COM4",
+        "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3",
+        "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"};
     if (reserved.count(stemUpper)) {
       std::string ext = std::filesystem::path(result).extension().string();
       result = stem + "_" + ext;
@@ -6717,9 +6719,8 @@ void drawSettingsWindow() {
       // find a free suffix rather than overwriting it.
       int suffix = 1;
       do {
-        destPath =
-            (texturesDir / (stem + "_" + std::to_string(suffix) + ext))
-                .string();
+        destPath = (texturesDir / (stem + "_" + std::to_string(suffix) + ext))
+                       .string();
         suffix++;
       } while (std::filesystem::exists(destPath));
     }
@@ -6772,7 +6773,8 @@ void drawSettingsWindow() {
       spdlog::error("No controller window for global texture import.");
       global_texture_dialog.ClearSelected();
     } else {
-      std::string selectedGlobalPath = global_texture_dialog.GetSelected().string();
+      std::string selectedGlobalPath =
+          global_texture_dialog.GetSelected().string();
       spdlog::debug("Selected global texture file: {}", selectedGlobalPath);
       makeContextCurrentSafe(ctrl->glfw_window);
       // Appends, same as the per-part texture list above - a model

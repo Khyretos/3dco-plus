@@ -48,7 +48,7 @@
       "textures": [
         {
           "path": "textures/60-BASE_AO.jpg",
-          "name": "1: /home/khyretos/.local/share/3dco+/models/60% Keyboard/textures/60-BASE_AO.jpg",
+          "name": "1: 60-BASE_AO.jpg",
           "type": 6,
           "wrapX": 0,
           "wrapY": 0,
@@ -64,7 +64,7 @@
 
         {
           "path": "textures/60-BASE_Example 1_Combined 1.jpg",
-          "name": "2: /home/khyretos/.local/share/3dco+/models/60% Keyboard/textures/60-BASE_Example 1_Combined 1.jpg",
+          "name": "2: 60-BASE_Example 1_Combined 1.jpg",
           "type": 0,
           "wrapX": 0,
           "wrapY": 0,
@@ -80,7 +80,7 @@
 
         {
           "path": "textures/60-BASE_Normal.jpg",
-          "name": "3: /home/khyretos/.local/share/3dco+/models/60% Keyboard/textures/60-BASE_Normal.jpg",
+          "name": "3: 60-BASE_Normal.jpg",
           "type": 3,
           "wrapX": 0,
           "wrapY": 0,
@@ -96,7 +96,7 @@
 
         {
           "path": "textures/60-BASE_Roughness.png",
-          "name": "4: /home/khyretos/.local/share/3dco+/models/60% Keyboard/textures/60-BASE_Roughness.png",
+          "name": "4: 60-BASE_Roughness.png",
           "type": 5,
           "wrapX": 0,
           "wrapY": 0,
@@ -5802,7 +5802,7 @@
   "global_textures": [
     {
       "path": "textures/60-KEYS_AO.jpg",
-      "name": "1: /home/khyretos/.local/share/3dco+/models/60% Keyboard/textures/60-KEYS_AO.jpg",
+      "name": "1: 60-KEYS_AO.jpg",
       "type": 6,
       "wrapX": 0,
       "wrapY": 0,
@@ -5818,7 +5818,7 @@
 
     {
       "path": "textures/60-KEYS_Example 1_Combined.jpg",
-      "name": "2: /home/khyretos/.local/share/3dco+/models/60% Keyboard/textures/60-KEYS_Example 1_Combined.jpg",
+      "name": "2: 60-KEYS_Example 1_Combined.jpg",
       "type": 0,
       "wrapX": 0,
       "wrapY": 0,
@@ -5834,7 +5834,7 @@
 
     {
       "path": "textures/60-KEYS_Normal.jpg",
-      "name": "3: /home/khyretos/.local/share/3dco+/models/60% Keyboard/textures/60-KEYS_Normal.jpg",
+      "name": "3: 60-KEYS_Normal.jpg",
       "type": 3,
       "wrapX": 0,
       "wrapY": 0,
@@ -5850,7 +5850,7 @@
 
     {
       "path": "textures/60-KEYS_Roughness.png",
-      "name": "4: /home/khyretos/.local/share/3dco+/models/60% Keyboard/textures/60-KEYS_Roughness.png",
+      "name": "4: 60-KEYS_Roughness.png",
       "type": 5,
       "wrapX": 0,
       "wrapY": 0,
