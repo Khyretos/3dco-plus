@@ -180,6 +180,36 @@ void writeJson(Model &m, const std::string &path) {
          << (mesh.smooth_travel_enabled ? "true" : "false") << ",\n";
     json << "      \"smooth_travel_duration\": " << mesh.smooth_travel_duration
          << ",\n";
+    // Additional bindings (see MeshBinding's own doc comment, model.h)
+    // - an array of small objects, one per extra binding, each fully
+    // self-contained (its own input, travel, travel_rotation, smooth
+    // travel settings). Empty array (the common case: no mesh has
+    // needed more than its one, primary binding) writes as "[]".
+    json << "      \"extra_bindings\": [";
+    for (size_t bi = 0; bi < mesh.extraBindings.size(); ++bi) {
+      const MeshBinding &b = mesh.extraBindings[bi];
+      if (bi > 0)
+        json << ",";
+      json << "\n        {\n";
+      json << "          \"input_binding\": \"" << escapeJson(b.inputBinding)
+           << "\",\n";
+      json << "          \"input_type\": " << b.inputType << ",\n";
+      json << "          \"invert\": " << (b.invert ? "true" : "false")
+           << ",\n";
+      json << "          \"travel\": [" << b.travel[0] << ", " << b.travel[1]
+           << ", " << b.travel[2] << "],\n";
+      json << "          \"travel_rotation\": [" << b.travel_rotation[0]
+           << ", " << b.travel_rotation[1] << ", " << b.travel_rotation[2]
+           << "],\n";
+      json << "          \"smooth_travel_enabled\": "
+           << (b.smooth_travel_enabled ? "true" : "false") << ",\n";
+      json << "          \"smooth_travel_duration\": "
+           << b.smooth_travel_duration << "\n";
+      json << "        }";
+    }
+    if (!mesh.extraBindings.empty())
+      json << "\n      ";
+    json << "],\n";
     // Textures - previously never persisted at all (only ever pushed
     // into mesh.textures in memory by the "Add Texture" UI flow in
     // settings_window.cpp, with no corresponding write here or read in
@@ -489,6 +519,36 @@ void readInfoJson(Model &m, const std::string &path) {
     // travel_value_display/travel_signed_display are intentionally not
     // read here - see their declaration in model.h for why (runtime-only,
     // re-derived from travel_value/travel_signed every frame regardless).
+
+    // Additional bindings (see MeshBinding's own doc comment, model.h).
+    // Absent entirely on any model saved before this existed - defaults
+    // to the already-empty extraBindings, identical to today's single-
+    // binding behavior.
+    mesh.extraBindings.clear();
+    if (p.contains("extra_bindings") && p["extra_bindings"].is_array()) {
+      for (const auto &bj : p["extra_bindings"]) {
+        MeshBinding b;
+        b.inputBinding = bj.value("input_binding", "");
+        b.inputType = bj.value("input_type", 0);
+        b.invert = bj.value("invert", false);
+        if (bj.contains("travel") && bj["travel"].is_array() &&
+            bj["travel"].size() >= 3) {
+          b.travel[0] = bj["travel"][0].get<float>();
+          b.travel[1] = bj["travel"][1].get<float>();
+          b.travel[2] = bj["travel"][2].get<float>();
+        }
+        if (bj.contains("travel_rotation") &&
+            bj["travel_rotation"].is_array() &&
+            bj["travel_rotation"].size() >= 3) {
+          b.travel_rotation[0] = bj["travel_rotation"][0].get<float>();
+          b.travel_rotation[1] = bj["travel_rotation"][1].get<float>();
+          b.travel_rotation[2] = bj["travel_rotation"][2].get<float>();
+        }
+        b.smooth_travel_enabled = bj.value("smooth_travel_enabled", false);
+        b.smooth_travel_duration = bj.value("smooth_travel_duration", 0.15f);
+        mesh.extraBindings.push_back(b);
+      }
+    }
 
     // Textures - see writeJson()'s comment on why this didn't exist
     // before. id is never read from JSON (a runtime GL handle) -
@@ -1612,28 +1672,51 @@ glm::mat4 computeMeshTransform(const Model &m, int meshIndex,
   // don't use the feature; when it's on, these instead ease toward the
   // raw target over smooth_travel_duration seconds.
   {
-    float travelMult = 0.0f;
-    if (fabs(mesh.travel_signed_display) > 0.001f) {
-      travelMult = mesh.travel_signed_display;
-    } else if (mesh.travel_value_display > 0.001f) {
-      travelMult = mesh.travel_value_display;
+    // Sum every binding's own contribution (the primary one above,
+    // plus every extra one - see Mesh::extraBindings' own doc comment
+    // for why) rather than applying just one. A mesh with no extra
+    // bindings behaves identically to before: the loop below adds
+    // exactly one term, the same one this always computed. Two
+    // bindings with opposite-signed travel on the same axis naturally
+    // cancel out here, with no special-case logic needed for that -
+    // it's just addition.
+    glm::vec3 summedTranslation(0.0f);
+    glm::vec3 summedRotationDegrees(0.0f);
+
+    auto accumulate = [&](float tv, float ts, const float travel[3],
+                          const float travelRot[3]) {
+      float travelMult = 0.0f;
+      if (fabs(ts) > 0.001f) {
+        travelMult = ts;
+      } else if (tv > 0.001f) {
+        travelMult = tv;
+      }
+      if (fabs(travelMult) > 0.001f) {
+        summedTranslation += glm::vec3(travel[0], travel[1], travel[2]) *
+                             travelMult;
+        summedRotationDegrees +=
+            glm::vec3(travelRot[0], travelRot[1], travelRot[2]) * travelMult;
+      }
+    };
+
+    accumulate(mesh.travel_value_display, mesh.travel_signed_display,
+              mesh.travel, mesh.travel_rotation);
+    for (const MeshBinding &b : mesh.extraBindings) {
+      accumulate(b.travel_value_display, b.travel_signed_display, b.travel,
+                b.travel_rotation);
     }
 
-    if (fabs(travelMult) > 0.001f) {
+    if (glm::length(summedTranslation) > 0.0001f ||
+        glm::length(summedRotationDegrees) > 0.0001f) {
       // Translation
-      model = glm::translate(model, glm::vec3(mesh.travel[0] * travelMult,
-                                              mesh.travel[1] * travelMult,
-                                              mesh.travel[2] * travelMult));
+      model = glm::translate(model, summedTranslation);
       // Rotation (around pivot – already translated to pivot above)
-      model =
-          glm::rotate(model, glm::radians(mesh.travel_rotation[0] * travelMult),
-                      glm::vec3(1.0f, 0.0f, 0.0f));
-      model =
-          glm::rotate(model, glm::radians(mesh.travel_rotation[1] * travelMult),
-                      glm::vec3(0.0f, 1.0f, 0.0f));
-      model =
-          glm::rotate(model, glm::radians(mesh.travel_rotation[2] * travelMult),
-                      glm::vec3(0.0f, 0.0f, 1.0f));
+      model = glm::rotate(model, glm::radians(summedRotationDegrees.x),
+                          glm::vec3(1.0f, 0.0f, 0.0f));
+      model = glm::rotate(model, glm::radians(summedRotationDegrees.y),
+                          glm::vec3(0.0f, 1.0f, 0.0f));
+      model = glm::rotate(model, glm::radians(summedRotationDegrees.z),
+                          glm::vec3(0.0f, 0.0f, 1.0f));
     }
   }
 

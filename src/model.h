@@ -97,6 +97,43 @@ enum InputType {
   INPUT_TYPE_MOUSE = 3
 };
 
+// One additional input binding on a mesh that already has its own,
+// primary inputBinding - see Mesh::extraBindings below for the full
+// reasoning. Deliberately holds only what's needed to independently
+// evaluate one more "press this input -> move/rotate this much"
+// contribution: no rendering data (vao/vbo/material/textures) is
+// duplicated, since the mesh itself still renders exactly once.
+//
+// Scope: covers the same "digital press" style bindings as the
+// primary one does for hats/buttons/axis-as-direction/keyboard/
+// mouse-button - NOT leftstick/rightstick/raw-axis-passthrough/
+// touchpad, which drive persistent single-value visual state
+// (stick_X/Y, touch_X/Y) that doesn't fit the "several independent
+// contributions summed together" model this exists for.
+typedef struct mesh_binding_struct {
+  std::string inputBinding;
+  int inputType = 0; // 0=Gamepad, 1=Joystick, 2=Keyboard, 3=Mouse
+  bool invert = false;
+
+  float travel[3] = {0.0f, 0.0f, 0.0f};
+  float travel_rotation[3] = {0.0f, 0.0f, 0.0f}; // degrees
+
+  bool smooth_travel_enabled = false;
+  float smooth_travel_duration = 0.15f; // seconds
+
+  // Runtime-only (not persisted) - mirrors the primary binding's own
+  // travel_value/travel_signed/travel_value_display/
+  // travel_signed_display fields, one full independent copy per
+  // extra binding so each one can be at a different point in its own
+  // smooth-travel ease at the same time (e.g. a hat moving from Up to
+  // Left-Up eases the newly-active binding in while the one going
+  // inactive eases back out, rather than both snapping together).
+  float travel_value = 0.0f;
+  float travel_signed = 0.0f;
+  float travel_value_display = 0.0f;
+  float travel_signed_display = 0.0f;
+} MeshBinding;
+
 typedef struct mesh_struct {
   GLuint vao = 0;
   GLuint vbo = 0;
@@ -197,6 +234,19 @@ typedef struct mesh_struct {
   std::string inputBinding; // e.g., "gamepad:b0", "joystick:a1+",
                             // "keyboard:key_w", "mouse:mouse_left"
   bool invert = false;
+
+  // Additional, independent bindings beyond the primary one above -
+  // for a mesh that needs to respond differently to several distinct
+  // inputs (the motivating case: a joystick hat's 8 directions, one
+  // physical mesh, each direction wanting its own movement). Every
+  // binding here (plus the primary one above) is evaluated every
+  // frame from its own live input state; computeMeshTransform() sums
+  // every active one's travel and travel_rotation contribution
+  // together rather than picking just one - two opposite-signed
+  // contributions on the same axis naturally cancel out this way,
+  // with no special-case logic needed for that. See MeshBinding's own
+  // doc comment just above for what is/isn't supported per binding.
+  std::vector<MeshBinding> extraBindings;
   bool isTouchpad = false;
   bool isBumper = false;
   bool isTrigger = false;
@@ -328,6 +378,11 @@ void loadMesh(Mesh &m, std::string path);
 // handles directly, and every save path goes through writeJson() instead.
 
 void loadTexture(GLuint &id, std::string path);
+// Just the filename, no directory - defined in model.cpp (used there
+// for path healing), also used in settings_window.cpp for display
+// names so the Textures list shows e.g. "1: diffuse.jpg" instead of
+// the full stored path.
+std::string extractFilenameCrossPlatform(const std::string &p);
 
 void deleteTexture(GLuint &id);
 

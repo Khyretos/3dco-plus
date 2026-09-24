@@ -2749,9 +2749,12 @@ void anchorTouchpointToTouchpad(controller_window &w, int meshIdx) {
   }
 }
 
-void applyMappingToMeshes(controller_window &w, float globalMouseDx,
-                          float globalMouseDy, float globalScrollDx,
-                          float globalScrollDy) {
+// Shared by applyMappingToMeshes() below and resolveExtraBinding() -
+// hoisted out of applyMappingToMeshes() (where this used to be a
+// local static) so both can use the same lazily-built map without
+// duplicating the scancode-name-table walk.
+static const std::unordered_map<std::string, SDL_Scancode> &
+getKeyNameMap() {
   static const std::unordered_map<std::string, SDL_Scancode> keyMap = []() {
     std::unordered_map<std::string, SDL_Scancode> map;
     for (int i = 0; i < SDL_SCANCODE_COUNT; ++i) {
@@ -2776,6 +2779,134 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
     }
     return map;
   }();
+  return keyMap;
+}
+
+// Resolves one MeshBinding's own travel_value/travel_signed from its
+// own live input state - the "extra bindings" equivalent of the
+// button/hat/axis-as-direction/keyboard-key/mouse-button branches in
+// applyMappingToMeshes() just below, deliberately mirroring that
+// exact matching logic so an extra binding behaves identically to a
+// primary one for every binding kind it supports. Scope is
+// deliberately narrower than the primary binding's own: no
+// leftstick/rightstick/raw-axis-passthrough/touchpad support here -
+// see MeshBinding's own doc comment (model.h) for why. Malformed/
+// unsupported bindings are left at 0 (silently, same "skip and move
+// on" philosophy as applyMappingToMeshes()'s own catch block) rather
+// than logged per-frame - the primary binding on the same mesh, if
+// similarly malformed, already produces a warning once.
+static void resolveExtraBinding(controller_window &w, MeshBinding &b) {
+  b.travel_value = 0.0f;
+  b.travel_signed = 0.0f;
+
+  if (b.inputBinding.empty())
+    return;
+  size_t colon = b.inputBinding.find(':');
+  if (colon == std::string::npos)
+    return;
+  std::string type = b.inputBinding.substr(0, colon);
+  std::string value = b.inputBinding.substr(colon + 1);
+
+  try {
+    if (type == "gamepad" || type == "joystick") {
+      bool useRaw = (type == "joystick");
+      if (value.empty() || value == "leftstick" || value == "rightstick")
+        return; // not supported for extra bindings - see doc comment above
+
+      char prefix = value[0];
+      if (prefix == 'b') {
+        int num = std::stoi(value.substr(1));
+        bool pressed = get_button_value_choice(w, num, useRaw);
+        if (b.invert)
+          pressed = !pressed;
+        b.travel_value = pressed ? 1.0f : 0.0f;
+      } else if (prefix == 'a') {
+        int num;
+        bool isDirection = false;
+        int dir = 0;
+        if (value.back() == '+') {
+          isDirection = true;
+          dir = 1;
+          num = std::stoi(value.substr(1, value.size() - 2));
+        } else if (value.back() == '-') {
+          isDirection = true;
+          dir = -1;
+          num = std::stoi(value.substr(1, value.size() - 2));
+        } else {
+          num = std::stoi(value.substr(1));
+        }
+        float axisVal = get_axis_value_choice(w, num, useRaw);
+        if (b.invert)
+          axisVal = -axisVal;
+        if (isDirection) {
+          bool pressed = (dir > 0) ? (axisVal > 0.5f) : (axisVal < -0.5f);
+          b.travel_value = pressed ? 1.0f : 0.0f;
+          b.travel_signed = pressed ? (dir > 0 ? 1.0f : -1.0f) : 0.0f;
+        } else {
+          b.travel_signed = axisVal;
+          b.travel_value = fabs(axisVal);
+        }
+      } else if (prefix == 'h') {
+        size_t dot = value.find('.');
+        if (dot == std::string::npos)
+          return;
+        int num = std::stoi(value.substr(1, dot - 1));
+        int hatDir = std::stoi(value.substr(dot + 1));
+        Uint8 hatVal = getHatValue(w, num);
+        Uint8 sdlDir = 0;
+        switch (hatDir) {
+        case 0: sdlDir = SDL_HAT_UP; break;
+        case 1: sdlDir = SDL_HAT_RIGHTUP; break;
+        case 2: sdlDir = SDL_HAT_RIGHT; break;
+        case 3: sdlDir = SDL_HAT_RIGHTDOWN; break;
+        case 4: sdlDir = SDL_HAT_DOWN; break;
+        case 5: sdlDir = SDL_HAT_LEFTDOWN; break;
+        case 6: sdlDir = SDL_HAT_LEFT; break;
+        case 7: sdlDir = SDL_HAT_LEFTUP; break;
+        }
+        bool pressed = (hatVal & sdlDir) != 0;
+        if (b.invert)
+          pressed = !pressed;
+        b.travel_value = pressed ? 1.0f : 0.0f;
+      }
+    } else if (type == "keyboard") {
+      if (value.empty())
+        return;
+      const auto &keyMap = getKeyNameMap();
+      auto it = keyMap.find(value);
+      if (it != keyMap.end()) {
+        bool pressed = GlobalKeyboard::isPressed(it->second);
+        if (b.invert)
+          pressed = !pressed;
+        b.travel_value = pressed ? 1.0f : 0.0f;
+      }
+    } else if (type == "mouse") {
+      int button = -1;
+      if (value == "mouse_left") button = 0;
+      else if (value == "mouse_right") button = 1;
+      else if (value == "mouse_middle") button = 2;
+      else if (value == "mouse_4") button = 3;
+      else if (value == "mouse_5") button = 4;
+      else if (value == "mouse_6") button = 5;
+      else if (value == "mouse_7") button = 6;
+      else if (value == "mouse_8") button = 7;
+      if (button >= 0 && button < 8) {
+        bool pressed = GlobalKeyboard::isMouseButtonPressed(button);
+        if (b.invert)
+          pressed = !pressed;
+        b.travel_value = pressed ? 1.0f : 0.0f;
+      }
+    }
+  } catch (const std::exception &) {
+    b.travel_value = 0.0f;
+    b.travel_signed = 0.0f;
+  }
+}
+
+void applyMappingToMeshes(controller_window &w, float globalMouseDx,
+                          float globalMouseDy, float globalScrollDx,
+                          float globalScrollDy) {
+  const auto &keyMap = getKeyNameMap();
 
   const float MOUSE_SCALE = 0.005f;
 
@@ -3243,6 +3374,25 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
       mesh.highlight_value = 0.0f;
       mesh.pull = 0.0f;
       mesh.axis_highlight_value = 0.0f;
+    }
+
+    // Additional bindings (see Mesh::extraBindings' own doc comment,
+    // model.h) - each resolved independently from its own live input,
+    // same as the primary binding just above. Runs regardless of
+    // whether the primary binding's own resolution above hit the try
+    // or catch path - one binding being malformed shouldn't prevent
+    // this mesh's other bindings from working.
+    for (MeshBinding &b : mesh.extraBindings) {
+      resolveExtraBinding(w, b);
+      // A mesh highlights when ANY of its bindings is active, not just
+      // the primary one - a mesh whose primary binding is idle but has
+      // an active extra binding (e.g. a hat resting while its "left"
+      // extra binding is held) should still visibly highlight.
+      float activeAmount = fabs(b.travel_signed) > 0.001f
+                               ? fabs(b.travel_signed)
+                               : b.travel_value;
+      if (activeAmount > mesh.highlight_value)
+        mesh.highlight_value = activeAmount;
     }
   }
 }
@@ -4644,6 +4794,34 @@ void drawControllerWindows() {
         } else {
           mesh.travel_value_display = mesh.travel_value;
           mesh.travel_signed_display = mesh.travel_signed;
+        }
+
+        // Same easing, applied independently to each extra binding
+        // (see Mesh::extraBindings' own doc comment, model.h, and
+        // MeshBinding's own travel_value_display field comment for
+        // why each needs its own, separate copy of this) - a hat
+        // moving from one direction to an adjacent one eases the
+        // newly-active binding in while the one going inactive eases
+        // back out, rather than every binding on the mesh snapping
+        // together.
+        for (MeshBinding &b : mesh.extraBindings) {
+          if (b.smooth_travel_enabled && !isAnalogTravelMesh(mesh) &&
+              b.smooth_travel_duration > 0.0001f) {
+            float rate = 1.0f - powf(0.01f,
+                                     w.deltaTime / b.smooth_travel_duration);
+            rate = glm::clamp(rate, 0.0f, 1.0f);
+            b.travel_value_display +=
+                (b.travel_value - b.travel_value_display) * rate;
+            b.travel_signed_display +=
+                (b.travel_signed - b.travel_signed_display) * rate;
+            if (fabs(b.travel_value - b.travel_value_display) < 0.0005f)
+              b.travel_value_display = b.travel_value;
+            if (fabs(b.travel_signed - b.travel_signed_display) < 0.0005f)
+              b.travel_signed_display = b.travel_signed;
+          } else {
+            b.travel_value_display = b.travel_value;
+            b.travel_signed_display = b.travel_signed;
+          }
         }
       }
 

@@ -4017,7 +4017,7 @@ void drawSettingsWindow() {
                 for (size_t i = 0; i < gtModel.globalTextures.size(); i++) {
                   gtModel.globalTextures[i].name =
                       std::to_string(i + 1) + ": " +
-                      gtModel.globalTextures[i].path;
+                      extractFilenameCrossPlatform(gtModel.globalTextures[i].path);
                 }
                 just_deleted_global_texture = true;
               }
@@ -4169,7 +4169,7 @@ void drawSettingsWindow() {
                   current_texture = 0;
                   for (size_t i = 0; i < texMesh.textures.size(); i++) {
                     texMesh.textures[i].name =
-                        std::to_string(i + 1) + ": " + texMesh.textures[i].path;
+                        std::to_string(i + 1) + ": " + extractFilenameCrossPlatform(texMesh.textures[i].path);
                   }
                   just_deleted_texture = true;
                 }
@@ -4186,7 +4186,7 @@ void drawSettingsWindow() {
                     }
                     for (size_t i = 0; i < texMesh.textures.size(); i++) {
                       texMesh.textures[i].name = std::to_string(i + 1) + ": " +
-                                                 texMesh.textures[i].path;
+                                                 extractFilenameCrossPlatform(texMesh.textures[i].path);
                     }
                   }
                   WrappedTooltip("Move selected texture up.");
@@ -4201,7 +4201,7 @@ void drawSettingsWindow() {
                     }
                     for (size_t i = 0; i < texMesh.textures.size(); i++) {
                       texMesh.textures[i].name = std::to_string(i + 1) + ": " +
-                                                 texMesh.textures[i].path;
+                                                 extractFilenameCrossPlatform(texMesh.textures[i].path);
                     }
                   }
                   WrappedTooltip("Move selected texture down.");
@@ -4784,6 +4784,21 @@ void drawSettingsWindow() {
                       ? "Pick meshes..."
                       : (std::to_string(travelSelectedCount) +
                          " mesh(es) selected");
+              // Leave just enough room for the "Copy Travel to
+              // Selected" button beside it (measured before drawing
+              // either, so the combo can be sized first): this combo
+              // had no width of its own (like every other control on
+              // this panel, none in this file do - they all rely on
+              // ImGui's own default), so it claimed that same full
+              // default width even with the button sitting right
+              // after it via SameLine(), pushing the row's total
+              // width past every other row's.
+              float copyButtonWidth =
+                  ImGui::CalcTextSize("Copy Travel to Selected").x +
+                  ImGui::GetStyle().FramePadding.x * 2.0f;
+              ImGui::SetNextItemWidth(ImGui::CalcItemWidth() -
+                                      copyButtonWidth -
+                                      ImGui::GetStyle().ItemSpacing.x);
               if (ImGui::BeginCombo("##TravelMeshPicker",
                                     travelComboPreview.c_str())) {
                 for (int i = 0; i < (int)current_window->model.meshes.size();
@@ -4898,6 +4913,116 @@ void drawSettingsWindow() {
                       "already set.");
                 }
               }
+
+              ImGui::Separator();
+              ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.8f, 1.0f),
+                                 "Additional Bindings");
+              WrappedTooltip(
+                  "For one mesh that needs to respond to more than one "
+                  "input in its own way - the motivating case is a "
+                  "joystick hat: one physical mesh, but each of its "
+                  "directions wants its own movement. This mesh's own "
+                  "Travel/Travel Rotation above still works exactly as "
+                  "before as its primary binding - each entry below is "
+                  "an independent, additional one. Every active "
+                  "binding's Travel and Travel Rotation are added "
+                  "together every frame, so e.g. one binding moving "
+                  "+0.010 on X and another moving -0.010 on X, both "
+                  "active at once, cancel out to 0.000 - no different "
+                  "from how you'd expect two forces to combine.");
+              if (ImGui::Button("Add Binding##extraBinding")) {
+                selectedMesh.extraBindings.push_back(MeshBinding{});
+                current_window->unsaved_change_count++;
+              }
+              {
+                int removeIndex = -1;
+                for (int bi = 0; bi < (int)selectedMesh.extraBindings.size();
+                     ++bi) {
+                  MeshBinding &b = selectedMesh.extraBindings[bi];
+                  ImGui::PushID(bi);
+                  // Plain Separator + Indent, not BeginShadedGroup() -
+                  // that calls ChannelsSplit(2) on the draw list, and
+                  // this whole block already sits inside the
+                  // enclosing Movement & Animation section's own,
+                  // still-open BeginShadedGroup() (it isn't closed
+                  // until the very end of that section, well after
+                  // this loop). ImGui explicitly asserts on nested
+                  // splits ("Nested channel splitting is not
+                  // supported") - an earlier version of this code hit
+                  // exactly that, crashing immediately on the first
+                  // Add Binding press.
+                  ImGui::Separator();
+                  ImGui::Indent();
+                  ImGui::Text("Binding %d", bi + 1);
+                  ImGui::SameLine();
+                  if (ImGui::SmallButton("Remove")) {
+                    removeIndex = bi;
+                  }
+                  // Same shared picker the Model table's own per-mesh
+                  // binding (and the Import dialog's) use - not a raw
+                  // text field, and no separate "Input Type" combo of
+                  // our own either: drawInputBindingPicker() already
+                  // draws its own type selector internally (deriving
+                  // it by parsing boundInput's own "type:value"
+                  // prefix - it needs nothing else from us), and
+                  // already shows its own tooltip at the end of its
+                  // own body - an earlier version of this code added
+                  // both a second, redundant type combo AND a second
+                  // tooltip on top of these, which is why b.inputType
+                  // exists in MeshBinding (model.h) but isn't used
+                  // here: kept for symmetry with Mesh's own
+                  // inputType field, not because the UI needs it.
+                  //
+                  // Width: neither of the picker's own two internal
+                  // combos (type, then value, side by side via
+                  // SameLine()) sets its own width, so each
+                  // independently claims a full default item width -
+                  // together they'd overflow well past every other
+                  // control on this panel (Travel X, Rot X, etc, all
+                  // likewise left at their own default width, with no
+                  // PushItemWidth() anywhere in this file). Halving
+                  // that same default width before the call, so the
+                  // two combos' combined width lands back on the same
+                  // width as everything else here.
+                  {
+                    float fullWidth = ImGui::CalcItemWidth();
+                    ImGui::PushItemWidth(
+                        (fullWidth - ImGui::GetStyle().ItemSpacing.x) * 0.5f);
+                    drawInputBindingPicker(
+                        current_window, 200000 + selected_mesh * 100 + bi,
+                        b.inputBinding, selectedMesh.name);
+                    ImGui::PopItemWidth();
+                  }
+                  ImGui::Checkbox("Invert", &b.invert);
+                  ImGui::InputFloat("Travel X##extra", &b.travel[0], 0.01f,
+                                    1.0f, "%.3f");
+                  ImGui::InputFloat("Travel Y##extra", &b.travel[1], 0.01f,
+                                    1.0f, "%.3f");
+                  ImGui::InputFloat("Travel Z##extra", &b.travel[2], 0.01f,
+                                    1.0f, "%.3f");
+                  ImGui::InputFloat("Rot X##extra", &b.travel_rotation[0],
+                                    0.1f, 1.0f, "%.1f");
+                  ImGui::InputFloat("Rot Y##extra", &b.travel_rotation[1],
+                                    0.1f, 1.0f, "%.1f");
+                  ImGui::InputFloat("Rot Z##extra", &b.travel_rotation[2],
+                                    0.1f, 1.0f, "%.1f");
+                  ImGui::Checkbox("Smooth Travel Animation##extra",
+                                  &b.smooth_travel_enabled);
+                  if (b.smooth_travel_enabled) {
+                    ImGui::SliderFloat("Duration (s)##extra",
+                                       &b.smooth_travel_duration, 0.02f, 0.6f,
+                                       "%.2f");
+                  }
+                  ImGui::Unindent();
+                  ImGui::PopID();
+                }
+                if (removeIndex >= 0) {
+                  selectedMesh.extraBindings.erase(
+                      selectedMesh.extraBindings.begin() + removeIndex);
+                  current_window->unsaved_change_count++;
+                }
+              }
+
               ImGui::Separator();
               ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.8f, 1.0f),
                                  "Popup (bumper/paddle)");
@@ -6759,7 +6884,7 @@ void drawSettingsWindow() {
       t.path = copiedPath;
       t.name =
           std::to_string(ctrl->model.meshes[texture_mesh].textures.size() + 1) +
-          ": " + t.path;
+          ": " + extractFilenameCrossPlatform(t.path);
       ctrl->model.meshes[texture_mesh].textures.push_back(t);
       ctrl->unsaved_change_count++;
       makeContextCurrentSafe(glfw_settings_window);
@@ -6787,7 +6912,7 @@ void drawSettingsWindow() {
       loadTexture(t.id, copiedGlobalPath);
       t.path = copiedGlobalPath;
       t.name =
-          std::to_string(ctrl->model.globalTextures.size() + 1) + ": " + t.path;
+          std::to_string(ctrl->model.globalTextures.size() + 1) + ": " + extractFilenameCrossPlatform(t.path);
       ctrl->model.globalTextures.push_back(t);
       ctrl->unsaved_change_count++;
       makeContextCurrentSafe(glfw_settings_window);
