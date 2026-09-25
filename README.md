@@ -252,10 +252,14 @@ You can jump straight there from inside the app via **Settings → Open Data Dir
 
 **Update check.** With **Check for updates on startup** on (under Help, on by default), the app asks GitHub once per launch whether a newer release exists. If one does, a popup shows its release notes, with **Open Download Page** and a **Don't remind me about this version** checkbox; the next release is still announced. Nothing is downloaded or installed for you, and if GitHub can't be reached nothing is shown. **Check Now** runs the same check on demand.
 
+![update check](images/update_check.png)
+
 **Bundled Models** (a Settings section, next to Theme) lists every model that comes with the app:
 
 - **Add** puts a missing one back in your library (**Add All Missing** for all of them).
 - **Restore...** resets one to how it shipped, after a confirmation. Your current version of it isn't deleted: it's moved to `model_backups/<model> <date>` in your [data directory](#where-your-data-lives).
+
+![bundled models](images/bundled_models.png)
 
 ## Supported input
 
