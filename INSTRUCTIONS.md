@@ -2,38 +2,48 @@
 
 ## Table of Contents
 
-1. [What's New in 1.3.3](#whats-new-in-133)
-2. [What's New in 1.3.2](#whats-new-in-132)
-3. [What's New in 1.3.1](#whats-new-in-131)
-4. [What's New in 1.3.0](#whats-new-in-130)
-5. [What's New in 1.2.0](#whats-new-in-120)
-6. [What's New in 1.1.1](#whats-new-in-111)
-7. [What's New in 1.1.0](#whats-new-in-110)
-8. [First Launch](#first-launch)
-9. [Opening a Controller Window](#opening-a-controller-window)
-10. [Mapping Inputs](#mapping-inputs)
-11. [Additional Bindings](#additional-bindings)
-12. [Gyro Support](#gyro-support)
-13. [Touchpads](#touchpads)
-14. [Highlighting & Press Feedback](#highlighting--press-feedback)
-15. [Smooth Travel Animation](#smooth-travel-animation)
-16. [Importing a Custom Model](#importing-a-custom-model)
-17. [Textures & UV Mapping](#textures--uv-mapping)
-18. [Materials](#materials)
-19. [Lighting](#lighting)
-20. [Window & Camera Settings](#window--camera-settings)
-21. [Network Functionality](#network-functionality)
-22. [Shader Effects](#shader-effects)
-23. [Input History](#input-history)
-24. [The Log Window](#the-log-window)
-25. [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode)
-26. [Theme](#theme)
-27. [Data Directory & Backups](#data-directory--backups)
-28. [Troubleshooting](#troubleshooting)
+1. [What's New in 1.4.0](#whats-new-in-140)
+2. [What's New in 1.3.3](#whats-new-in-133)
+3. [What's New in 1.3.2](#whats-new-in-132)
+4. [What's New in 1.3.1](#whats-new-in-131)
+5. [What's New in 1.3.0](#whats-new-in-130)
+6. [What's New in 1.2.0](#whats-new-in-120)
+7. [What's New in 1.1.1](#whats-new-in-111)
+8. [What's New in 1.1.0](#whats-new-in-110)
+9. [First Launch](#first-launch)
+10. [Opening a Controller Window](#opening-a-controller-window)
+11. [Mapping Inputs](#mapping-inputs)
+12. [Additional Bindings](#additional-bindings)
+13. [Gyro Support](#gyro-support)
+14. [Touchpads](#touchpads)
+15. [Highlighting & Press Feedback](#highlighting--press-feedback)
+16. [Smooth Travel Animation](#smooth-travel-animation)
+17. [Importing a Custom Model](#importing-a-custom-model)
+18. [Textures & UV Mapping](#textures--uv-mapping)
+19. [Materials](#materials)
+20. [Lighting](#lighting)
+21. [Window & Camera Settings](#window--camera-settings)
+22. [Network Functionality](#network-functionality)
+23. [Shader Effects](#shader-effects)
+24. [Input History](#input-history)
+25. [The Log Window](#the-log-window)
+26. [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode)
+27. [Theme](#theme)
+28. [Updates & Bundled Models](#updates--bundled-models)
+29. [Data Directory & Backups](#data-directory--backups)
+30. [Troubleshooting](#troubleshooting)
 
 ---
 
 ![Demo](images/demo.webp)
+
+## What's New in 1.4.0
+
+- [Updates & Bundled Models](#updates--bundled-models) – a **What's New** window on the first launch after an update (release notes, plus any new bundled models to add in one click), a new **Bundled Models** section in Settings to add missing models or restore one to its original, and an optional check for newer releases.
+- The running version now shows in the Settings window title, the tray tooltip, and the Windows `.exe` Properties / macOS Get Info, not only in Help.
+- Smoother UI text (Noto Sans via FreeType), with dashes, quotes, arrows, check marks and color emoji rendering instead of `?`.
+
+---
 
 ## What's New in 1.3.3
 
@@ -471,9 +481,35 @@ Changes apply immediately, everywhere, not just in Settings - open a controller 
 
 ---
 
+## Updates & Bundled Models
+
+**Which version am I running?** Shown in the Settings window title, the tray icon tooltip, and **Help**. Outside the app: Windows → right-click `3dco+.exe` → **Properties** → **Details**; macOS → **Get Info**.
+
+**What's New:** the first launch after updating shows that version's release notes, once. If the update includes bundled models you don't have yet, they're listed below the notes, ticked by default:
+
+1. Untick any you don't want.
+2. **Add Selected Models** adds the ticked ones to your library; **Not Now** skips them (they stay available under Bundled Models).
+
+**Update check:** under **Help**, **Check for updates on startup** (on by default) asks GitHub once per launch whether a newer release exists. If it does:
+
+- A popup shows the new version's release notes.
+- **Open Download Page** takes you to the release on GitHub. Nothing is downloaded or installed automatically.
+- Tick **Don't remind me about vX.Y.Z again** to stop the popup for that version; a later release is still announced.
+
+**Check Now** next to the toggle runs the check immediately (and shows the result even for a version you chose to skip). If GitHub can't be reached, the startup check simply stays quiet.
+
+**Bundled Models** (Settings section, above Theme) lists every model that comes with the app, marked **Installed** or **Missing**:
+
+- **Add** puts a missing model back; **Add All Missing** does all of them at once.
+- **Restore...** resets a model to how it shipped, after a confirmation. Your current version (bindings, travel, textures and all) is moved to `model_backups/<model> <date>` in the data directory, not deleted. Any controller window showing that model reloads it right away.
+
+---
+
 ## Data Directory & Backups
 
 Everything you configure – bindings, imported models, tab layouts, controller mapping database – lives in your per‑OS data directory (see README for paths). Back it up to preserve your setup.
+
+`model_backups/` in the same directory holds the previous version of any model you reset with **Restore...** under [Bundled Models](#updates--bundled-models). To go back to it, copy its folder into `models/` (renaming it to the model's name).
 
 ---
 

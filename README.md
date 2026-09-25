@@ -11,6 +11,14 @@ This is a **fork, not a replacement**. It exists as an homage to the original to
 
 The **`+`** in the name means exactly that: **improvements and extra features** layered on top of the original — more controllers, more rendering features, more input paths, more build tooling — while keeping the same "point it at your input device and it just works" spirit. It's also a personal passion project: a way for me to see what I'm actually capable of building and maintaining with AI as a collaborator rather than a crutch.
 
+## What's new in 1.4.0
+
+- **"What's New" after an update.** The first launch of a new version shows its release notes once, and offers any bundled models that are new in that version (pre-ticked), so new models no longer require deleting your models folder. Never shown on a normal launch or a fresh install.
+- **Bundled Models section in Settings.** Every model the app ships, marked Installed or Missing, with **Add** for missing ones and **Restore...** to reset one to its original. Restoring asks first, and moves your current version to `model_backups` in the [data directory](#where-your-data-lives) instead of deleting it.
+- **Optional update check.** On startup the app asks GitHub whether a newer release exists and, if so, shows its release notes with a link to the download page and a "don't remind me about this version" option. Nothing is downloaded or installed automatically. Toggle it (or **Check Now**) under Help.
+- **The version is visible everywhere:** the Settings window title (taskbar/dock), the tray tooltip, the Windows `.exe`'s Properties → Details, and macOS Get Info (previously always 1.0), as well as Help. See [Updates & version](#updates--version).
+- **Smoother text and color emoji.** The UI font is now Noto Sans rendered through FreeType instead of ImGui's pixel font, so dashes, quotes, arrows, check marks and color emoji (Twemoji) render instead of showing as `?`.
+
 ## What's new in 1.3.3
 
 - **Additional Bindings: more than one input per mesh.** Under Movement & Animation, a mesh can now have any number of extra input bindings on top of its existing one, each with its own Invert, Travel X/Y/Z, Rot X/Y/Z, and Smooth Travel settings. Every active binding's Travel/Travel Rotation is added together each frame - so a joystick hat (one physical mesh, several directions) can tilt its own way per direction, a diagonal press tilts on two axes at once, and opposite bindings cancel out naturally. A mesh highlights if any of its bindings is active. Supports "press"-style inputs (buttons, hats, axis-as-direction, keyboard keys, mouse buttons); sticks, raw axis passthrough, and touchpads stay single-binding. Existing models are unaffected - their current binding simply becomes the primary one - and the new `extra_bindings` field in `info.json` is optional.
@@ -111,6 +119,7 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 
 - [What stayed the same](#what-stayed-the-same)
 - [What's new in the `+`](#whats-new-in-the-)
+- [What's new in 1.4.0](#whats-new-in-140)
 - [What's new in 1.3.3](#whats-new-in-133)
 - [What's new in 1.3.2](#whats-new-in-132)
 - [What's new in 1.3.1](#whats-new-in-131)
@@ -123,6 +132,7 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 - [Supported platforms](#supported-platforms)
 - [Platform showcase](#platform-showcase)
 - [Where your data lives](#where-your-data-lives)
+- [Updates & version](#updates--version)
 - [Supported input](#supported-input)
 - [Network functionality](#network-functionality)
 - [Shader effects](#shader-effects)
@@ -135,6 +145,7 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 - [Work in progress / known bugs](#work-in-progress--known-bugs)
 - [Known issues (tracked)](#known-issues-tracked)
 - [Building](#building)
+- [Releasing](#releasing)
 - [Contributing](#contributing)
 - [Credits](#credits)
 
@@ -186,7 +197,7 @@ The goal of the `+` fork isn't "more lines of code" — it's closing gaps the or
 - **Updated to the latest Dear ImGui version** for improved UI/UX and bug fixes.
 - **Updated to SDL3** for better performance, new features, and improved controller support.
 
-New dependencies to support the above: **Assimp** (model import), **spdlog/fmt** (logging), and **nlohmann_json** (settings/model metadata), alongside the original GLFW/SDL3/GLM/stb stack. Linux builds additionally link against **libdbus-1** for the StatusNotifierItem tray icon.
+New dependencies to support the above: **Assimp** (model import), **spdlog/fmt** (logging), **nlohmann_json** (settings/model metadata), and **FreeType** (font rendering), alongside the original GLFW/SDL3/GLM/stb stack. Linux builds additionally link against **libdbus-1** for the StatusNotifierItem tray icon.
 
 ## How it works
 
@@ -231,6 +242,19 @@ The same live overlay, running natively on all three targets.
 | 🍎 macOS   | `~/Library/Application Support/3dco+/` |
 
 You can jump straight there from inside the app via **Settings → Open Data Directory**. There's also an **Open Log Window** button right next to it if you'd rather watch the log live instead of digging through files — handy on macOS/Linux, where no console is attached to the process unless you launched it from a terminal.
+
+## Updates & version
+
+**Which version am I running?** It's in the Settings window's title (so also the taskbar/dock entry), the tray icon's tooltip, and the **Help** section. Without opening the app: on Windows, right-click `3dco+.exe` → **Properties** → **Details**; on macOS, **Get Info** on the app.
+
+**After updating**, the first launch shows a **What's New** window with that version's release notes, once. If the update ships models you don't have yet, they're listed there with a checkbox each; untick any you don't want, then **Add Selected Models**.
+
+**Update check.** With **Check for updates on startup** on (under Help, on by default), the app asks GitHub once per launch whether a newer release exists. If one does, a popup shows its release notes, with **Open Download Page** and a **Don't remind me about this version** checkbox; the next release is still announced. Nothing is downloaded or installed for you, and if GitHub can't be reached nothing is shown. **Check Now** runs the same check on demand.
+
+**Bundled Models** (a Settings section, next to Theme) lists every model that comes with the app:
+
+- **Add** puts a missing one back in your library (**Add All Missing** for all of them).
+- **Restore...** resets one to how it shipped, after a confirmation. Your current version of it isn't deleted: it's moved to `model_backups/<model> <date>` in your [data directory](#where-your-data-lives).
 
 ## Supported input
 
@@ -448,10 +472,10 @@ This fork builds with **CMake** and **pkg-config** on all three platforms. From 
 ```bash
 # Debian/Ubuntu
 sudo apt install build-essential cmake pkg-config libglfw3-dev libsdl3-dev \
-  libassimp-dev libspdlog-dev libfmt-dev nlohmann-json3-dev
+  libassimp-dev libspdlog-dev libfmt-dev nlohmann-json3-dev libfreetype-dev
 
 # Arch/CachyOS
-sudo pacman -S --needed base-devel cmake pkgconf glfw sdl3 assimp spdlog fmt nlohmann-json
+sudo pacman -S --needed base-devel cmake pkgconf glfw sdl3 assimp spdlog fmt nlohmann-json freetype2
 
 rm -rf build && mkdir build && cd build
 cmake ..
@@ -461,7 +485,7 @@ make -j$(nproc)
 ### 🍎 macOS
 
 ```bash
-brew install cmake pkg-config glfw sdl3 assimp spdlog fmt nlohmann-json
+brew install cmake pkg-config glfw sdl3 assimp spdlog fmt nlohmann-json freetype
 
 rm -rf build && mkdir build && cd build
 cmake ..
@@ -485,7 +509,7 @@ If you skip this, the app still launches fine — gamepad/joystick input is unaf
 pacman -S --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake \
   mingw-w64-x86_64-pkgconf mingw-w64-x86_64-glfw mingw-w64-x86_64-SDL3 \
   mingw-w64-x86_64-assimp mingw-w64-x86_64-spdlog mingw-w64-x86_64-fmt \
-  mingw-w64-x86_64-nlohmann-json
+  mingw-w64-x86_64-nlohmann-json mingw-w64-x86_64-freetype
 rm -rf build && mkdir build && cd build
 cmake -G "MinGW Makefiles" ..
 mingw32-make -j$(nproc)
@@ -499,6 +523,17 @@ The resulting executable is **`3dco+`** (`3dco+.exe` on Windows).
 
 Convenience scripts (`build-all.sh`, `build-appimage.sh`, `build-macos.sh`, `build-windows.sh`) plus Docker cross-build files are also included, and are the easiest way to produce a Windows or macOS build from a Linux machine without installing a full native toolchain.
 
+**Version number:** taken from the nearest git tag (`git describe`) at build time, so a build from a clone just works. Override it with `-DAPP_VERSION=v1.2.3` (or the `APP_VERSION` environment variable); a build with no tag and no override reports `0.0.0-dev`.
+
+## Releasing
+
+1. Write the release notes as `release-notes/vX.Y.Z.md` (Markdown; emoji are fine) and commit them. The build embeds this file for the in-app **What's New** window, and the release workflow uses it as the GitHub release description.
+2. Tag the commit and push the tag:
+   ```bash
+   git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z
+   ```
+3. The Build workflow compiles all three platforms with that version baked in and publishes the release with the notes and binaries attached. There's no version number to bump anywhere by hand.
+
 ## Contributing
 
 Bug reports and pull requests are welcome. Please open an issue first to discuss proposed changes.
@@ -508,6 +543,7 @@ Bug reports and pull requests are welcome. Please open an issue first to discuss
 - **Original creator & engine**: [Larf](https://github.com/larfingshnew) — [3D Controller Overlay](https://github.com/larfingshnew/3d-controller-overlay). Please go star/support the original.
 - **Controller/keyboard prompt icons** (Input History's glyph display styles): Nicolae "Xelu" Berbece / Those Awesome Guys — released free under CC0 (public domain), commercial use included. Not affiliated with this project; credited here because it's the right thing to do, not because the license requires it.
 - **This fork**: designed, built, and maintained by me as a homage/continuation and a personal test of what I can build with AI-assisted coding — all architecture, debugging, and feature decisions are mine.
-- Third-party libraries: GLFW, glad, SDL3, GLM, Dear ImGui, stb_image, Assimp, spdlog/fmt, nlohmann_json, miniz, libdbus (Linux tray icon).
+- **Fonts** (see `assets/fonts/`): [Noto Sans, Noto Sans Math and Noto Sans Symbols 2](https://fonts.google.com/noto) under the SIL Open Font License 1.1 (subset to the characters the app uses). Color emoji from [Twemoji](https://github.com/twitter/twemoji) (Copyright Twitter, Inc and other contributors), licensed under [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/), via Mozilla's [twemoji-colr](https://github.com/mozilla/twemoji-colr) font build (Apache 2.0), unmodified.
+- Third-party libraries: GLFW, glad, SDL3, GLM, Dear ImGui, stb_image, Assimp, spdlog/fmt, nlohmann_json, miniz, FreeType, libdbus (Linux tray icon). Portions of this software are copyright © The FreeType Project (www.freetype.org). All rights reserved.
 
 **Enjoy!** If you find this useful, please star the repository and consider supporting the original project.
