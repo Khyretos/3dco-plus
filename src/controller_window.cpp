@@ -110,17 +110,79 @@ void logNetworkMessage(controller_window &w, const std::string &direction,
 // full explanation of why it exists.
 static GLFWwindow *g_gladLoadedFor = nullptr;
 
+namespace {
+// A handful of GLAD entry points spanning GL 1.0 through 3.0, compared
+// between contexts to tell whether a context's function pointers match
+// the ones already loaded.
+struct GladProbe {
+  void *p[8];
+  bool operator==(const GladProbe &o) const {
+    return std::equal(std::begin(p), std::end(p), std::begin(o.p));
+  }
+};
+GladProbe captureGladProbe() {
+  return {{(void *)glad_glClear, (void *)glad_glDrawArrays,
+           (void *)glad_glActiveTexture, (void *)glad_glCreateShader,
+           (void *)glad_glUniformMatrix4fv, (void *)glad_glGenVertexArrays,
+           (void *)glad_glBindFramebuffer, (void *)glad_glGetStringi}};
+}
+// The pointer set loaded for the first context, and whether each
+// window's context resolved to exactly that set. Reloading GLAD is not
+// free - hundreds of glfwGetProcAddress() lookups plus a scan of every
+// extension string - and the main loop switches contexts several times
+// per frame (Settings, every controller window, Input History, ...).
+// In practice every context on the same GPU resolves to identical
+// pointers (always, on GLX and macOS), so after one verifying reload
+// per window, switching between such windows needs no reload at all.
+// A window whose context ever resolves differently keeps getting a full
+// reload on every switch, exactly as before.
+bool g_gladBaselineSet = false;
+GladProbe g_gladBaseline;
+bool g_gladTableIsBaseline = false;
+std::unordered_map<GLFWwindow *, bool> g_gladContextMatchesBaseline;
+} // namespace
+
 void makeContextCurrentSafe(GLFWwindow *window) {
   glfwMakeContextCurrent(window);
   if (window == g_gladLoadedFor)
     return; // GLAD's global table is already valid for this context
+  auto known = g_gladContextMatchesBaseline.find(window);
+  if (known != g_gladContextMatchesBaseline.end() && known->second &&
+      g_gladTableIsBaseline) {
+    g_gladLoadedFor = window; // same pointers as what's loaded - reuse
+    return;
+  }
   if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
     spdlog::error("makeContextCurrentSafe: failed to reload GLAD for a "
-                 "context switch - GL calls against this context may not "
-                 "work correctly.");
+                  "context switch - GL calls against this context may not "
+                  "work correctly.");
+    g_gladLoadedFor = nullptr;
+    g_gladTableIsBaseline = false;
     return; // don't mark it as loaded if the reload itself failed
   }
   g_gladLoadedFor = window;
+  const GladProbe probe = captureGladProbe();
+  if (!g_gladBaselineSet) {
+    g_gladBaseline = probe;
+    g_gladBaselineSet = true;
+  }
+  const bool matches = probe == g_gladBaseline;
+  if (!matches && known == g_gladContextMatchesBaseline.end())
+    spdlog::info("GL context for a new window resolved different function "
+                 "pointers - GLAD will be reloaded on every switch to it.");
+  g_gladContextMatchesBaseline[window] = matches;
+  g_gladTableIsBaseline = matches;
+}
+
+void destroyWindowSafe(GLFWwindow *window) {
+  if (!window)
+    return;
+  // A later window can be allocated at the same address - forget
+  // everything known about this one's context first.
+  g_gladContextMatchesBaseline.erase(window);
+  if (g_gladLoadedFor == window)
+    g_gladLoadedFor = nullptr;
+  glfwDestroyWindow(window);
 }
 
 void setWindowClickThrough(GLFWwindow *window, bool enable) {
@@ -1778,7 +1840,6 @@ void updateCompanionWindow(CompanionWindow &cw, bool always_on_top,
 }
 #endif // _WIN32
 
-static GLuint g_glowTexture = 0;
 const char *getMouseButtonName(int button) {
   switch (button) {
   case GLFW_MOUSE_BUTTON_LEFT:
@@ -1800,37 +1861,6 @@ const char *getMouseButtonName(int button) {
   default:
     return nullptr;
   }
-}
-
-void createGlowTexture() {
-  if (g_glowTexture)
-    return;
-  const int size = 128;
-  std::vector<unsigned char> data(size * size * 4);
-  for (int y = 0; y < size; ++y) {
-    for (int x = 0; x < size; ++x) {
-      float dx = (x - size / 2.0f) / (size / 2.0f);
-      float dy = (y - size / 2.0f) / (size / 2.0f);
-      float dist = std::sqrt(dx * dx + dy * dy);
-      float alpha = 1.0f - dist;
-      if (alpha < 0)
-        alpha = 0;
-      alpha = alpha * alpha * (3 - 2 * alpha);
-      int idx = (y * size + x) * 4;
-      data[idx + 0] = 100;
-      data[idx + 1] = 180;
-      data[idx + 2] = 255;
-      data[idx + 3] = (unsigned char)(alpha * 255);
-    }
-  }
-  glGenTextures(1, &g_glowTexture);
-  glBindTexture(GL_TEXTURE_2D, g_glowTexture);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size, size, 0, GL_RGBA,
-               GL_UNSIGNED_BYTE, data.data());
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 }
 
 // ------------------------------------------------------------------
@@ -2214,14 +2244,6 @@ float get_axis_value_choice(controller_window &w, int axis_idx, bool useRaw) {
   }
 }
 
-float get_axis_value(controller_window &w, int axis_idx) {
-  if (axis_idx < 6) {
-    return get_axis_value_choice(w, axis_idx, false);
-  } else {
-    return get_axis_value_choice(w, axis_idx, true);
-  }
-}
-
 bool get_button_value_choice(controller_window &w, int btn_idx, bool useRaw) {
   if (useRaw) {
     SDL_Joystick *joy = nullptr;
@@ -2279,6 +2301,42 @@ void createAxisIndicator(controller_window &w) {
   w.axis_elements = 6; // 3 lines * 2 vertices each
 }
 
+static controller_window *findControllerWindow(GLFWwindow *window) {
+  for (auto &w : windows)
+    if (w.glfw_window == window)
+      return &w;
+  return nullptr;
+}
+
+// Tracks minimized state, framebuffer size and window size via callbacks
+// so the input/draw loops don't have to ask the window system for them
+// every frame.
+static void installControllerWindowCallbacks(controller_window &w) {
+  w.glfw_iconified = glfwGetWindowAttrib(w.glfw_window, GLFW_ICONIFIED);
+  glfwGetFramebufferSize(w.glfw_window, &w.framebuffer_width,
+                         &w.framebuffer_height);
+  glfwGetWindowSize(w.glfw_window, &w.window_width, &w.window_height);
+  glfwSetWindowSizeCallback(w.glfw_window,
+                            [](GLFWwindow *window, int width, int height) {
+                              if (auto *cw = findControllerWindow(window)) {
+                                cw->window_width = width;
+                                cw->window_height = height;
+                              }
+                            });
+  glfwSetWindowIconifyCallback(w.glfw_window,
+                               [](GLFWwindow *window, int iconified) {
+                                 if (auto *cw = findControllerWindow(window))
+                                   cw->glfw_iconified = iconified == GLFW_TRUE;
+                               });
+  glfwSetFramebufferSizeCallback(
+      w.glfw_window, [](GLFWwindow *window, int width, int height) {
+        if (auto *cw = findControllerWindow(window)) {
+          cw->framebuffer_width = width;
+          cw->framebuffer_height = height;
+        }
+      });
+}
+
 void createControllerWindow(std::string title, std::string model_path) {
   controller_window w;
   w.gyro_sensitivity = 5.0f;
@@ -2298,6 +2356,9 @@ void createControllerWindow(std::string title, std::string model_path) {
   // whichever context is actually current - required here, since this
   // window's GL context is its own, separate, non-shared one.
   makeContextCurrentSafe(w.glfw_window);
+  // Never vsync (see drawControllerWindows()) - set once here, since
+  // swap interval is per-context state.
+  glfwSwapInterval(0);
   w.window_title = title;
   setWindowClickThrough(w.glfw_window, false); // default: no passthrough
   w.click_through_last_applied = false;
@@ -2359,6 +2420,7 @@ void createControllerWindow(std::string title, std::string model_path) {
   }
 
   glfwSetScrollCallback(w.glfw_window, controller_window_scroll_callback);
+  installControllerWindowCallbacks(w);
   w.lastFrame = glfwGetTime();
 
   make_grid(w);
@@ -2606,110 +2668,6 @@ void createControllerWindow(std::string title, std::string model_path) {
   }
 
   windows.push_back(w);
-}
-
-void recreateControllerWindow(controller_window *w) {
-  if (!w)
-    return;
-  // Save window state
-  std::string title = w->window_title;
-  int x, y, width, height;
-  glfwGetWindowPos(w->glfw_window, &x, &y);
-  glfwGetWindowSize(w->glfw_window, &width, &height);
-  bool was_always_on_top = w->always_on_top;
-  bool was_borderless = w->borderless;
-  int was_swap_interval = w->swap_interval;
-  bool was_grid = w->grid;
-  bool was_wireframe = w->wireframe;
-  float bg_color[4];
-  memcpy(bg_color, w->bg_color, 4 * sizeof(float));
-
-#if defined(_WIN32)
-  // The companion window is now the Windows default (see
-  // createControllerWindow()), so had_transparent_overlay will normally
-  // always be true here - this flag mainly guards the rare case where
-  // creation originally failed and left transparent_overlay.hwnd null,
-  // in which case there's nothing to tear down/recreate and the GLFW
-  // window is shown directly as a fallback either way.
-  bool had_transparent_overlay = (w->transparent_overlay.hwnd != nullptr);
-  if (had_transparent_overlay)
-    destroyCompanionWindow(w->transparent_overlay);
-#endif
-
-  // Destroy old window (free resources)
-  glfwDestroyWindow(w->glfw_window);
-
-  // Recreate with GLFW_TRANSPARENT_FRAMEBUFFER if needed
-  glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER,
-                 w->transparent_bg ? GLFW_TRUE : GLFW_FALSE);
-  w->glfw_window = glfwCreateWindow(width, height, title.c_str(), NULL, NULL);
-  if (!w->glfw_window) {
-    spdlog::error("Failed to recreate controller window with transparency.");
-    return;
-  }
-  makeContextCurrentSafe(w->glfw_window);
-  w->window_title = title;
-
-  glfwSetWindowPos(w->glfw_window, x, y);
-  // Borderless controls GLFW_DECORATED, Always on Top controls
-  // GLFW_FLOATING. Neither is affected by Transparent Background - on
-  // Windows that's handled entirely by the layered companion window
-  // (see createCompanionWindow()), which is always borderless by
-  // construction; on Linux/macOS it's GLFW's native transparent
-  // framebuffer, which doesn't require undecorated either.
-  glfwSetWindowAttrib(w->glfw_window, GLFW_FLOATING, was_always_on_top);
-  glfwSetWindowAttrib(w->glfw_window, GLFW_DECORATED, !was_borderless);
-  glfwSwapInterval(was_swap_interval);
-  w->grid = was_grid;
-  w->wireframe = was_wireframe;
-  memcpy(w->bg_color, bg_color, 4 * sizeof(float));
-
-#if defined(_WIN32)
-  if (had_transparent_overlay)
-    createCompanionWindow(w->transparent_overlay, w->glfw_window,
-                          &w->click_through, w->window_title);
-#endif
-
-  // Apply click-through after all attributes. setWindowClickThrough() is
-  // the ONLY place that should ever touch GLFW_MOUSE_PASSTHROUGH - see its
-  // definition for why a direct glfwSetWindowAttrib(..., GLFW_MOUSE_
-  // PASSTHROUGH, ...) call anywhere else is harmful on Windows.
-  setWindowClickThrough(w->glfw_window, w->click_through);
-
-  // Recreate OpenGL resources that depend on the context
-  // (shaders, VAOs, etc.) – these were destroyed when the old window was
-  // destroyed. The model and its meshes are still in memory; we just need to
-  // re‑upload their GL resources.
-  for (auto &mesh : w->model.meshes) {
-    // Re‑load the mesh from its OBJ file (or re‑upload from stored data)
-    // Since we have the mesh data (vertices, indices) still in memory, we can
-    // re‑create the buffers. For simplicity, we call loadMesh again – but that
-    // would read from disk. A better approach is to store the raw vertex/index
-    // data in Mesh and re‑upload. For a quick fix, we can reload from the OBJ
-    // file (which still exists).
-    if (!mesh.filename.empty()) {
-      std::string objPath = w->model.path + "/" + mesh.filename;
-      loadMesh(mesh, objPath);
-    }
-  }
-  // Recreate grid, lighting, touch area, etc.
-  make_grid(*w);
-  lightingSpecification(*w);
-  createTouchAreaRect(*w);
-  // Recreate shaders
-  createShader(w->shader, vertex_shader_code.c_str(),
-               fragment_shader_code.c_str());
-  createShader(w->grid_shader, grid_vertex_shader_code.c_str(),
-               grid_fragment_shader_code.c_str());
-  createShader(w->light_source_shader, light_source_vertex_shader_code.c_str(),
-               light_source_fragment_shader_code.c_str());
-  createShader(w->touch_shader, touch_area_vertex_shader_code.c_str(),
-               touch_area_fragment_shader_code.c_str());
-
-  // Restore the window in the windows list (if needed, but we already have the
-  // pointer)
-  spdlog::info("Recreated window with transparent background = {}",
-               w->transparent_bg);
 }
 
 // Corrects a touchpoint mesh's parenting so it sits exactly at its
@@ -3120,7 +3078,6 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
                   mesh.touch_state = 1;
                   mesh.glow_intensity = 1.0f;
 
-                  int part = mesh.assignedPart;
                   anchorTouchpointToTouchpad(w, meshIdx);
                 } else {
                   mesh.touch_state = 0;
@@ -3155,7 +3112,6 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
                   mesh.touch_state = 1;
                   mesh.glow_intensity = 1.0f;
 
-                  int part = mesh.assignedPart;
                   anchorTouchpointToTouchpad(w, meshIdx);
                 } else {
                   mesh.touch_state = 0;
@@ -3169,16 +3125,13 @@ void applyMappingToMeshes(controller_window &w, float globalMouseDx,
       } else if (type == "mouse") {
         // Determine which delta to use based on binding name
         float dx = 0.0f, dy = 0.0f;
-        bool isScroll = false;
         if (value == "mouse_xy" || value == "mouse_x" || value == "mouse_y") {
           dx = globalMouseDx;
           dy = globalMouseDy;
-          isScroll = false;
         } else if (value == "mouse_scroll_xy" || value == "mouse_scroll_x" ||
                    value == "mouse_scroll_y") {
           dx = globalScrollDx;
           dy = globalScrollDy;
-          isScroll = true;
         }
 
         if (value == "mouse_xy" || value == "mouse_scroll_xy") {
@@ -3424,9 +3377,7 @@ void controller_window_input() {
       } else {
         // Gyro processing (with safety checks)
         if (w.gyro_enabled) {
-          bool has_gyro_source = false;
           if (w.is_gamecontroller && w.sdl_controller) {
-            has_gyro_source = true;
             int ret = SDL_GetGamepadSensorData(w.sdl_controller,
                                                SDL_SENSOR_GYRO, w.gyro_data, 3);
             if (ret >= 0) {
@@ -3531,7 +3482,6 @@ void controller_window_input() {
               }
             }
           } else if (w.gyro_sensor) {
-            has_gyro_source = true;
             float sensor_data[3];
             if (SDL_GetSensorData(w.gyro_sensor, sensor_data, 3) == 0) {
               w.gyro_data[0] = sensor_data[0];
@@ -3573,10 +3523,6 @@ void controller_window_input() {
           if (w.is_gamecontroller && w.sdl_controller) {
             SDL_Joystick *joy = SDL_GetGamepadJoystick(w.sdl_controller);
             if (joy) {
-              int numAxes = SDL_GetNumJoystickAxes(joy);
-              for (int i = 0; i < numAxes; ++i) {
-                float val = get_axis_value(w, i);
-              }
               int numJoyButtons = SDL_GetNumJoystickButtons(joy);
               // ---- SAFETY: clamp to our array size ----
               if (numJoyButtons > 128)
@@ -3617,8 +3563,6 @@ void controller_window_input() {
                       spdlog::info(
                           "Touchpad {} finger {} down at ({:.3f}, {:.3f})", t,
                           f, x, y);
-                    } else if (down) {
-                      spdlog::info("Touchpad {} finger {} up", t, f);
                     }
                   }
                 }
@@ -3698,7 +3642,6 @@ void controller_window_input() {
                        last_log_mouse_y); // Invert Y for screen coordinates
           float distance_sq = dx * dx + dy * dy;
           if (distance_sq > 25.0f) { // 5.0f squared
-            float distance = sqrt(distance_sq);
             const char *direction = "";
             float angle = atan2(dy, dx) * 180.0f / 3.14159265f;
 
@@ -3928,8 +3871,7 @@ void controller_window_input() {
 
     // Window-relative mouse for orbit/pivot (now allowed for import preview
     // too)
-    int win_width, win_height;
-    glfwGetWindowSize(w.glfw_window, &win_width, &win_height);
+    const int win_width = w.window_width, win_height = w.window_height;
     if (win_width == 0 || win_height == 0)
       continue;
 
@@ -4206,7 +4148,7 @@ void controller_window_input() {
         // tab
         unsigned id = w.ID;
         // Close the window and remove from windows vector
-        glfwDestroyWindow(w.glfw_window);
+        destroyWindowSafe(w.glfw_window);
         // Remove from windows vector
         for (unsigned i = 0; i < windows.size(); ++i) {
           if (windows[i].ID == id) {
@@ -4484,7 +4426,7 @@ void update_camera(controller_window &w, GLuint &shader, int window_width,
 }
 
 bool isControllerWindowMinimized(const controller_window &w) {
-  bool minimized = glfwGetWindowAttrib(w.glfw_window, GLFW_ICONIFIED);
+  bool minimized = w.glfw_iconified;
 #if defined(_WIN32)
   minimized = minimized || w.transparent_overlay.minimized;
 #endif
@@ -4504,20 +4446,20 @@ void drawControllerWindows() {
     if (!isControllerWindowMinimized(w)) {
       makeContextCurrentSafe(w.glfw_window);
       // vsync (glfwSwapInterval) is never used for controller windows -
-      // always 0. Three separate incremental attempts at narrowing the
-      // trigger condition (click-through only, then also transparent
-      // overlay, then considering window-focus state) each turned out
-      // to be too narrow: on NVIDIA specifically, glfwSwapBuffers can
-      // stall waiting for a vsync signal the driver is deprioritizing
-      // for this window while a fullscreen/borderless game has GPU
-      // priority - and since gamepad polling and rendering share a
-      // single thread (see Input()/Draw() in main.cpp), that freezes
-      // input reads too. AMD doesn't exhibit this. Rather than keep
-      // chasing which exact combination of settings triggers it, vsync
-      // is simply never used here; frame pacing instead comes from the
-      // sleep-based cap in MainLoop() (main.cpp), which never blocks on
+      // always 0, set once when the window's context is created (see
+      // createControllerWindow()); it's per-context state, so there's no
+      // need to re-apply it every frame. Three separate incremental attempts at
+      // narrowing the trigger condition (click-through only, then also
+      // transparent overlay, then considering window-focus state) each turned
+      // out to be too narrow: on NVIDIA specifically, glfwSwapBuffers can stall
+      // waiting for a vsync signal the driver is deprioritizing for this window
+      // while a fullscreen/borderless game has GPU priority - and since gamepad
+      // polling and rendering share a single thread (see Input()/Draw() in
+      // main.cpp), that freezes input reads too. AMD doesn't exhibit this.
+      // Rather than keep chasing which exact combination of settings triggers
+      // it, vsync is simply never used here; frame pacing instead comes from
+      // the sleep-based cap in MainLoop() (main.cpp), which never blocks on
       // anything GPU/driver-related.
-      glfwSwapInterval(0);
       w.deltaTime = glfwGetTime() - w.lastTime;
       w.lastTime = glfwGetTime();
 
@@ -4541,7 +4483,8 @@ void drawControllerWindows() {
       // by 2x per axis, so using glfwGetWindowSize here was only covering
       // 1 / (scale^2) of the real drawable area - e.g. 1/4 of the screen
       // on a standard 2x Retina Mac.
-      glfwGetFramebufferSize(w.glfw_window, &width, &height);
+      width = w.framebuffer_width;
+      height = w.framebuffer_height;
       glViewport(0, 0, width, height);
 
       update_camera(w, w.shader, width, height);
@@ -4958,9 +4901,25 @@ void drawControllerWindows() {
       // top of the 3D scene just drawn above, before the Windows
       // companion copy/swap below - so it's included in what actually
       // ends up visible either way.
-      if (w.controller_imgui_ctx && w.controller_imgui_backend_ready) {
+      // Only runs while the menu has just been requested or is still
+      // open: an idle ImGui frame here costs a full UI frame plus the
+      // backend's window/cursor queries, every frame, for nothing
+      // visible.
+      if (w.controller_imgui_ctx && w.controller_imgui_backend_ready &&
+          (w.middle_click_menu_open || w.middle_click_menu_visible)) {
         ImGuiContext *previousImgui = ImGui::GetCurrentContext();
         ImGui::SetCurrentContext(w.controller_imgui_ctx);
+        // Starting up again after being idle: drop the input queued up
+        // meanwhile (including the click that opened the menu), so none
+        // of it lands on the freshly opened menu.
+        if (!w.middle_click_menu_visible) {
+          ImGui::GetIO().ClearEventsQueue();
+          // ...but keep the current mouse position, which is where the
+          // menu opens.
+          double mx = 0.0, my = 0.0;
+          glfwGetCursorPos(w.glfw_window, &mx, &my);
+          ImGui::GetIO().AddMousePosEvent((float)mx, (float)my);
+        }
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
@@ -5006,7 +4965,8 @@ void drawControllerWindows() {
           // to survive long enough to trigger that once.
           w.middle_click_menu_open = false;
         }
-        if (ImGui::BeginPopup("MiddleClickMenu")) {
+        w.middle_click_menu_visible = ImGui::BeginPopup("MiddleClickMenu");
+        if (w.middle_click_menu_visible) {
           if (ImGui::Selectable("Reset View")) {
             w.camera_yaw = 0.0f;
             w.camera_pitch = 89.999f;
@@ -5216,7 +5176,7 @@ static void releaseControllerWindowResources(controller_window &w) {
 void destroyWindows() {
   for (controller_window &w : windows) {
     releaseControllerWindowResources(w);
-    glfwDestroyWindow(w.glfw_window);
+    destroyWindowSafe(w.glfw_window);
   }
 }
 
@@ -5281,7 +5241,7 @@ void removeControllerWindow(unsigned ID) {
   for (unsigned i = 0; i < windows.size(); ++i) {
     if (windows[i].ID == ID) {
       releaseControllerWindowResources(windows[i]);
-      glfwDestroyWindow(windows[i].glfw_window);
+      destroyWindowSafe(windows[i].glfw_window);
       windows.erase(windows.begin() + i);
       break;
     }

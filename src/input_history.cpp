@@ -1444,7 +1444,7 @@ void destroyInputHistoryWindow(controller_window &w) {
     ImGui_ImplGlfw_Shutdown();
   }
   ImGui::DestroyContext(w.input_history_imgui_ctx);
-  glfwDestroyWindow(w.input_history_glfw_window);
+  destroyWindowSafe(w.input_history_glfw_window);
 
   // The GL context this window's glyph textures were loaded into is
   // now gone (destroyed with the window above, and never shared with

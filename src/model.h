@@ -366,7 +366,6 @@ struct ImportPreviewData {
 };
 
 // ----- Existing function declarations -----
-bool isFloat(std::string myString);
 
 void loadModel(Model &m, std::string path);
 
@@ -418,7 +417,6 @@ void drawModel(Model &m, GLuint shader, int highlight_mesh_index = -1,
 
 // ----- functions for custom mesh import and mapping -----
 void importModelFile(Model &m, const std::string &filepath);
-void applyMeshMapping(Model &m);
 
 void convertImportedToMeshes(Model &m);
 

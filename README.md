@@ -17,6 +17,7 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 - **Bundled Models section in Settings.** Every model the app ships, marked Installed or Missing, with **Add** for missing ones and **Restore...** to reset one to its original. Restoring asks first, and moves your current version to `model_backups` in the [data directory](#where-your-data-lives) instead of deleting it.
 - **Optional update check.** On startup the app asks GitHub whether a newer release exists and, if so, shows its release notes with a link to the download page and a "don't remind me about this version" option. Nothing is downloaded or installed automatically. Toggle it (or **Check Now**) under Help.
 - **The version is visible everywhere:** the Settings window title (taskbar/dock), the tray tooltip, the Windows `.exe`'s Properties → Details, and macOS Get Info (previously always 1.0), as well as Help. See [Updates & version](#updates--version).
+- **Lower CPU usage.** The Frame Cap is now respected even on high-refresh monitors: the Settings window's vsync used to drive the whole app at 144/240 fps. Settings redraws at 10 fps while in the background and not at all while minimized, and per-part rendering is much cheaper, roughly halving main-thread CPU per frame on large models like the keyboard.
 - **Smoother text and color emoji.** The UI font is now Noto Sans rendered through FreeType instead of ImGui's pixel font, so dashes, quotes, arrows, check marks and color emoji (Twemoji) render instead of showing as `?`.
 
 ## What's new in 1.3.3

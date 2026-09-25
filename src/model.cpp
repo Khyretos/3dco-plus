@@ -18,23 +18,6 @@ using json = nlohmann::json;
 
 #include "strings.h"
 
-static GLuint g_whiteTexture = 0;
-
-GLuint getWhiteTexture() {
-  if (g_whiteTexture == 0) {
-    unsigned char data[4] = {255, 255, 255, 255};
-    glGenTextures(1, &g_whiteTexture);
-    glBindTexture(GL_TEXTURE_2D, g_whiteTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                 data);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  }
-  return g_whiteTexture;
-}
-
 static std::string escapeJson(const std::string &s) {
   std::string out;
   for (char c : s) {
@@ -897,13 +880,6 @@ void loadModel(Model &m, std::string path) {
   spdlog::warn("No info file found for model at '{}'.", path);
 }
 
-bool isFloat(std::string myString) {
-  std::istringstream iss(myString);
-  float f;
-  iss >> std::noskipws >> f;
-  return iss.eof() && !iss.fail();
-}
-
 void loadMesh(Mesh &m, std::string path) {
   std::ifstream ifs = std::ifstream(path);
   if (!ifs.is_open()) {
@@ -1303,9 +1279,8 @@ void drawMesh(const Mesh &mesh, const glm::mat4 &modelMatrix, GLuint shader,
 
   // Determine which shader to use: per-mesh override, else global
   GLuint program = shader;
-  std::string effectiveShaderName = mesh.shader_name;
-  if (effectiveShaderName.empty())
-    effectiveShaderName = globalShaderName;
+  const std::string &effectiveShaderName =
+      mesh.shader_name.empty() ? globalShaderName : mesh.shader_name;
   if (!effectiveShaderName.empty()) {
     GLuint customProg = LoadShaderProgram(effectiveShaderName);
     if (customProg != 0) {
@@ -1394,8 +1369,15 @@ void drawMesh(const Mesh &mesh, const glm::mat4 &modelMatrix, GLuint shader,
   // correctly instead of sampling an unbound texture unit.
   if (!effectiveShaderName.empty()) {
     for (int ch = 0; ch < 4; ++ch) {
-      std::string chName = "iChannel" + std::to_string(ch);
-      GLint chLoc = getCachedUniformLocation(program, chName.c_str());
+      static const char *const kChannelNames[4] = {"iChannel0", "iChannel1",
+                                                   "iChannel2", "iChannel3"};
+      static const char *const kChannelResolutionNames[4] = {
+          "iChannelResolution[0]", "iChannelResolution[1]",
+          "iChannelResolution[2]", "iChannelResolution[3]"};
+      static const char *const kChannelTimeNames[4] = {
+          "iChannelTime[0]", "iChannelTime[1]", "iChannelTime[2]",
+          "iChannelTime[3]"};
+      GLint chLoc = getCachedUniformLocation(program, kChannelNames[ch]);
       if (chLoc == -1)
         continue;
       int texW = 0, texH = 0;
@@ -1409,13 +1391,12 @@ void drawMesh(const Mesh &mesh, const glm::mat4 &modelMatrix, GLuint shader,
       glBindTexture(GL_TEXTURE_2D, texId);
       glUniform1i(chLoc, unit);
 
-      GLint resLoc = getCachedUniformLocation(
-          program, ("iChannelResolution[" + std::to_string(ch) + "]").c_str());
+      GLint resLoc =
+          getCachedUniformLocation(program, kChannelResolutionNames[ch]);
       if (resLoc != -1)
         glUniform3f(resLoc, (float)texW, (float)texH, 1.0f);
 
-      GLint timeLoc = getCachedUniformLocation(
-          program, ("iChannelTime[" + std::to_string(ch) + "]").c_str());
+      GLint timeLoc = getCachedUniformLocation(program, kChannelTimeNames[ch]);
       if (timeLoc != -1)
         glUniform1f(timeLoc, (float)glfwGetTime());
     }
@@ -1969,90 +1950,6 @@ void importModelFile(Model &m, const std::string &filepath) {
   if (m.has_imported_meshes)
     spdlog::info("Imported {} meshes from {}", m.imported_meshes.size(),
                  filepath);
-}
-
-void applyMeshMapping(Model &m) {
-  // For each imported mesh that has an assigned part, replace the corresponding
-  // mesh in m.meshes
-  for (auto &imported : m.imported_meshes) {
-    if (imported.assigned_part < 0 || imported.assigned_part >= 35)
-      continue;
-
-    // Build vertex_data from imported data
-    std::vector<float> vertex_data;
-    float uvMinU = FLT_MAX, uvMaxU = -FLT_MAX, uvMinV = FLT_MAX,
-          uvMaxV = -FLT_MAX;
-    for (size_t i = 0; i < imported.positions.size(); ++i) {
-      vertex_data.push_back(imported.positions[i].x);
-      vertex_data.push_back(imported.positions[i].y);
-      vertex_data.push_back(imported.positions[i].z);
-      vertex_data.push_back(imported.normals[i].x);
-      vertex_data.push_back(imported.normals[i].y);
-      vertex_data.push_back(imported.normals[i].z);
-      vertex_data.push_back(imported.texcoords[i].x);
-      vertex_data.push_back(imported.texcoords[i].y);
-      uvMinU = std::min(uvMinU, imported.texcoords[i].x);
-      uvMaxU = std::max(uvMaxU, imported.texcoords[i].x);
-      uvMinV = std::min(uvMinV, imported.texcoords[i].y);
-      uvMaxV = std::max(uvMaxV, imported.texcoords[i].y);
-    }
-    // See loadMesh()'s identical check for the full explanation - a
-    // source file with no UV channel (mesh->HasTextureCoords(0) ==
-    // false when this was imported - see importModelFile() above)
-    // silently falls back to (0,0) for every vertex here, which is
-    // exactly this degenerate case.
-    if (!imported.positions.empty() && (uvMaxU - uvMinU) < 0.0001f &&
-        (uvMaxV - uvMinV) < 0.0001f) {
-      spdlog::warn(
-          "Imported mesh '{}' has no meaningful UV variation (every "
-          "vertex maps to roughly the same texture coordinate, ({:.4f}, "
-          "{:.4f})) - any texture applied to it will render as one flat "
-          "color, not the actual image. The source file likely has no "
-          "UV unwrap for this mesh; re-export it with one to fix this.",
-          imported.name, uvMinU, uvMinV);
-    }
-
-    Mesh &target = m.meshes[imported.assigned_part];
-    // Delete old GL objects
-    if (target.vao)
-      glDeleteVertexArrays(1, &target.vao);
-    if (target.vbo)
-      glDeleteBuffers(1, &target.vbo);
-    if (target.ebo)
-      glDeleteBuffers(1, &target.ebo);
-
-    // Upload new data
-    glGenVertexArrays(1, &target.vao);
-    glGenBuffers(1, &target.vbo);
-    glGenBuffers(1, &target.ebo);
-    glBindVertexArray(target.vao);
-    glBindBuffer(GL_ARRAY_BUFFER, target.vbo);
-    glBufferData(GL_ARRAY_BUFFER, vertex_data.size() * sizeof(float),
-                 vertex_data.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float),
-                          (void *)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float),
-                          (void *)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float),
-                          (void *)(6 * sizeof(float)));
-    glEnableVertexAttribArray(2);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, target.ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-                 imported.indices.size() * sizeof(unsigned int),
-                 imported.indices.data(), GL_STATIC_DRAW);
-    target.elements = imported.indices.size();
-    glBindVertexArray(0);
-
-    // Preserve existing material and motion data (they are kept as-is)
-    spdlog::debug("Assigned mesh '{}' to part '{}'", imported.name,
-                  mesh_names[imported.assigned_part]);
-  }
-
-  // Clear imported list to indicate mapping applied
-  m.imported_meshes.clear();
-  m.has_imported_meshes = false;
 }
 
 void convertImportedToMeshes(Model &m) {
