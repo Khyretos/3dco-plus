@@ -79,10 +79,14 @@ RUN git clone --depth 1 --branch 10.2.1 https://github.com/fmtlib/fmt.git && \
 # Build FreeType statically - ImGui's font loader (smooth text and color
 # emoji, see src/app_fonts.cpp). Its optional zlib/bzip2/PNG/Brotli/
 # HarfBuzz support is left out: the bundled fonts need none of it, and it
-# keeps the static link free of extra dependencies.
+# keeps the static link free of extra dependencies. The prefix must be
+# set at configure time: FreeType writes it into freetype2.pc then, and
+# `cmake --install --prefix` alone would leave that pointing at
+# /usr/local.
 RUN git clone --depth 1 --branch VER-2-13-3 https://github.com/freetype/freetype.git && \
     cd freetype && \
     cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
+    -DCMAKE_INSTALL_PREFIX=/usr \
     -DFT_DISABLE_ZLIB=ON -DFT_DISABLE_BZIP2=ON -DFT_DISABLE_PNG=ON \
     -DFT_DISABLE_HARFBUZZ=ON -DFT_DISABLE_BROTLI=ON && \
     cmake --build build -j$(nproc) && \

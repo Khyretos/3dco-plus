@@ -2743,14 +2743,48 @@ static void reloadWindowsUsingModel(const std::filesystem::path &path) {
   }
 }
 
+// Margin kept free around the version popups.
+static constexpr float kNoticePopupMargin = 12.0f;
+
+// Places the next version popup at the top centre of the Settings window,
+// never taller than the window itself. The top is the one spot that's
+// reliably visible: a tiling window manager (or a small Settings window)
+// can leave a centred popup partly cut off.
+static void placeNoticePopup() {
+  const ImVec2 display = ImGui::GetIO().DisplaySize;
+  const float width =
+      std::max(200.0f, std::min(600.0f, display.x - 2.0f * kNoticePopupMargin));
+  const float maxHeight =
+      std::max(150.0f, display.y - 2.0f * kNoticePopupMargin);
+  ImGui::SetNextWindowPos(ImVec2(display.x * 0.5f, kNoticePopupMargin),
+                          ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+  ImGui::SetNextWindowSizeConstraints(ImVec2(width, 0.0f),
+                                      ImVec2(width, maxHeight));
+}
+
+// Height for a popup's scrolling release-notes area: whatever is left of
+// the Settings window after the popup's other `reservedRows` lines.
+static float noticeNotesHeight(float reservedRows) {
+  const float available = ImGui::GetIO().DisplaySize.y -
+                          2.0f * kNoticePopupMargin -
+                          ImGui::GetStyle().WindowPadding.y * 2.0f -
+                          reservedRows * ImGui::GetFrameHeightWithSpacing();
+  return std::max(80.0f, std::min(available, 480.0f));
+}
+
+// Flags the Settings window to the window manager (taskbar flash, or the
+// urgent hint on X11/Wayland compositors) so a popup is noticed even if
+// Settings is behind other windows. Harmless if unsupported.
+static void requestNoticeAttention() {
+  glfwRequestWindowAttention(glfw_settings_window);
+}
+
 static void drawWhatsNewPopup() {
   if (g_show_whats_new && !ImGui::IsPopupOpen("What's New")) {
     ImGui::OpenPopup("What's New");
+    requestNoticeAttention();
   }
-  const ImVec2 display = ImGui::GetIO().DisplaySize;
-  ImGui::SetNextWindowSize(ImVec2(std::min(600.0f, display.x - 40.0f), 0));
-  ImGui::SetNextWindowPos(ImVec2(display.x * 0.5f, display.y * 0.5f),
-                          ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  placeNoticePopup();
   if (!ImGui::BeginPopupModal("What's New", nullptr,
                               ImGuiWindowFlags_NoResize |
                                   ImGuiWindowFlags_NoSavedSettings))
@@ -2763,11 +2797,11 @@ static void drawWhatsNewPopup() {
   const bool hasModels = !g_whats_new_models.empty();
   if (!g_whats_new_notes.empty()) {
     // Leave room for the model list and buttons below.
-    float notesHeight = std::max(
-        120.0f,
-        display.y * 0.6f -
-            (hasModels ? 60.0f + 24.0f * g_whats_new_models.size() : 0.0f));
-    ImGui::BeginChild("##whatsnew_notes", ImVec2(0, notesHeight),
+    // Title, buttons and separators, plus the model list if any.
+    const float reserved =
+        4.0f + (hasModels ? 2.0f + (float)g_whats_new_models.size() : 0.0f);
+    ImGui::BeginChild("##whatsnew_notes",
+                      ImVec2(0, noticeNotesHeight(reserved)),
                       ImGuiChildFlags_Borders);
     renderMarkdownLite(g_whats_new_notes);
     ImGui::EndChild();
@@ -2828,13 +2862,12 @@ static void drawUpdateAvailablePopup() {
       g_show_update_popup = true;
     }
   }
-  if (g_show_update_popup && !ImGui::IsPopupOpen("Update Available"))
+  if (g_show_update_popup && !ImGui::IsPopupOpen("Update Available")) {
     ImGui::OpenPopup("Update Available");
+    requestNoticeAttention();
+  }
 
-  const ImVec2 display = ImGui::GetIO().DisplaySize;
-  ImGui::SetNextWindowSize(ImVec2(std::min(600.0f, display.x - 40.0f), 0));
-  ImGui::SetNextWindowPos(ImVec2(display.x * 0.5f, display.y * 0.5f),
-                          ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  placeNoticePopup();
   if (!ImGui::BeginPopupModal("Update Available", nullptr,
                               ImGuiWindowFlags_NoResize |
                                   ImGuiWindowFlags_NoSavedSettings))
@@ -2844,8 +2877,7 @@ static void drawUpdateAvailablePopup() {
                      g_update_release.version.c_str(), APP_VERSION_STRING);
   if (!g_update_notes.empty()) {
     ImGui::Spacing();
-    ImGui::BeginChild("##update_notes",
-                      ImVec2(0, std::max(120.0f, display.y * 0.55f)),
+    ImGui::BeginChild("##update_notes", ImVec2(0, noticeNotesHeight(5.0f)),
                       ImGuiChildFlags_Borders);
     renderMarkdownLite(g_update_notes);
     ImGui::EndChild();
