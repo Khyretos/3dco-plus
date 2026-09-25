@@ -14,6 +14,7 @@
 #include <cstring>
 #include <nlohmann/json.hpp> // already included, but ensure it's here
 
+#include "app_fonts.h"
 #include "controller_window.h"
 #include "cube_info.h"
 #include "icon_data.h"
@@ -2581,6 +2582,7 @@ void createControllerWindow(std::string title, std::string model_path) {
     ImGui::GetIO().IniFilename = nullptr;
     ImGui::StyleColorsDark();
     applyCustomImGuiTheme();
+    setupAppFonts(ImGui::GetIO());
 
 #if defined(IMGUI_IMPL_OPENGL_ES2)
     const char *glsl_version = "#version 100";

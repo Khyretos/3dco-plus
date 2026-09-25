@@ -41,6 +41,10 @@ void close_window(unsigned ID);
 void removeTab(unsigned tab);
 void saveTabs();
 void loadTabs();
+// Call once after loadTabs(): decides whether to show the "What's New"
+// dialog (first launch after an update) and starts the optional update
+// check. See settings_window.cpp.
+void initVersionNotices();
 void removeSettingsWindow();
 void drawSettingsWindow();
 // The Glyph Mapping Editor's own window - own GLFW window/ImGui

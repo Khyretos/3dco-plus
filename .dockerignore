@@ -7,3 +7,6 @@ build/
 *.tmp
 .DS_Store
 Thumbs.db
+# Release notes are embedded into the app at build time (see
+# cmake/GenerateVersion.cmake) - keep them in the build context.
+!release-notes/*.md

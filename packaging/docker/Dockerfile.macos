@@ -70,7 +70,8 @@ ENV MACOSX_DEPLOYMENT_TARGET=11.0
 
 # ============================================================================
 # STAGE 1 of 2: Build third-party dependencies (zlib, GLFW, SDL3, fmt,
-# spdlog, nlohmann-json, Assimp) for both architectures into /deps.
+# spdlog, nlohmann-json, Assimp, FreeType) for both architectures into
+# /deps.
 #
 # IMPORTANT: this block intentionally does NOT depend on `/src` (the app
 # source code) in any way - it only needs the toolchain set up above.
@@ -309,6 +310,20 @@ PC
     cmake --install "${WORK}/assimp/build"
     refresh_archives
 
+    # ---- FreeType ----
+    # ImGui's font loader (smooth text and color emoji - see
+    # src/app_fonts.cpp). Optional compression/PNG/HarfBuzz support off:
+    # the bundled fonts need none of it.
+    echo "-- FreeType --"
+    download "https://github.com/freetype/freetype/archive/refs/tags/VER-2-13-3.tar.gz" "${WORK}/freetype.tar.gz"
+    extract_tar "${WORK}/freetype.tar.gz" "${WORK}/freetype"
+    cmake -S "${WORK}/freetype" -B "${WORK}/freetype/build" "${COMMON_CMAKE[@]}" \
+        -DFT_DISABLE_ZLIB=ON -DFT_DISABLE_BZIP2=ON -DFT_DISABLE_PNG=ON \
+        -DFT_DISABLE_HARFBUZZ=ON -DFT_DISABLE_BROTLI=ON
+    cmake --build "${WORK}/freetype/build" --parallel
+    cmake --install "${WORK}/freetype/build"
+    refresh_archives
+
     echo "Finished dependencies for ${ARCH}"
 }
 
@@ -455,6 +470,9 @@ cp /src/assets/icon.png /out/3dco+.app/Contents/Resources/
 cp /src/assets/gamecontrollerdb.txt /out/3dco+.app/Contents/Resources/
 
 # ----- Info.plist -----
+# X.Y.Z written by cmake/GenerateVersion.cmake - what Finder's Get Info
+# shows for the app.
+APP_VERSION_NUM=$(head -n1 /build-x86_64/generated/app_version.txt)
 cat > /out/3dco+.app/Contents/Info.plist <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -471,9 +489,9 @@ cat > /out/3dco+.app/Contents/Info.plist <<PLIST
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>${APP_VERSION_NUM}</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>${APP_VERSION_NUM}</string>
     <key>LSMinimumSystemVersion</key>
     <string>11.0</string>
 </dict>
@@ -483,6 +501,11 @@ PLIST
 echo "Universal app built at /out/3dco+.app"
 SCRIPT
 
+# Version to bake into the app (e.g. v1.3.4), passed by CI as a build
+# arg - this build context has no .git, so CMake can't ask git itself.
+# Exposed to the build below as an environment variable, which
+# cmake/GenerateVersion.cmake reads. Unset = "0.0.0-dev".
+ARG APP_VERSION=
 RUN chmod +x /usr/local/bin/build-app.sh
 RUN /usr/local/bin/build-app.sh
 
