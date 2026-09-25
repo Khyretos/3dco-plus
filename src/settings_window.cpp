@@ -12,12 +12,15 @@
 #else // some other operating system
 #endif
 
+#include "app_fonts.h"
+#include "app_version.h"
 #include "controller_window.h"
 #include "icon_data.h"
 #include "imfilebrowser.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include "input_history_glyphs.h"
+#include "release_notes_data.h"
 
 // Defined in main.cpp - the confirmation popup below (see
 // g_pending_quit_confirmation's own doc comment) sets this directly
@@ -25,6 +28,7 @@
 extern bool gQuit;
 #include "keyboard_input.h"
 #include "log_window.h"
+#include "markdown_lite.h"
 #include "model.h"
 #include "settings.h"
 #include "settings_window.h"
@@ -32,6 +36,8 @@ extern bool gQuit;
 #include "stb_image.h"
 #include "strings.h"
 #include "tray_icon.h"
+#include "update_check.h"
+#include "version_utils.h"
 #include <SDL3/SDL_joystick.h>
 #include <algorithm>
 #include <cctype> // std::toupper, for the texture-filename sanitizer's reserved-name check
@@ -1873,6 +1879,7 @@ static void ensureGlyphMappingEditorWindowCreated() {
   ImGui::GetIO().IniFilename = nullptr;
   ImGui::StyleColorsDark();
   applyCustomImGuiTheme(); // match the main Settings window's purple theme
+  setupAppFonts(ImGui::GetIO());
 
   ImGui_ImplGlfw_InitForOpenGL(g_glyphMappingEditorGlfwWindow, true);
   g_glyphMappingEditorBackendReady = ImGui_ImplOpenGL3_Init(glsl_version);
@@ -2403,6 +2410,11 @@ void applyCustomImGuiTheme() {
   style.Colors[ImGuiCol_FrameBgActive] = purple;
 }
 
+// Shown in the taskbar/dock/window switcher, so the running version is
+// visible without opening the Help section.
+static const char *kSettingsWindowTitle =
+    "3D Controller Overlay + v" APP_VERSION_STRING;
+
 void createSettingsWindow() {
   // Set error callback first
   glfwSetErrorCallback(glfw_error_callback);
@@ -2451,7 +2463,7 @@ void createSettingsWindow() {
   // Try to create the window with transparent framebuffer first
   glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
   glfw_settings_window =
-      glfwCreateWindow(640, 480, "3D Controller Overlay", NULL, NULL);
+      glfwCreateWindow(640, 480, kSettingsWindowTitle, NULL, NULL);
 
   if (!glfw_settings_window) {
     spdlog::warn("Failed to create window with transparent framebuffer: {}",
@@ -2460,7 +2472,7 @@ void createSettingsWindow() {
     // Clear the hint and try again
     glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_FALSE);
     glfw_settings_window =
-        glfwCreateWindow(640, 480, "3D Controller Overlay", NULL, NULL);
+        glfwCreateWindow(640, 480, kSettingsWindowTitle, NULL, NULL);
   }
 
   if (!glfw_settings_window) {
@@ -2507,6 +2519,7 @@ void createSettingsWindow() {
 
   ImGui::StyleColorsDark();
   applyCustomImGuiTheme();
+  setupAppFonts(*io);
 
   ImGui_ImplGlfw_InitForOpenGL(glfw_settings_window, true);
   if (!ImGui_ImplOpenGL3_Init(glsl_version)) {
@@ -2608,6 +2621,383 @@ bool check_tab_title_exists(const std::string &title) {
 void DrawImportPreviewControls(controller_window &w);
 void SaveImportedModel(controller_window &w);
 void writeOBJ(const std::string &path, const ImportedMesh &mesh);
+
+// ============================================================
+// Version notices: "What's New" after an update, and the optional
+// "update available" check
+// ============================================================
+
+// Persisted in settings.json's app settings (see saveGlobalSettings()).
+// The X.Y.Z that last ran - an older value on startup means the user
+// just updated.
+static std::string g_last_seen_version;
+// Bundled models this user has already been offered. Anything bundled
+// that isn't listed here is new in this version (see
+// initVersionNotices()), so a model the user deliberately deleted isn't
+// offered again on every update - Bundled Models in Settings is where
+// those come back from.
+static std::vector<std::string> g_known_bundled_models;
+static bool g_check_for_updates = true;
+// A release the user said not to be reminded about ("1.3.5").
+static std::string g_skipped_update_version;
+// Whether settings.json existed at startup - no file means a fresh
+// install, which gets no "What's New".
+static bool g_settings_file_existed = false;
+
+struct WhatsNewModel {
+  std::string name;
+  bool selected = true;
+};
+static bool g_show_whats_new = false;
+static std::vector<MarkdownBlock> g_whats_new_notes;
+static std::vector<WhatsNewModel> g_whats_new_models;
+
+// Set once the result of the current update check has been shown (or
+// deliberately not shown, for a skipped version), so the popup opens at
+// most once per check.
+static bool g_update_result_handled = false;
+static bool g_show_update_popup = false;
+static UpdateCheck::Release g_update_release;
+static std::vector<MarkdownBlock> g_update_notes;
+static bool g_update_dont_remind = false;
+
+static void saveGlobalSettings();
+
+// Records that this version has run and its bundled models have been
+// offered, saving right away (settings are otherwise only saved on
+// quit) so the notice isn't shown again after a crash or forced close.
+static void recordVersionSeen() {
+  bool changed = g_last_seen_version != APP_VERSION_BASE;
+  g_last_seen_version = APP_VERSION_BASE;
+  for (const auto &name : list_bundled_models()) {
+    if (std::find(g_known_bundled_models.begin(), g_known_bundled_models.end(),
+                  name) == g_known_bundled_models.end()) {
+      g_known_bundled_models.push_back(name);
+      changed = true;
+    }
+  }
+  if (changed)
+    saveGlobalSettings();
+}
+
+void initVersionNotices() {
+  const AppVersion current = parseAppVersion(APP_VERSION_BASE);
+  // Dev builds (0.0.0) skip the "What's New" bookkeeping entirely.
+  if (current.valid) {
+    const AppVersion last = parseAppVersion(g_last_seen_version);
+    // No last-seen version but an existing settings.json means an update
+    // from a version before this existed (<= 1.3.3).
+    const bool updated =
+        g_settings_file_existed && (!last.valid || last < current);
+    if (updated) {
+      g_whats_new_notes = parseMarkdownLite(kEmbeddedReleaseNotes);
+      for (const auto &name : list_bundled_models()) {
+        bool known = std::find(g_known_bundled_models.begin(),
+                               g_known_bundled_models.end(),
+                               name) != g_known_bundled_models.end();
+        if (!known && !is_bundled_model_installed(name))
+          g_whats_new_models.push_back({name, true});
+      }
+      g_show_whats_new =
+          !g_whats_new_notes.empty() || !g_whats_new_models.empty();
+    }
+    if (!g_show_whats_new)
+      recordVersionSeen();
+  }
+
+  if (g_check_for_updates)
+    UpdateCheck::start(false);
+}
+
+// Reloads every open controller window showing the model at `path`, so
+// a restored model shows its restored state immediately.
+static void reloadWindowsUsingModel(const std::filesystem::path &path) {
+  for (auto &w : windows) {
+    if (w.is_import_preview || w.model.path.empty())
+      continue;
+    std::error_code ec;
+    if (!std::filesystem::equivalent(w.model.path, path, ec))
+      continue;
+    makeContextCurrentSafe(w.glfw_window);
+    loadModel(w.model, w.model.path);
+    makeContextCurrentSafe(glfw_settings_window);
+    w.unsaved_change_count = 0;
+  }
+}
+
+static void drawWhatsNewPopup() {
+  if (g_show_whats_new && !ImGui::IsPopupOpen("What's New")) {
+    ImGui::OpenPopup("What's New");
+  }
+  const ImVec2 display = ImGui::GetIO().DisplaySize;
+  ImGui::SetNextWindowSize(ImVec2(std::min(600.0f, display.x - 40.0f), 0));
+  ImGui::SetNextWindowPos(ImVec2(display.x * 0.5f, display.y * 0.5f),
+                          ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  if (!ImGui::BeginPopupModal("What's New", nullptr,
+                              ImGuiWindowFlags_NoResize |
+                                  ImGuiWindowFlags_NoSavedSettings))
+    return;
+
+  ImGui::TextWrapped("3D Controller Overlay + has been updated to v%s.",
+                     APP_VERSION_BASE);
+  ImGui::Spacing();
+
+  const bool hasModels = !g_whats_new_models.empty();
+  if (!g_whats_new_notes.empty()) {
+    // Leave room for the model list and buttons below.
+    float notesHeight = std::max(
+        120.0f,
+        display.y * 0.6f -
+            (hasModels ? 60.0f + 24.0f * g_whats_new_models.size() : 0.0f));
+    ImGui::BeginChild("##whatsnew_notes", ImVec2(0, notesHeight),
+                      ImGuiChildFlags_Borders);
+    renderMarkdownLite(g_whats_new_notes);
+    ImGui::EndChild();
+  }
+
+  if (hasModels) {
+    ImGui::Spacing();
+    ImGui::TextUnformatted("New models in this version:");
+    for (auto &m : g_whats_new_models)
+      ImGui::Checkbox(m.name.c_str(), &m.selected);
+    ImGui::TextDisabled("Bundled models can also be added or restored later "
+                        "in Settings > Bundled Models.");
+  }
+
+  ImGui::Spacing();
+  ImGui::Separator();
+  ImGui::Spacing();
+  bool close = false;
+  if (hasModels) {
+    if (ImGui::Button("Add Selected Models")) {
+      for (const auto &m : g_whats_new_models)
+        if (m.selected)
+          install_bundled_model(m.name);
+      close = true;
+    }
+    ImGui::SameLine();
+  }
+  if (ImGui::Button(hasModels ? "Not Now" : "Close"))
+    close = true;
+  ImGui::SameLine();
+  if (ImGui::Button("View Release on GitHub")) {
+    OsOpenInShell(("https://github.com/Khyretos/3dco-plus/releases/tag/v" +
+                   std::string(APP_VERSION_BASE))
+                      .c_str());
+  }
+
+  if (close) {
+    g_show_whats_new = false;
+    g_whats_new_notes.clear();
+    g_whats_new_models.clear();
+    recordVersionSeen();
+    ImGui::CloseCurrentPopup();
+  }
+  ImGui::EndPopup();
+}
+
+static void drawUpdateAvailablePopup() {
+  // Wait for "What's New" (if any) so two modals never stack.
+  if (!g_update_result_handled && !g_show_whats_new &&
+      UpdateCheck::status() == UpdateCheck::Status::UpdateAvailable) {
+    g_update_result_handled = true;
+    g_update_release = UpdateCheck::latest();
+    if (UpdateCheck::lastCheckWasManual() ||
+        g_update_release.version != g_skipped_update_version) {
+      g_update_notes = parseMarkdownLite(g_update_release.notes);
+      g_update_dont_remind =
+          g_update_release.version == g_skipped_update_version;
+      g_show_update_popup = true;
+    }
+  }
+  if (g_show_update_popup && !ImGui::IsPopupOpen("Update Available"))
+    ImGui::OpenPopup("Update Available");
+
+  const ImVec2 display = ImGui::GetIO().DisplaySize;
+  ImGui::SetNextWindowSize(ImVec2(std::min(600.0f, display.x - 40.0f), 0));
+  ImGui::SetNextWindowPos(ImVec2(display.x * 0.5f, display.y * 0.5f),
+                          ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  if (!ImGui::BeginPopupModal("Update Available", nullptr,
+                              ImGuiWindowFlags_NoResize |
+                                  ImGuiWindowFlags_NoSavedSettings))
+    return;
+
+  ImGui::TextWrapped("Version %s is available - you're running %s.",
+                     g_update_release.version.c_str(), APP_VERSION_STRING);
+  if (!g_update_notes.empty()) {
+    ImGui::Spacing();
+    ImGui::BeginChild("##update_notes",
+                      ImVec2(0, std::max(120.0f, display.y * 0.55f)),
+                      ImGuiChildFlags_Borders);
+    renderMarkdownLite(g_update_notes);
+    ImGui::EndChild();
+  }
+  ImGui::Spacing();
+  ImGui::Checkbox(
+      ("Don't remind me about v" + g_update_release.version + " again").c_str(),
+      &g_update_dont_remind);
+  ImGui::Spacing();
+  ImGui::Separator();
+  ImGui::Spacing();
+  bool close = false;
+  if (ImGui::Button("Open Download Page")) {
+    OsOpenInShell(g_update_release.url.c_str());
+    close = true;
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Close"))
+    close = true;
+
+  if (close) {
+    std::string skipped =
+        g_update_dont_remind
+            ? g_update_release.version
+            : (g_skipped_update_version == g_update_release.version
+                   ? std::string()
+                   : g_skipped_update_version);
+    if (skipped != g_skipped_update_version) {
+      g_skipped_update_version = skipped;
+      saveGlobalSettings();
+    }
+    g_show_update_popup = false;
+    g_update_notes.clear();
+    ImGui::CloseCurrentPopup();
+  }
+  ImGui::EndPopup();
+}
+
+// Settings > Bundled Models: every model this build ships, with a way
+// to add missing ones back or restore an edited one to its original.
+static void drawBundledModelsSection() {
+  static std::string restore_target;
+  static std::string status_message;
+
+  ImGui::TextWrapped(
+      "The models that come with this version of the app. Add any that "
+      "are missing from your model library, or restore one to its "
+      "original state. Restoring replaces your changes to that model "
+      "(bindings, travel, textures, ...); the current folder is moved to "
+      "model_backups in the data directory first, not deleted.");
+  ImGui::Spacing();
+
+  const auto &bundled = list_bundled_models();
+  if (bundled.empty()) {
+    ImGui::TextDisabled("This build doesn't include any bundled models.");
+    return;
+  }
+
+  std::vector<const std::string *> missing;
+  if (ImGui::BeginTable("##bundled_models", 3,
+                        ImGuiTableFlags_RowBg |
+                            ImGuiTableFlags_SizingStretchProp)) {
+    ImGui::TableSetupColumn("Model", ImGuiTableColumnFlags_WidthStretch, 0.55f);
+    ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthStretch, 0.2f);
+    ImGui::TableSetupColumn("##action", ImGuiTableColumnFlags_WidthStretch,
+                            0.25f);
+    for (const auto &name : bundled) {
+      const bool installed = is_bundled_model_installed(name);
+      if (!installed)
+        missing.push_back(&name);
+      ImGui::PushID(name.c_str());
+      ImGui::TableNextRow();
+      ImGui::TableSetColumnIndex(0);
+      ImGui::TextUnformatted(name.c_str());
+      ImGui::TableSetColumnIndex(1);
+      if (installed)
+        ImGui::TextUnformatted("Installed");
+      else
+        ImGui::TextDisabled("Missing");
+      ImGui::TableSetColumnIndex(2);
+      if (installed) {
+        if (ImGui::SmallButton("Restore...")) {
+          restore_target = name;
+          ImGui::OpenPopup("Restore Model##confirm");
+        }
+      } else if (ImGui::SmallButton("Add")) {
+        std::string err;
+        status_message = install_bundled_model(name, nullptr, &err)
+                             ? "Added " + name + "."
+                             : "Couldn't add " + name + ": " + err;
+      }
+
+      ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(),
+                              ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+      if (ImGui::BeginPopupModal("Restore Model##confirm", nullptr,
+                                 ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Restore \"%s\" to its original bundled version?",
+                    restore_target.c_str());
+        ImGui::TextWrapped("Your changes to it are replaced. The current "
+                           "folder is moved to model_backups first.");
+        ImGui::Spacing();
+        if (ImGui::Button("Restore", ImVec2(120, 0))) {
+          std::string backup, err;
+          if (install_bundled_model(restore_target, &backup, &err)) {
+            reloadWindowsUsingModel(std::filesystem::path(get_models_root()) /
+                                    std::filesystem::u8path(restore_target));
+            status_message = "Restored " + restore_target +
+                             (backup.empty() ? "." : ". Backup: " + backup);
+          } else {
+            status_message = "Couldn't restore " + restore_target + ": " + err;
+          }
+          ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0)))
+          ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+      }
+      ImGui::PopID();
+    }
+    ImGui::EndTable();
+  }
+
+  if (missing.size() > 1 && ImGui::Button("Add All Missing")) {
+    int added = 0;
+    for (const auto *name : missing)
+      added += install_bundled_model(*name) ? 1 : 0;
+    status_message = "Added " + std::to_string(added) + " model(s).";
+  }
+  if (!status_message.empty())
+    ImGui::TextWrapped("%s", status_message.c_str());
+}
+
+// Help section: version, update check toggle and status.
+static void drawUpdateCheckControls() {
+  if (ImGui::Checkbox("Check for updates on startup", &g_check_for_updates))
+    saveGlobalSettings();
+  WrappedTooltip("Asks GitHub once per launch whether a newer release "
+                 "exists and, if so, shows its release notes with a link "
+                 "to the download page. Nothing is downloaded or "
+                 "installed automatically.");
+  ImGui::SameLine();
+  const auto status = UpdateCheck::status();
+  ImGui::BeginDisabled(status == UpdateCheck::Status::Checking);
+  if (ImGui::Button("Check Now")) {
+    g_update_result_handled = false;
+    UpdateCheck::start(true);
+  }
+  ImGui::EndDisabled();
+  switch (status) {
+  case UpdateCheck::Status::Checking:
+    ImGui::TextDisabled("Checking for updates...");
+    break;
+  case UpdateCheck::Status::UpToDate:
+    ImGui::TextDisabled("You're on the latest version.");
+    break;
+  case UpdateCheck::Status::UpdateAvailable:
+    ImGui::TextDisabled("Version %s is available.",
+                        UpdateCheck::latest().version.c_str());
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Download"))
+      OsOpenInShell(UpdateCheck::latest().url.c_str());
+    break;
+  case UpdateCheck::Status::Failed:
+    ImGui::TextDisabled("Couldn't reach GitHub to check for updates.");
+    break;
+  case UpdateCheck::Status::Idle:
+    break;
+  }
+}
 
 void drawSettingsWindow() {
   makeContextCurrentSafe(glfw_settings_window);
@@ -2717,6 +3107,9 @@ void drawSettingsWindow() {
     }
     ImGui::EndPopup();
   }
+
+  drawWhatsNewPopup();
+  drawUpdateAvailablePopup();
 
   static bool show_delete_popup = false;
 
@@ -6559,6 +6952,13 @@ void drawSettingsWindow() {
       }
 
       // ============================================================
+      // BUNDLED MODELS
+      // ============================================================
+      if (ImGui::CollapsingHeader("Bundled Models")) {
+        drawBundledModelsSection();
+      }
+
+      // ============================================================
       // THEME
       // ============================================================
       if (ImGui::CollapsingHeader("Theme")) {
@@ -6606,7 +7006,8 @@ void drawSettingsWindow() {
         ImGui::TextColored(ImVec4(0.8f, 0.4f, 1.0f, 1.0f),
                            "3D Controller Overlay +");
         ImGui::SameLine();
-        ImGui::TextDisabled("v1.3.3");
+        ImGui::TextDisabled("v" APP_VERSION_STRING);
+        drawUpdateCheckControls();
 
         ImGui::NewLine();
         ImGui::Text(
@@ -7859,6 +8260,10 @@ static void saveGlobalSettings() {
   app_settings["theme_primary_dark"] = {
       g_theme_primary_dark.x, g_theme_primary_dark.y, g_theme_primary_dark.z,
       g_theme_primary_dark.w};
+  app_settings["last_seen_version"] = g_last_seen_version;
+  app_settings["known_bundled_models"] = g_known_bundled_models;
+  app_settings["check_for_updates"] = g_check_for_updates;
+  app_settings["skipped_update_version"] = g_skipped_update_version;
   root[kAppSettingsKey] = app_settings;
 
   std::ofstream f(getSettingsFilePath());
@@ -7894,6 +8299,7 @@ static void loadGlobalSettings() {
     spdlog::warn("Failed to parse settings.json – ignoring.");
     return;
   }
+  g_settings_file_existed = true;
 
   // Delete old settings folder if it still exists
   std::filesystem::remove_all(config_base_path + "/settings");
@@ -7936,6 +8342,12 @@ static void loadGlobalSettings() {
         readColor("theme_primary_light", kDefaultThemePrimaryLight);
     g_theme_primary_dark =
         readColor("theme_primary_dark", kDefaultThemePrimaryDark);
+
+    g_last_seen_version = app_settings.value("last_seen_version", "");
+    g_known_bundled_models =
+        app_settings.value("known_bundled_models", std::vector<std::string>{});
+    g_check_for_updates = app_settings.value("check_for_updates", true);
+    g_skipped_update_version = app_settings.value("skipped_update_version", "");
   }
 
   // We'll create tabs in the order they appear in the JSON

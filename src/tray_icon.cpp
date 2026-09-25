@@ -1,11 +1,16 @@
 #include "tray_icon.h"
 
+#include "app_version.h"
 #include "icon_data.h"
 #include "stb_image.h"
 
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+// Wide-string form of a narrow string-literal macro (APP_VERSION_STRING),
+// for the Win32 tray tooltip.
+#define APP_WIDEN_(x) L##x
+#define APP_WIDEN(x) APP_WIDEN_(x)
 #include <set> // validateUniqueIds() (Linux section) - duplicate menu id detection
 
 #if defined(_WIN32)
@@ -378,7 +383,8 @@ bool enable() {
     g_app_hicon = createAppHIcon(GetSystemMetrics(SM_CXSMICON));
   g_nid.hIcon =
       g_app_hicon ? g_app_hicon : LoadIconW(nullptr, MAKEINTRESOURCEW(32512));
-  const std::wstring tip = L"3D Controller Overlay";
+  const std::wstring tip =
+      L"3D Controller Overlay + v" APP_WIDEN(APP_VERSION_STRING);
   size_t n = std::min(tip.size(), (sizeof(g_nid.szTip) / sizeof(wchar_t)) - 1);
   wmemcpy(g_nid.szTip, tip.c_str(), n);
   g_nid.szTip[n] = L'\0';
@@ -933,7 +939,7 @@ void appendStatusNotifierItemProperties(DBusMessageIter *array_iter) {
   appendStrPropTo(array_iter, "OverlayIconName", "");
   appendStrPropTo(array_iter, "AttentionIconName", "");
   appendStrPropTo(array_iter, "IconThemePath", "");
-  appendToolTipProp(array_iter, "3D Controller Overlay");
+  appendToolTipProp(array_iter, "3D Controller Overlay + v" APP_VERSION_STRING);
   appendObjectPathPropTo(array_iter, "Menu", kMenuPath);
   appendBoolPropTo(array_iter, "ItemIsMenu", false);
 }

@@ -301,6 +301,7 @@ void InitializeProgram() {
   ensureStandardGlyphStylesPresent();
 
   loadTabs();
+  initVersionNotices();
 }
 
 void Input() {

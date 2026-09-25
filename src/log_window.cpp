@@ -1,4 +1,5 @@
 #include "log_window.h"
+#include "app_fonts.h"
 
 // clang-format off
 #include <glad/glad.h>
@@ -136,6 +137,7 @@ static void ensureLogWindowCreated() {
   ImGui::GetIO().IniFilename = nullptr; // don't persist a second imgui.ini
   ImGui::StyleColorsDark();
   applyCustomImGuiTheme(); // match the main Settings window's purple theme
+  setupAppFonts(ImGui::GetIO());
 
   ImGui_ImplGlfw_InitForOpenGL(g_log_glfw_window, true);
   g_log_backend_ready = ImGui_ImplOpenGL3_Init(glsl_version);

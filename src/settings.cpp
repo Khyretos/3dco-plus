@@ -3,8 +3,11 @@
 #include "miniz.h"
 #include "models_zip_data.h"
 #include <SDL3/SDL.h>
+#include <cstring>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <spdlog/spdlog.h>
 #include <string>
 
@@ -23,6 +26,25 @@ bool is_usable_dir(const std::filesystem::path &p) {
   return std::filesystem::exists(p, ec) &&
          std::filesystem::is_directory(p, ec) &&
          !std::filesystem::is_empty(p, ec);
+}
+
+// A "models" folder shipped next to the executable (portable layout) or
+// in ../share/3dco+/models (installed layout, e.g. the AppImage), if
+// there is one - used in preference to the embedded model library.
+// Empty if neither exists.
+std::filesystem::path find_external_models_source() {
+  namespace fs = std::filesystem;
+  if (!base_path)
+    return {};
+  fs::path exe_dir(base_path);
+  fs::path portable_models = exe_dir / "models";
+  fs::path installed_models = exe_dir / ".." / "share" / "3dco+" / "models";
+  std::error_code ec;
+  if (fs::is_directory(portable_models, ec))
+    return portable_models;
+  if (fs::is_directory(installed_models, ec))
+    return installed_models;
+  return {};
 }
 
 } // namespace
@@ -146,19 +168,7 @@ std::string get_models_root() {
   }
 
   // ---- Try to find an external source folder ----
-  fs::path exe_dir(base_path);
-  fs::path portable_models = exe_dir / "models";
-  fs::path installed_models = exe_dir / ".." / "share" / "3dco+" / "models";
-
-  fs::path source;
-  std::error_code ec;
-  if (fs::exists(portable_models, ec) &&
-      fs::is_directory(portable_models, ec)) {
-    source = portable_models;
-  } else if (fs::exists(installed_models, ec) &&
-             fs::is_directory(installed_models, ec)) {
-    source = installed_models;
-  }
+  fs::path source = find_external_models_source();
 
   if (!source.empty()) {
     try {
@@ -258,4 +268,192 @@ void ensure_gamecontrollerdb() {
   } else {
     spdlog::info("Loaded {} gamecontroller mappings from {}", count, path);
   }
+}
+// ------------------------------------------------------------------
+// Bundled models
+//
+// The "bundled" set is whatever this build ships: the external models
+// folder if there is one (see find_external_models_source()), otherwise
+// the embedded ZIP - the same priority get_models_root() uses for the
+// first-run copy. Entries in the embedded ZIP look like
+// "models/<Model Name>/<file>".
+// ------------------------------------------------------------------
+
+namespace {
+
+constexpr const char *kZipModelsPrefix = "models/";
+
+// Runs fn(entry_index, path_inside_models_dir) for every file in the
+// embedded models ZIP. Returns false if the ZIP couldn't be opened.
+template <typename Fn> bool for_each_embedded_model_file(Fn &&fn) {
+  if (Embedded::models_zip_size == 0)
+    return false;
+  mz_zip_archive zip;
+  memset(&zip, 0, sizeof(zip));
+  if (!mz_zip_reader_init_mem(&zip, Embedded::models_zip_data,
+                              Embedded::models_zip_size, 0))
+    return false;
+  const mz_uint count = mz_zip_reader_get_num_files(&zip);
+  for (mz_uint i = 0; i < count; ++i) {
+    mz_zip_archive_file_stat st;
+    if (!mz_zip_reader_file_stat(&zip, i, &st) || st.m_is_directory)
+      continue;
+    std::string name = st.m_filename;
+    if (name.rfind(kZipModelsPrefix, 0) == 0)
+      name = name.substr(strlen(kZipModelsPrefix));
+    if (!fn(zip, i, name))
+      break;
+  }
+  mz_zip_reader_end(&zip);
+  return true;
+}
+
+// True if a relative path from the ZIP stays inside its destination
+// (no absolute paths, no ".." components).
+bool is_safe_relative_path(const std::filesystem::path &rel) {
+  if (rel.empty() || rel.is_absolute() || rel.has_root_name())
+    return false;
+  for (const auto &part : rel)
+    if (part == "..")
+      return false;
+  return true;
+}
+
+// Copies/extracts bundled model `name` into `dest` (which must not
+// exist yet).
+bool write_bundled_model_to(const std::string &name,
+                            const std::filesystem::path &dest,
+                            std::string &error) {
+  namespace fs = std::filesystem;
+  fs::path external = find_external_models_source();
+  if (!external.empty()) {
+    std::error_code ec;
+    fs::copy(external / name, dest, fs::copy_options::recursive, ec);
+    if (ec) {
+      error = ec.message();
+      return false;
+    }
+    return true;
+  }
+
+  const std::string prefix = name + "/";
+  bool ok = true;
+  bool any = false;
+  for_each_embedded_model_file([&](mz_zip_archive &zip, mz_uint index,
+                                   const std::string &file) {
+    if (file.rfind(prefix, 0) != 0)
+      return true;
+    fs::path rel = fs::u8path(file.substr(prefix.size()));
+    if (!is_safe_relative_path(rel))
+      return true;
+    fs::path out = dest / rel;
+    std::error_code ec;
+    fs::create_directories(out.parent_path(), ec);
+    if (!mz_zip_reader_extract_to_file(&zip, index, out.string().c_str(), 0)) {
+      error = "could not extract " + file;
+      ok = false;
+      return false;
+    }
+    any = true;
+    return true;
+  });
+  if (ok && !any)
+    error = "not found in this build";
+  return ok && any;
+}
+
+} // namespace
+
+const std::vector<std::string> &list_bundled_models() {
+  // Fixed for the lifetime of the process - computed once.
+  static const std::vector<std::string> models = [] {
+    namespace fs = std::filesystem;
+    std::set<std::string> names;
+    fs::path external = find_external_models_source();
+    if (!external.empty()) {
+      std::error_code ec;
+      for (const auto &entry : fs::directory_iterator(external, ec))
+        if (entry.is_directory(ec))
+          names.insert(entry.path().filename().u8string());
+    } else {
+      for_each_embedded_model_file(
+          [&](mz_zip_archive &, mz_uint, const std::string &file) {
+            size_t slash = file.find('/');
+            if (slash != std::string::npos && slash > 0)
+              names.insert(file.substr(0, slash));
+            return true;
+          });
+    }
+    return std::vector<std::string>(names.begin(), names.end());
+  }();
+  return models;
+}
+
+bool is_bundled_model_installed(const std::string &name) {
+  std::error_code ec;
+  return std::filesystem::is_directory(
+      std::filesystem::path(get_models_root()) / std::filesystem::u8path(name),
+      ec);
+}
+
+bool install_bundled_model(const std::string &name, std::string *backup_path,
+                           std::string *error) {
+  namespace fs = std::filesystem;
+  std::string err;
+  auto fail = [&](const std::string &what) {
+    spdlog::warn("Could not install bundled model '{}': {}", name, what);
+    if (error)
+      *error = what;
+    return false;
+  };
+
+  const fs::path models_root = get_models_root();
+  const fs::path target = models_root / fs::u8path(name);
+  const fs::path staging = models_root / fs::u8path("." + name + ".installing");
+
+  // Write the fresh copy to a staging folder first, so a failure halfway
+  // through never leaves a half-written model (or no model at all)
+  // behind.
+  std::error_code ec;
+  fs::remove_all(staging, ec);
+  if (!write_bundled_model_to(name, staging, err)) {
+    fs::remove_all(staging, ec);
+    return fail(err);
+  }
+
+  // Restoring over an existing model: move the current one aside into
+  // model_backups/ rather than deleting it - it holds the user's own
+  // bindings, travel, textures, etc.
+  if (fs::exists(target, ec)) {
+    char stamp[32];
+    std::time_t now = std::time(nullptr);
+    std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H-%M-%S",
+                  std::localtime(&now));
+    const fs::path backups = fs::path(config_base_path) / "model_backups";
+    const fs::path backup = backups / fs::u8path(name + " " + stamp);
+    fs::create_directories(backups, ec);
+    fs::rename(target, backup, ec);
+    if (ec) {
+      // Different filesystem or locked file - fall back to copy+remove.
+      ec.clear();
+      fs::copy(target, backup, fs::copy_options::recursive, ec);
+      if (!ec)
+        fs::remove_all(target, ec);
+    }
+    if (ec) {
+      fs::remove_all(staging, ec);
+      return fail("could not back up the existing folder");
+    }
+    if (backup_path)
+      *backup_path = backup.u8string();
+  }
+
+  fs::rename(staging, target, ec);
+  if (ec) {
+    std::string msg = ec.message();
+    fs::remove_all(staging, ec);
+    return fail(msg);
+  }
+  spdlog::info("Installed bundled model '{}' to {}", name, target.string());
+  return true;
 }

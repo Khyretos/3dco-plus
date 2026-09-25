@@ -76,6 +76,19 @@ RUN git clone --depth 1 --branch 10.2.1 https://github.com/fmtlib/fmt.git && \
     cmake --install build --prefix /usr && \
     cd .. && rm -rf fmt
 
+# Build FreeType statically - ImGui's font loader (smooth text and color
+# emoji, see src/app_fonts.cpp). Its optional zlib/bzip2/PNG/Brotli/
+# HarfBuzz support is left out: the bundled fonts need none of it, and it
+# keeps the static link free of extra dependencies.
+RUN git clone --depth 1 --branch VER-2-13-3 https://github.com/freetype/freetype.git && \
+    cd freetype && \
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
+    -DFT_DISABLE_ZLIB=ON -DFT_DISABLE_BZIP2=ON -DFT_DISABLE_PNG=ON \
+    -DFT_DISABLE_HARFBUZZ=ON -DFT_DISABLE_BROTLI=ON && \
+    cmake --build build -j$(nproc) && \
+    cmake --install build --prefix /usr && \
+    cd .. && rm -rf freetype
+
 # Now build the application
 WORKDIR /app
 COPY . /app
@@ -89,6 +102,11 @@ COPY . /app
 # building.
 RUN mkdir -p /app/assets/models
 
+# Version to bake into the app (e.g. v1.3.4), passed by CI as a build
+# arg - this build context has no .git, so CMake can't ask git itself.
+# Exposed to the build below as an environment variable, which
+# cmake/GenerateVersion.cmake reads. Unset = "0.0.0-dev".
+ARG APP_VERSION=
 RUN mkdir -p build && cd build && \
     cmake .. -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=/usr \

@@ -23,6 +23,7 @@ src/gamecontrollerdb_data.h
 src/icon_data.h
 src/shaders_data.h
 src/glyphs_zip_data.h
+src/fonts_data.h
 src/icon_data.h
 
 # CMake generated files
@@ -34,6 +35,7 @@ CMakeUserPresets.json
 *.cmake
 !CMakeLists.txt
 !*.cmake.in
+!cmake/*.cmake
 !third_party/include/**/*.cmake
 
 # Compiled object files (build output only — not the vendored .obj mesh assets)

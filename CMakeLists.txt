@@ -32,6 +32,17 @@ pkg_check_modules(NLOHMANN_JSON REQUIRED nlohmann_json)
 
 find_package(OpenGL REQUIRED)
 find_package(ZLIB REQUIRED)
+# Font rendering (ImGui's FreeType loader - see IMGUI_SRC below).
+# pkg-config first, like every other dependency here (the Docker builds
+# install freetype2.pc into their sysroots), then CMake's own
+# FindFreetype for setups without it.
+pkg_check_modules(FREETYPE QUIET IMPORTED_TARGET freetype2)
+if(FREETYPE_FOUND)
+    set(FREETYPE_TARGET PkgConfig::FREETYPE)
+else()
+    find_package(Freetype REQUIRED)
+    set(FREETYPE_TARGET Freetype::Freetype)
+endif()
 
 if(NOT APPLE)
     find_package(Threads REQUIRED)
@@ -59,6 +70,11 @@ set(IMGUI_SRC
     third_party/imgui/imgui_demo.cpp
     third_party/imgui/backends/imgui_impl_glfw.cpp
     third_party/imgui/backends/imgui_impl_opengl3.cpp
+    # FreeType-based font loader instead of ImGui's built-in
+    # stb_truetype one: smoother text, and the only loader that can draw
+    # color emoji (see app_fonts.cpp). Enabled via IMGUI_ENABLE_FREETYPE
+    # below.
+    third_party/imgui/misc/freetype/imgui_freetype.cpp
 )
 list(APPEND SRC_FILES ${IMGUI_SRC})
 
@@ -175,6 +191,23 @@ add_custom_command(
 
 set_source_files_properties(${ICON_HEADER} PROPERTIES GENERATED TRUE)
 
+# ------------------------------------------------------------------
+# Generate fonts_data.h from assets/fonts (UI font + symbol/emoji
+# fallbacks - see assets/fonts/README.txt and app_fonts.cpp)
+# ------------------------------------------------------------------
+set(FONTS_SCRIPT "${CMAKE_SOURCE_DIR}/tools/generate_fonts_header.py")
+set(FONTS_HEADER "${CMAKE_SOURCE_DIR}/src/fonts_data.h")
+file(GLOB FONTS_SOURCES "${CMAKE_SOURCE_DIR}/assets/fonts/*.ttf")
+
+add_custom_command(
+    OUTPUT ${FONTS_HEADER}
+    COMMAND python3 ${FONTS_SCRIPT}
+    DEPENDS ${FONTS_SOURCES} ${FONTS_SCRIPT}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Generating fonts_data.h from assets/fonts"
+)
+set_source_files_properties(${FONTS_HEADER} PROPERTIES GENERATED TRUE)
+
 # Generate shaders_data.h
 set(SHADER_SCRIPT "${CMAKE_SOURCE_DIR}/tools/generate_shaders_header.py")
 set(SHADER_HEADER "${CMAKE_SOURCE_DIR}/src/shaders_data.h")
@@ -215,6 +248,40 @@ add_custom_command(
 )
 set_source_files_properties(${GLYPHS_HEADER} PROPERTIES GENERATED TRUE)
 
+
+# ------------------------------------------------------------------
+# App version - one source of truth, no manual bumping
+#
+# The version comes from the git tag (or APP_VERSION, see
+# cmake/GenerateVersion.cmake for the full lookup order) and is written
+# into generated headers/resources in the build tree: the Help section,
+# the "What's New" dialog and update check, the Windows .exe's file
+# Properties, and the macOS Info.plist all read from there. Regenerated
+# on every build (files are only touched when the version changes).
+# ------------------------------------------------------------------
+set(APP_VERSION "" CACHE STRING
+    "Explicit app version, e.g. v1.3.4. Empty = APP_VERSION env var, then git describe.")
+set(APP_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated")
+set(APP_VERSION_SCRIPT_ARGS
+    -DSRC_DIR=${CMAKE_SOURCE_DIR}
+    -DOUT_DIR=${APP_GENERATED_DIR}
+    -DVERSION_OVERRIDE=${APP_VERSION}
+    -P ${CMAKE_SOURCE_DIR}/cmake/GenerateVersion.cmake)
+# Once now, so the files exist for the first build and for IDEs...
+execute_process(COMMAND ${CMAKE_COMMAND} ${APP_VERSION_SCRIPT_ARGS})
+file(STRINGS "${APP_GENERATED_DIR}/app_version.txt" APP_VERSION_BASE LIMIT_COUNT 1)
+message(STATUS "3dco+ version: ${APP_VERSION_BASE}")
+# ...and again on every build, to pick up a new tag/commit.
+add_custom_target(app_version ALL
+    COMMAND ${CMAKE_COMMAND} ${APP_VERSION_SCRIPT_ARGS}
+    BYPRODUCTS
+        ${APP_GENERATED_DIR}/app_version.h
+        ${APP_GENERATED_DIR}/release_notes_data.h
+        ${APP_GENERATED_DIR}/app_version.rc
+        ${APP_GENERATED_DIR}/app_version.txt
+    COMMENT "Updating app version"
+    VERBATIM
+)
 
 # ============================================================
 # ImGuiFileBrowser – locate the header locally
@@ -258,10 +325,19 @@ endif()
 # CMake still generates the right WinMain-calling-main() entry point
 # shim automatically, so no code changes were needed for this.
 # ------------------------------------------------------------------
-add_executable(3dco+ WIN32 ${SRC_FILES} ${GEN_HEADER} ${DB_HEADER} ${ICON_HEADER} ${SHADER_HEADER} ${GLYPHS_HEADER})
+add_executable(3dco+ WIN32 ${SRC_FILES} ${GEN_HEADER} ${DB_HEADER} ${ICON_HEADER} ${SHADER_HEADER} ${GLYPHS_HEADER} ${FONTS_HEADER})
+
+add_dependencies(3dco+ app_version)
+
+# IMGUI_USE_WCHAR32: 32-bit ImWchar, so characters outside the Basic
+# Multilingual Plane - which is where most emoji live (U+1F300 and up) -
+# can be drawn at all.
+target_compile_definitions(3dco+ PRIVATE IMGUI_ENABLE_FREETYPE IMGUI_USE_WCHAR32)
+target_link_libraries(3dco+ PRIVATE ${FREETYPE_TARGET})
 
 # Include directories
 target_include_directories(3dco+ PRIVATE
+    "${APP_GENERATED_DIR}"
     "${CMAKE_SOURCE_DIR}/src"
     "${CMAKE_SOURCE_DIR}/third_party/include"
     "${CMAKE_SOURCE_DIR}/third_party/imgui"          # for public headers
@@ -385,7 +461,8 @@ endif()
 
 if(WIN32)
     # shell32: Shell_NotifyIconW (system tray icon, see tray_icon.cpp)
-    target_link_libraries(3dco+ PRIVATE ws2_32 winmm user32 comctl32 shell32)
+    # winhttp: the optional update check (update_check.cpp)
+    target_link_libraries(3dco+ PRIVATE ws2_32 winmm user32 comctl32 shell32 winhttp)
     
     if(NOT BUILD_STATIC)
         file(GLOB WINDOWS_REDIST "${CMAKE_SOURCE_DIR}/packaging/windows/redist/*.dll")
@@ -397,8 +474,11 @@ if(WIN32)
         endforeach()
     endif()
 
-    # Embed Windows icon resource
-    target_sources(3dco+ PRIVATE packaging/windows/3dco+.rc)
+    # Embed Windows icon + version resource (generated - see
+    # cmake/GenerateVersion.cmake), so the version shows in the .exe's
+    # Properties -> Details tab.
+    set_source_files_properties(${APP_GENERATED_DIR}/app_version.rc PROPERTIES GENERATED TRUE)
+    target_sources(3dco+ PRIVATE ${APP_GENERATED_DIR}/app_version.rc)
 endif()
 
 # ------------------------------------------------------------------

@@ -1,12 +1,5 @@
-# Test harness for 3dco+. Not wired into the root CMakeLists.txt
-# automatically - add this near the bottom of it, after the main
-# executable target is defined:
-#
-#   option(BUILD_TESTS "Build the test suite" ON)
-#   if(BUILD_TESTS)
-#     enable_testing()
-#     add_subdirectory(tests)
-#   endif()
+# Test harness for 3dco+. Included from the root CMakeLists.txt
+# (BUILD_TESTS option, on by default).
 #
 # doctest.h is vendored at third_party/doctest/doctest.h (MIT
 # licensed, pinned to v2.4.9 - see that file's own header comment).
@@ -138,3 +131,17 @@ target_compile_options(test_shortcut_logic PRIVATE
 target_compile_features(test_shortcut_logic PRIVATE cxx_std_17)
 
 add_test(NAME shortcut_logic COMMAND test_shortcut_logic)
+
+# test_version_utils needs nothing but version_utils.h itself
+# (header-only, standard library only).
+add_executable(test_version_utils
+    test_version_utils.cpp
+)
+target_compile_definitions(test_version_utils PRIVATE DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN)
+target_compile_options(test_version_utils PRIVATE
+    "-iquote${CMAKE_SOURCE_DIR}/src"
+    "-iquote${CMAKE_SOURCE_DIR}/third_party/doctest"
+)
+target_compile_features(test_version_utils PRIVATE cxx_std_17)
+
+add_test(NAME version_utils COMMAND test_version_utils)

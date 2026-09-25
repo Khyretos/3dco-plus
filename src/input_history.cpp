@@ -1,3 +1,4 @@
+#include "app_fonts.h"
 #include "controller_window.h"
 #include "input_history_glyphs.h"
 #include "keyboard_input.h"
@@ -1388,6 +1389,7 @@ void ensureInputHistoryWindowCreated(controller_window &w) {
   ImGui::GetIO().IniFilename = nullptr;
   ImGui::StyleColorsDark();
   applyCustomImGuiTheme(); // match the main Settings window's purple theme
+  setupAppFonts(ImGui::GetIO());
 
   ImGui_ImplGlfw_InitForOpenGL(w.input_history_glfw_window, true);
   w.input_history_backend_ready = ImGui_ImplOpenGL3_Init(glsl_version);
