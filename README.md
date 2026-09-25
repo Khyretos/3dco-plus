@@ -11,6 +11,14 @@ This is a **fork, not a replacement**. It exists as an homage to the original to
 
 The **`+`** in the name means exactly that: **improvements and extra features** layered on top of the original — more controllers, more rendering features, more input paths, more build tooling — while keeping the same "point it at your input device and it just works" spirit. It's also a personal passion project: a way for me to see what I'm actually capable of building and maintaining with AI as a collaborator rather than a crutch.
 
+## What's new in 1.3.3
+
+- **Additional Bindings: more than one input per mesh.** Under Movement & Animation, a mesh can now have any number of extra input bindings on top of its existing one, each with its own Invert, Travel X/Y/Z, Rot X/Y/Z, and Smooth Travel settings. Every active binding's Travel/Travel Rotation is added together each frame - so a joystick hat (one physical mesh, several directions) can tilt its own way per direction, a diagonal press tilts on two axes at once, and opposite bindings cancel out naturally. A mesh highlights if any of its bindings is active. Supports "press"-style inputs (buttons, hats, axis-as-direction, keyboard keys, mouse buttons); sticks, raw axis passthrough, and touchpads stay single-binding. Existing models are unaffected - their current binding simply becomes the primary one - and the new `extra_bindings` field in `info.json` is optional.
+- **New bundled models: Flightstick DAT L and Flightstick DAT R** - left- and right-handed flightsticks by [DAT](https://www.youtube.com/@gitardat), with a hat that already uses Additional Bindings for its directions.
+- **Fixed: Highlight Color (Global) losing its opacity on restart.** Only the color's RGB was saved to `settings.json`, so alpha silently reset to fully opaque every time. All four channels are saved now; older 3-value settings files still load.
+- **Fixed: a mesh's highlight value not being saved** to `info.json` - it always reloaded as 0. Older files without it load unchanged.
+- **UI polish:** the Additional Bindings input picker and the Pick meshes... / Copy Travel to Selected row no longer overflow past the width of the rest of the Movement & Animation panel.
+
 ## What's new in 1.3.2
 
 - **Fixed: a hard crash on Windows when closing a controller window.** Dear ImGui's OpenGL backend bundles its own, separate GL function loader by default, independent of the GLAD loader the rest of the app uses - it only ever initializes those function pointers once, globally, for the whole process, and resets that same shared state every time a window's ImGui backend shuts down (exactly what happens on close). The next window to render anywhere afterward silently rebound every one of those pointers to its own context instead, leaving every other already-open window calling through pointers that were no longer valid for it - the app is now told to use the same GLAD loader everywhere instead, so there's only ever one, correctly-synced set of pointers. Windows/AMD hardware surfaced this one first, but the underlying issue wasn't platform-specific.
@@ -103,6 +111,7 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 
 - [What stayed the same](#what-stayed-the-same)
 - [What's new in the `+`](#whats-new-in-the-)
+- [What's new in 1.3.3](#whats-new-in-133)
 - [What's new in 1.3.2](#whats-new-in-132)
 - [What's new in 1.3.1](#whats-new-in-131)
 - [What's new in 1.3.0](#whats-new-in-130)
@@ -234,7 +243,7 @@ You can jump straight there from inside the app via **Settings → Open Data Dir
 | Mouse overlay                                                                      | ✅ Supported (position, buttons, scroll — system-wide)                                                                |
 | Gyro / accelerometer                                                               | ✅ Supported, with sensitivity/correction tuning                                                                      |
 | Touchpads (DualShock/DualSense)                                                    | ✅ Supported, multi-touch, multiple pads                                                                              |
-| flightstick / throttles                                                            | ✅ Supported, Manual mapping required since i only own 1 model                                                        |
+| Flightstick / throttles                                                            | ✅ Supported (bundled Flightstick, Flightstick DAT L/R models); manual mapping may be needed for your own hardware    |
 | Racing wheel                                                                       | 🚧 Work in progress (I currently do not posses a racing whe eel or pedal but i assume that it can be mapped manually) |
 
 Gamepad button/axis layouts are resolved through SDL3's community-maintained [`gamecontrollerdb.txt`](https://github.com/mdqinc/SDL_GameControllerDB) database (embedded in the app, covering most Xbox/PlayStation/Switch Pro/Steam Controller/third-party pads). If your controller shows up as a raw, unlabeled joystick instead of a named gamepad, it isn't in that database yet — you can either add an entry to `gamecontrollerdb.txt` in your [data directory](#where-your-data-lives) (e.g. using [SDL3 Gamepad Tool](https://generalarcade.com/gamepadtool/)) and restart, or just map it manually using raw joystick bindings in the Mapping panel, which works regardless of whether SDL3 recognizes the controller. If you do get a new controller working, consider [contributing the mapping upstream](https://github.com/mdqinc/SDL_GameControllerDB) so other SDL3-based apps benefit too.
