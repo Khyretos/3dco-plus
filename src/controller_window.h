@@ -200,6 +200,10 @@ typedef struct controller_window_struct {
   // - routing all three through one menu lets a single button reach
   // any of them without them ever colliding again.
   bool middle_click_menu_open = false;
+  // Whether the middle-click menu was still showing last frame. The
+  // window's ImGui context only runs a frame while the menu is requested
+  // or open - see drawControllerWindows().
+  bool middle_click_menu_visible = false;
 
   union {
     SDL_Gamepad *sdl_controller = nullptr;
@@ -317,9 +321,17 @@ typedef struct controller_window_struct {
   int drag_move_start_win_y = 0;
   bool scroll_to_resize = false;
   bool grid = false;
-  int swap_interval = 1;
   bool wireframe = false;
   Uint8 frame_cap = 60;
+  // Kept up to date by GLFW callbacks (see
+  // installControllerWindowCallbacks(), controller_window.cpp) instead of
+  // being queried every frame - on X11 both queries are synchronous
+  // round trips to the X server.
+  bool glfw_iconified = false;
+  int framebuffer_width = 0;
+  int framebuffer_height = 0;
+  int window_width = 0;
+  int window_height = 0;
   float bg_color[4] = {0.256f, 0.2f, 0.3f, 1.0f};
   bool freelook = false;
 
@@ -883,18 +895,13 @@ void destroyWindows();
 // Lowest frame_cap among currently open controller windows (defaulting
 // to 60 if none are open), used by MainLoop() in main.cpp for
 // sleep-based frame pacing. See that function's comment for why pacing
-// no longer relies on vsync/swap_interval at all.
+// no longer relies on vsync at all.
 unsigned getFrameCapHz();
 void make_grid(controller_window &w);
 void drawControllerWindows();
-void controller_framebuffer_size_callback(GLFWwindow *window, int width,
-                                          int height);
-void controller_window_size_callback(GLFWwindow *window, int width, int height);
 void controller_window_scroll_callback(GLFWwindow *window, double xoffset,
                                        double yoffset);
-void controller_window_iconify_callback(GLFWwindow *window, int iconified);
 void createTouchAreaRect(controller_window &w);
-void recreateControllerWindow(controller_window *w);
 void setWindowClickThrough(GLFWwindow *window, bool enable);
 
 // Use this everywhere instead of calling glfwMakeContextCurrent()
@@ -930,12 +937,21 @@ void setWindowClickThrough(GLFWwindow *window, bool enable);
 // creation can't catch that.
 //
 // This wrapper reloads GLAD (gladLoadGLLoader((GLADloadproc)
-// glfwGetProcAddress)) exactly when the context is actually about to
-// change to a DIFFERENT window than GLAD was last loaded for -
-// tracked internally, so calling this repeatedly for the same,
-// already-current window (the common case within one window's own
-// draw pass) costs nothing beyond the calls this already made.
+// glfwGetProcAddress)) when the context is about to change to a
+// DIFFERENT window than GLAD was last loaded for - tracked internally,
+// so calling this repeatedly for the same, already-current window (the
+// common case within one window's own draw pass) costs nothing beyond
+// the calls this already made. The first switch to each window also
+// records whether its context resolved exactly the same pointers as
+// the first context did; later switches between such windows skip the
+// reload entirely (see the implementation for details), while a window
+// whose pointers differ keeps being reloaded on every switch.
 void makeContextCurrentSafe(GLFWwindow *window);
+
+// Use instead of glfwDestroyWindow() for any window that was ever passed
+// to makeContextCurrentSafe(): clears its cached GLAD state, since a
+// window created later can reuse the same address.
+void destroyWindowSafe(GLFWwindow *window);
 
 // ------------------------------------------------------------------
 // On-the-fly Click-Through/Drag-to-Move shortcuts - see

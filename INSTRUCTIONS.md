@@ -41,6 +41,7 @@
 
 - [Updates & Bundled Models](#updates--bundled-models) – a **What's New** window on the first launch after an update (release notes, plus any new bundled models to add in one click), a new **Bundled Models** section in Settings to add missing models or restore one to its original, and an optional check for newer releases.
 - The running version now shows in the Settings window title, the tray tooltip, and the Windows `.exe` Properties / macOS Get Info, not only in Help.
+- Lower CPU usage: the Frame Cap is respected on high-refresh monitors (it used to follow the monitor's refresh rate), Settings redraws slowly while in the background, and rendering large models is much cheaper.
 - Smoother UI text (Noto Sans via FreeType), with dashes, quotes, arrows, check marks and color emoji rendering instead of `?`.
 
 ---

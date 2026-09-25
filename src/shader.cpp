@@ -8,10 +8,13 @@
 // Needed here for glfwGetCurrentContext() - see LoadShaderProgram()'s
 // own doc comment for why.
 #include <GLFW/glfw3.h>
-#include <cstdint> // uintptr_t, for LoadShaderProgram()'s cache key
+#include <cinttypes> // PRIxPTR, for LoadShaderProgram()'s cache key
+#include <cstdint>   // uintptr_t, for LoadShaderProgram()'s cache key
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 #include <unordered_map>
@@ -42,7 +45,13 @@ std::unordered_map<std::string, std::string> g_embedded_shaders;
 // ID 3 in window B's context are two unrelated programs that happen
 // to share a number, so without the context in the key, a location
 // cached for one could be silently reused - wrongly - for the other.
-std::unordered_map<std::string, GLint> g_uniform_location_cache;
+struct ProgramUniforms {
+  GLFWwindow *context = nullptr;
+  GLuint program = 0;
+  std::unordered_map<std::string, GLint> locations;
+};
+std::vector<std::unique_ptr<ProgramUniforms>> g_uniform_location_cache;
+ProgramUniforms *g_last_program_uniforms = nullptr;
 } // namespace
 
 // Not inside the anonymous namespace above (unlike its own
@@ -57,15 +66,39 @@ std::unordered_map<std::string, GLint> g_uniform_location_cache;
 // every one of those lookups was a wasted driver call whose only
 // possible answer is -1, every single time, regardless of whether any
 // custom shader effect was even in use.
+//
+// Called dozens of times per mesh, per frame, so the lookup itself has
+// to be cheap: locations are grouped per (context, program) - found via
+// a one-entry memo, since consecutive calls almost always hit the same
+// program - and looked up by name through a reused buffer, so a cache
+// hit allocates nothing. (It used to build a "<context>#<program>#name"
+// std::string key - several heap allocations - on every single call.)
 GLint getCachedUniformLocation(GLuint program, const char *name) {
-  std::string key =
-      std::to_string(reinterpret_cast<uintptr_t>(glfwGetCurrentContext())) +
-      "#" + std::to_string(program) + "#" + name;
-  auto it = g_uniform_location_cache.find(key);
-  if (it != g_uniform_location_cache.end())
+  GLFWwindow *context = glfwGetCurrentContext();
+  if (!g_last_program_uniforms || g_last_program_uniforms->context != context ||
+      g_last_program_uniforms->program != program) {
+    g_last_program_uniforms = nullptr;
+    for (auto &entry : g_uniform_location_cache) {
+      if (entry->context == context && entry->program == program) {
+        g_last_program_uniforms = entry.get();
+        break;
+      }
+    }
+    if (!g_last_program_uniforms) {
+      g_uniform_location_cache.push_back(std::make_unique<ProgramUniforms>());
+      g_last_program_uniforms = g_uniform_location_cache.back().get();
+      g_last_program_uniforms->context = context;
+      g_last_program_uniforms->program = program;
+    }
+  }
+  static std::string key; // reused - no allocation once it's grown
+  key.assign(name);
+  auto &locations = g_last_program_uniforms->locations;
+  auto it = locations.find(key);
+  if (it != locations.end())
     return it->second;
   GLint loc = glGetUniformLocation(program, name);
-  g_uniform_location_cache[key] = loc;
+  locations.emplace(key, loc);
   return loc;
 }
 
@@ -206,6 +239,15 @@ void ensureDirectory(const std::string &path) {
 
 // Unpack all embedded shaders into the user folder (config_base_path/shaders/)
 void unpackEmbeddedShaders() {
+  // Once per session is enough: this only restores built-in shader
+  // files that are missing on disk. It used to run on every
+  // LoadShaderProgram() call - i.e. for every mesh using a shader
+  // effect, every frame - each time checking every built-in shader's
+  // file on disk.
+  static bool unpacked = false;
+  if (unpacked)
+    return;
+  unpacked = true;
   loadEmbeddedShaders(); // ensure g_embedded_shaders is populated
   if (g_embedded_shaders.empty())
     return;
@@ -300,19 +342,6 @@ std::string getShaderFragmentSource(const std::string &name) {
   return "";
 }
 
-// Build a complete fragment shader by combining the default lighting code
-// with the custom effect function.
-std::string buildCustomFragmentShader(const std::string &customEffect) {
-  // We'll prepend the default lighting code (from shaders.cpp) and
-  // then append the custom function and a main that calls it.
-  // To avoid duplication, we'll use the existing fragment_shader_code
-  // but we need to strip out its main and replace with our own.
-  // Simpler approach: we'll provide the custom shader as a full
-  // replacement – the user must copy the lighting code.
-  // For simplicity, we'll return customEffect as-is.
-  // The user's shader must be a complete fragment shader.
-  return customEffect;
-}
 } // namespace
 
 // ------------------------------------------------------------------
@@ -407,41 +436,6 @@ GLuint getOutlineProgram() {
   return g_outline_program;
 }
 
-const char *wireframe_vertex_shader = R"(
-#version 330 core
-layout (location = 0) in vec3 aPos;
-layout (location = 1) in vec3 aNormal;
-layout (location = 2) in vec2 aTexCoord;
-
-uniform mat4 model;
-uniform mat4 view;
-uniform mat4 projection;
-
-void main()
-{
-    gl_Position = projection * view * model * vec4(aPos, 1.0);
-}
-)";
-
-const char *wireframe_fragment_shader = R"(
-#version 330 core
-out vec4 FragColor;
-void main()
-{
-    FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-}
-)";
-
-GLuint g_wireframe_program = 0;
-
-GLuint getWireframeProgram() {
-  if (g_wireframe_program == 0) {
-    g_wireframe_program =
-        CreateShaderProgram(wireframe_vertex_shader, wireframe_fragment_shader);
-  }
-  return g_wireframe_program;
-}
-
 GLuint LoadShaderProgram(const std::string &name) {
   unpackEmbeddedShaders();
   if (name.empty())
@@ -460,9 +454,13 @@ GLuint LoadShaderProgram(const std::string &name) {
   // compiled program; every other window requesting that same effect
   // name would have reused that first window's now-invalid-here
   // handle instead of compiling its own.
-  std::string cacheKey =
-      std::to_string(reinterpret_cast<uintptr_t>(glfwGetCurrentContext())) +
-      "#" + name;
+  // Built in a reused buffer: this runs for every mesh using a shader
+  // effect, every frame, and a cache hit shouldn't allocate.
+  static std::string cacheKey;
+  char contextPrefix[32];
+  std::snprintf(contextPrefix, sizeof(contextPrefix), "%" PRIxPTR "#",
+                reinterpret_cast<uintptr_t>(glfwGetCurrentContext()));
+  cacheKey.assign(contextPrefix).append(name);
   auto it = g_shader_cache.find(cacheKey);
   if (it != g_shader_cache.end() && it->second != 0) {
     return it->second;
@@ -487,16 +485,6 @@ GLuint LoadShaderProgram(const std::string &name) {
 
   g_shader_cache[cacheKey] = prog;
   return prog;
-}
-
-void ReloadShaderPrograms() {
-  // Delete all cached programs and clear the map
-  for (auto &[name, prog] : g_shader_cache) {
-    if (prog)
-      glDeleteProgram(prog);
-  }
-  g_shader_cache.clear();
-  // Embedded shaders are already loaded; no need to reload them.
 }
 
 GLuint CompileShader(GLuint type, const char *shaderSource) {
@@ -573,32 +561,6 @@ GLuint CreateShaderProgram(const char *vertexShaderSource,
   return programObject;
 }
 
-std::string GetShaderSource(std::string path) {
-  const char *base_path = SDL_GetBasePath();
-  std::filesystem::path file_path;
-  file_path = std::filesystem::path(base_path);
-  std::filesystem::path sub_path(path);
-  file_path /= sub_path;
-
-  std::ifstream ifs;
-  std::string shader_source;
-
-  ifs = std::ifstream(file_path);
-  if (!ifs) {
-    printf("Uh oh, file could not be opened for reading!\n");
-  } else {
-    while (ifs) {
-      std::string line;
-      std::getline(ifs, line);
-      shader_source.append(line);
-      shader_source.append("\n");
-    }
-    // printf(shader_source.c_str());
-  }
-
-  return shader_source;
-}
-
 std::vector<std::string> GetShaderNames() {
   unpackEmbeddedShaders(); // ensure user folder is populated
 
@@ -620,10 +582,6 @@ std::vector<std::string> GetShaderNames() {
     }
   }
   return names;
-}
-
-void shaderUniformBool(GLuint ID, const char *name, bool value) {
-  glUniform1i(getCachedUniformLocation(ID, name), (int)value);
 }
 
 void shaderUniformInt(GLuint ID, const char *name, int value) {
@@ -652,19 +610,4 @@ void shaderUniformVec3(GLuint ID, const char *name, glm::vec3 vec) {
 void shaderUniformVec4(GLuint ID, const char *name, glm::vec4 vec) {
 
   glUniform4fv(getCachedUniformLocation(ID, name), 1, &vec[0]);
-}
-
-void shaderUniform2f(GLuint ID, const char *name, float value1, float value2) {
-  glUniform2f(getCachedUniformLocation(ID, name), value1, value2);
-}
-
-void shaderUniform3f(GLuint ID, const char *name, float value1, float value2,
-                     float value3) {
-  glUniform3f(getCachedUniformLocation(ID, name), value1, value2, value3);
-}
-
-void shaderUniform4f(GLuint ID, const char *name, float value1, float value2,
-                     float value3, float value4) {
-  glUniform4f(getCachedUniformLocation(ID, name), value1, value2, value3,
-             value4);
 }

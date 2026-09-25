@@ -1114,18 +1114,6 @@ extern std::vector<controller_window> windows;
 extern std::string button_names[21];
 extern std::string config_base_path;
 
-static bool HasTouchpadFinger(controller_window *w, int touchpadIdx,
-                              int fingerIdx) {
-  if (!w || !w->is_gamecontroller || !w->sdl_controller)
-    return false;
-  int numTouchpads = SDL_GetNumGamepadTouchpads(w->sdl_controller);
-  if (touchpadIdx >= numTouchpads)
-    return false;
-  int numFingers =
-      SDL_GetNumGamepadTouchpadFingers(w->sdl_controller, touchpadIdx);
-  return fingerIdx < numFingers;
-}
-
 bool g_log_controller = false;
 bool g_log_keyboard = false;
 bool g_log_mouse = false;
@@ -1170,8 +1158,6 @@ void setDebugModeEnabled(bool enabled) {
 std::string export_mapping_result;
 bool export_mapping_ok = false;
 double export_mapping_popup_until = 0.0;
-
-static int last_logged_device_index = -1;
 
 // Helper to center a piece of text or a widget horizontally within the current
 // content region.
@@ -2410,6 +2396,18 @@ void applyCustomImGuiTheme() {
   style.Colors[ImGuiCol_FrameBgActive] = purple;
 }
 
+// Tracked through GLFW callbacks (see createSettingsWindow()) rather
+// than queried every frame - on X11, glfwGetWindowAttrib() is a
+// synchronous round trip to the X server. Used to throttle this window
+// while it's in the background - see drawSettingsWindow().
+static bool g_settings_focused = true;
+static bool g_settings_iconified = false;
+static GLFWwindowfocusfun g_prev_settings_focus_cb = nullptr;
+// How often the Settings window redraws while unfocused. It's a full
+// immediate-mode rebuild of a large UI every time, and nobody is
+// interacting with it while a game has focus.
+static constexpr double kSettingsBackgroundFps = 10.0;
+
 // Shown in the taskbar/dock/window switcher, so the running version is
 // visible without opening the Help section.
 static const char *kSettingsWindowTitle =
@@ -2484,7 +2482,13 @@ void createSettingsWindow() {
   }
 
   makeContextCurrentSafe(glfw_settings_window);
-  glfwSwapInterval(1);
+  // No vsync here either, same as every other window (see MainLoop()'s
+  // frame pacing comment in main.cpp): a vsync'd swap on this window
+  // made the whole main loop - controller windows included - run at
+  // the monitor's refresh rate (144/240 Hz on a gaming monitor) instead
+  // of the configured frame cap, and blocked input polling while it
+  // waited.
+  glfwSwapInterval(0);
   glfwSetFramebufferSizeCallback(glfw_settings_window,
                                  settings_framebuffer_size_callback);
 
@@ -2527,6 +2531,20 @@ void createSettingsWindow() {
                      "Cannot continue.");
     exit(1);
   }
+  // Installed after ImGui's own callbacks, so the focus one chains to
+  // ImGui's (returned here as the previous callback).
+  g_settings_focused =
+      glfwGetWindowAttrib(glfw_settings_window, GLFW_FOCUSED) == GLFW_TRUE;
+  g_prev_settings_focus_cb = glfwSetWindowFocusCallback(
+      glfw_settings_window, [](GLFWwindow *window, int focused) {
+        g_settings_focused = focused == GLFW_TRUE;
+        if (g_prev_settings_focus_cb)
+          g_prev_settings_focus_cb(window, focused);
+      });
+  glfwSetWindowIconifyCallback(glfw_settings_window,
+                               [](GLFWwindow *, int iconified) {
+                                 g_settings_iconified = iconified == GLFW_TRUE;
+                               });
 
   texture_dialog.SetWindowSize(400, 300);
   texture_dialog.SetTitle("Select Texture File");
@@ -2583,7 +2601,7 @@ void removeSettingsWindow() {
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();
-  glfwDestroyWindow(glfw_settings_window);
+  destroyWindowSafe(glfw_settings_window);
 }
 
 void settings_window_input(bool &quit) {
@@ -3000,9 +3018,26 @@ static void drawUpdateCheckControls() {
 }
 
 void drawSettingsWindow() {
+  // Popups that need an answer always get drawn at full rate, and a
+  // quit confirmation (which can be triggered from a controller window
+  // or the tray while this window is minimized) brings it back up.
+  const bool popupPending =
+      g_pending_quit_confirmation || g_show_whats_new || g_show_update_popup;
+  if (g_pending_quit_confirmation && g_settings_iconified)
+    glfwRestoreWindow(glfw_settings_window);
+  // In the background, redraw at a low rate instead of every frame.
+  // Input that arrives meanwhile is queued by ImGui and handled on the
+  // next drawn frame, and focusing the window restores the full rate.
+  if (!g_settings_focused && !popupPending) {
+    static double last_background_draw = 0.0;
+    const double now = glfwGetTime();
+    if (now - last_background_draw < 1.0 / kSettingsBackgroundFps)
+      return;
+    last_background_draw = now;
+  }
+
   makeContextCurrentSafe(glfw_settings_window);
   ImGui::SetCurrentContext(g_settings_imgui_ctx);
-  glfwSwapInterval(1);
   // Re-applied every frame (not just once at context creation) so a
   // live edit in the Theme section is reflected immediately, without
   // needing to reopen this window.
@@ -3067,6 +3102,11 @@ void drawSettingsWindow() {
     TrayIcon::setControllerList(tray_controllers);
     TrayIcon::setNetworkStatus(net_status, net_connections);
   }
+
+  // Minimized: nothing to show (the tray data above is still kept up
+  // to date).
+  if (g_settings_iconified && !popupPending)
+    return;
 
   // ---- Set viewport to framebuffer size (fixes Retina scaling) ----
   int fb_width, fb_height;
@@ -7875,7 +7915,7 @@ void SaveImportedModel(controller_window &w) {
   w.is_import_preview = false;
   w.import_preview.is_open = false;
   // Destroy the window properly
-  glfwDestroyWindow(w.glfw_window);
+  destroyWindowSafe(w.glfw_window);
   // Remove from windows vector
   for (unsigned i = 0; i < windows.size(); ++i) {
     if (windows[i].ID == w.ID) {
@@ -8030,7 +8070,6 @@ static void saveGlobalSettings() {
     tab["x_pos"] = x;
     tab["y_pos"] = y;
 
-    tab["swap_interval"] = w->swap_interval;
     tab["frame_cap"] = w->frame_cap;
 #if defined(_WIN32)
     tab["overlay_update_interval"] = w->overlay_update_interval;
@@ -8825,7 +8864,6 @@ static void loadGlobalSettings() {
     int y = tab.value("y_pos", 100);
     glfwSetWindowPos(w->glfw_window, x, y);
 
-    w->swap_interval = tab.value("swap_interval", 1);
     w->frame_cap = tab.value("frame_cap", 60);
 #if defined(_WIN32)
     w->overlay_update_interval =
@@ -8888,12 +8926,8 @@ static void loadGlobalSettings() {
       w->highlight_color[2] = 0.0f;
       w->highlight_color[3] = 1.0f;
     }
-    // Defaults to 0 (Replace) for a settings file saved before this
-    // option existed - the original mix()-based behavior, unchanged.
+    // 0 = Add, the default since 1.3.1 (see drawHighlightBlendModeCombo()).
     w->highlight_blend_mode = tab.value("highlight_blend_mode", 0);
-
-    auto tao =
-        tab.value("touch_area_offset", std::array<float, 3>{0.0f, 0.01f, 0.0f});
 
     w->gyro_debug_logging = tab.value("gyro_debug_logging", false);
     w->gyro_enabled = tab.value("gyro_enabled", false);
