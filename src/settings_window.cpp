@@ -4017,7 +4017,8 @@ void drawSettingsWindow() {
                 for (size_t i = 0; i < gtModel.globalTextures.size(); i++) {
                   gtModel.globalTextures[i].name =
                       std::to_string(i + 1) + ": " +
-                      extractFilenameCrossPlatform(gtModel.globalTextures[i].path);
+                      extractFilenameCrossPlatform(
+                          gtModel.globalTextures[i].path);
                 }
                 just_deleted_global_texture = true;
               }
@@ -4169,7 +4170,8 @@ void drawSettingsWindow() {
                   current_texture = 0;
                   for (size_t i = 0; i < texMesh.textures.size(); i++) {
                     texMesh.textures[i].name =
-                        std::to_string(i + 1) + ": " + extractFilenameCrossPlatform(texMesh.textures[i].path);
+                        std::to_string(i + 1) + ": " +
+                        extractFilenameCrossPlatform(texMesh.textures[i].path);
                   }
                   just_deleted_texture = true;
                 }
@@ -4186,7 +4188,8 @@ void drawSettingsWindow() {
                     }
                     for (size_t i = 0; i < texMesh.textures.size(); i++) {
                       texMesh.textures[i].name = std::to_string(i + 1) + ": " +
-                                                 extractFilenameCrossPlatform(texMesh.textures[i].path);
+                                                 extractFilenameCrossPlatform(
+                                                     texMesh.textures[i].path);
                     }
                   }
                   WrappedTooltip("Move selected texture up.");
@@ -4201,7 +4204,8 @@ void drawSettingsWindow() {
                     }
                     for (size_t i = 0; i < texMesh.textures.size(); i++) {
                       texMesh.textures[i].name = std::to_string(i + 1) + ": " +
-                                                 extractFilenameCrossPlatform(texMesh.textures[i].path);
+                                                 extractFilenameCrossPlatform(
+                                                     texMesh.textures[i].path);
                     }
                   }
                   WrappedTooltip("Move selected texture down.");
@@ -4796,8 +4800,7 @@ void drawSettingsWindow() {
               float copyButtonWidth =
                   ImGui::CalcTextSize("Copy Travel to Selected").x +
                   ImGui::GetStyle().FramePadding.x * 2.0f;
-              ImGui::SetNextItemWidth(ImGui::CalcItemWidth() -
-                                      copyButtonWidth -
+              ImGui::SetNextItemWidth(ImGui::CalcItemWidth() - copyButtonWidth -
                                       ImGui::GetStyle().ItemSpacing.x);
               if (ImGui::BeginCombo("##TravelMeshPicker",
                                     travelComboPreview.c_str())) {
@@ -4988,9 +4991,9 @@ void drawSettingsWindow() {
                     float fullWidth = ImGui::CalcItemWidth();
                     ImGui::PushItemWidth(
                         (fullWidth - ImGui::GetStyle().ItemSpacing.x) * 0.5f);
-                    drawInputBindingPicker(
-                        current_window, 200000 + selected_mesh * 100 + bi,
-                        b.inputBinding, selectedMesh.name);
+                    drawInputBindingPicker(current_window,
+                                           200000 + selected_mesh * 100 + bi,
+                                           b.inputBinding, selectedMesh.name);
                     ImGui::PopItemWidth();
                   }
                   ImGui::Checkbox("Invert", &b.invert);
@@ -5000,12 +5003,12 @@ void drawSettingsWindow() {
                                     1.0f, "%.3f");
                   ImGui::InputFloat("Travel Z##extra", &b.travel[2], 0.01f,
                                     1.0f, "%.3f");
-                  ImGui::InputFloat("Rot X##extra", &b.travel_rotation[0],
-                                    0.1f, 1.0f, "%.1f");
-                  ImGui::InputFloat("Rot Y##extra", &b.travel_rotation[1],
-                                    0.1f, 1.0f, "%.1f");
-                  ImGui::InputFloat("Rot Z##extra", &b.travel_rotation[2],
-                                    0.1f, 1.0f, "%.1f");
+                  ImGui::InputFloat("Rot X##extra", &b.travel_rotation[0], 0.1f,
+                                    1.0f, "%.1f");
+                  ImGui::InputFloat("Rot Y##extra", &b.travel_rotation[1], 0.1f,
+                                    1.0f, "%.1f");
+                  ImGui::InputFloat("Rot Z##extra", &b.travel_rotation[2], 0.1f,
+                                    1.0f, "%.1f");
                   ImGui::Checkbox("Smooth Travel Animation##extra",
                                   &b.smooth_travel_enabled);
                   if (b.smooth_travel_enabled) {
@@ -6603,7 +6606,7 @@ void drawSettingsWindow() {
         ImGui::TextColored(ImVec4(0.8f, 0.4f, 1.0f, 1.0f),
                            "3D Controller Overlay +");
         ImGui::SameLine();
-        ImGui::TextDisabled("v1.3.2");
+        ImGui::TextDisabled("v1.3.3");
 
         ImGui::NewLine();
         ImGui::Text(
@@ -6911,8 +6914,8 @@ void drawSettingsWindow() {
           copyTextureIntoModelFolder(ctrl->model.path, selectedGlobalPath);
       loadTexture(t.id, copiedGlobalPath);
       t.path = copiedGlobalPath;
-      t.name =
-          std::to_string(ctrl->model.globalTextures.size() + 1) + ": " + extractFilenameCrossPlatform(t.path);
+      t.name = std::to_string(ctrl->model.globalTextures.size() + 1) + ": " +
+               extractFilenameCrossPlatform(t.path);
       ctrl->model.globalTextures.push_back(t);
       ctrl->unsaved_change_count++;
       makeContextCurrentSafe(glfw_settings_window);
@@ -8456,8 +8459,7 @@ static void loadGlobalSettings() {
     // file used to write and the new 4-element (RGBA) form above -
     // a fixed-size std::array<float, 4> would throw trying to parse
     // an old, shorter array from an existing settings.json.
-    if (tab.contains("highlight_color") &&
-        tab["highlight_color"].is_array()) {
+    if (tab.contains("highlight_color") && tab["highlight_color"].is_array()) {
       auto &hc = tab["highlight_color"];
       if (hc.size() >= 3) {
         w->highlight_color[0] = hc[0].get<float>();
