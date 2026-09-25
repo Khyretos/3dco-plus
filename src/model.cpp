@@ -180,6 +180,13 @@ void writeJson(Model &m, const std::string &path) {
          << (mesh.smooth_travel_enabled ? "true" : "false") << ",\n";
     json << "      \"smooth_travel_duration\": " << mesh.smooth_travel_duration
          << ",\n";
+    // Highlight value - previously runtime-only (recomputed every frame
+    // from the active binding(s)' travel amount), so it was never
+    // written here and always reloaded as 0, meaning any highlight tint
+    // visible at save time silently reset the moment the model was
+    // reloaded. Persisted like any other per-mesh field so it round-
+    // trips across a reload.
+    json << "      \"highlight_value\": " << mesh.highlight_value << ",\n";
     // Additional bindings (see MeshBinding's own doc comment, model.h)
     // - an array of small objects, one per extra binding, each fully
     // self-contained (its own input, travel, travel_rotation, smooth
@@ -516,6 +523,10 @@ void readInfoJson(Model &m, const std::string &path) {
     // info.json written before this feature existed.
     mesh.smooth_travel_enabled = p.value("smooth_travel_enabled", false);
     mesh.smooth_travel_duration = p.value("smooth_travel_duration", 0.15f);
+    // Highlight value - defaults to 0 (no highlight) for any info.json
+    // written before this was persisted, matching the old always-reset
+    // behavior for old saves while letting new saves round-trip it.
+    mesh.highlight_value = p.value("highlight_value", 0.0f);
     // travel_value_display/travel_signed_display are intentionally not
     // read here - see their declaration in model.h for why (runtime-only,
     // re-derived from travel_value/travel_signed every frame regardless).

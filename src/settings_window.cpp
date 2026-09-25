@@ -7668,9 +7668,14 @@ static void saveGlobalSettings() {
             ? w->model.meshes[8].ring_highlight_deadzone
             : 0;
 
-    // Colors
+    // Colors - all 4 components, including alpha (the highlight's
+    // "Value"/intensity in the Controller section's color picker).
+    // Previously only RGB was written here, so the alpha/intensity the
+    // user set for the global highlight color silently reset to the
+    // struct default (1.0, fully opaque) every time settings.json was
+    // reloaded, even though the RGB part loaded back correctly.
     tab["highlight_color"] = {w->highlight_color[0], w->highlight_color[1],
-                              w->highlight_color[2]};
+                              w->highlight_color[2], w->highlight_color[3]};
     tab["highlight_blend_mode"] = w->highlight_blend_mode;
 
     // Gyro
@@ -8446,11 +8451,29 @@ static void loadGlobalSettings() {
     if (w->model.meshes.size() > 8)
       w->model.meshes[8].ring_highlight_deadzone = rdz;
 
-    auto hc =
-        tab.value("highlight_color", std::array<float, 3>{1.0f, 0.0f, 0.0f});
-    w->highlight_color[0] = hc[0];
-    w->highlight_color[1] = hc[1];
-    w->highlight_color[2] = hc[2];
+    // Read as a raw JSON array (rather than a fixed-size std::array)
+    // so this tolerates both the old 3-element (RGB-only) form this
+    // file used to write and the new 4-element (RGBA) form above -
+    // a fixed-size std::array<float, 4> would throw trying to parse
+    // an old, shorter array from an existing settings.json.
+    if (tab.contains("highlight_color") &&
+        tab["highlight_color"].is_array()) {
+      auto &hc = tab["highlight_color"];
+      if (hc.size() >= 3) {
+        w->highlight_color[0] = hc[0].get<float>();
+        w->highlight_color[1] = hc[1].get<float>();
+        w->highlight_color[2] = hc[2].get<float>();
+      }
+      // Alpha (the highlight color's "Value"/intensity) - defaults to
+      // 1.0 (fully opaque, the struct's own default) for any
+      // settings.json written before this was saved.
+      w->highlight_color[3] = (hc.size() >= 4) ? hc[3].get<float>() : 1.0f;
+    } else {
+      w->highlight_color[0] = 1.0f;
+      w->highlight_color[1] = 0.0f;
+      w->highlight_color[2] = 0.0f;
+      w->highlight_color[3] = 1.0f;
+    }
     // Defaults to 0 (Replace) for a settings file saved before this
     // option existed - the original mix()-based behavior, unchanged.
     w->highlight_blend_mode = tab.value("highlight_blend_mode", 0);
