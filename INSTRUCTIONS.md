@@ -2,36 +2,48 @@
 
 ## Table of Contents
 
-1. [What's New in 1.3.2](#whats-new-in-132)
-2. [What's New in 1.3.1](#whats-new-in-131)
-3. [What's New in 1.3.0](#whats-new-in-130)
-4. [What's New in 1.2.0](#whats-new-in-120)
-5. [What's New in 1.1.1](#whats-new-in-111)
-6. [What's New in 1.1.0](#whats-new-in-110)
-7. [First Launch](#first-launch)
-8. [Opening a Controller Window](#opening-a-controller-window)
-9. [Mapping Inputs](#mapping-inputs)
-10. [Gyro Support](#gyro-support)
-11. [Touchpads](#touchpads)
-12. [Highlighting & Press Feedback](#highlighting--press-feedback)
-13. [Smooth Travel Animation](#smooth-travel-animation)
-14. [Importing a Custom Model](#importing-a-custom-model)
-15. [Textures & UV Mapping](#textures--uv-mapping)
-16. [Materials](#materials)
-17. [Lighting](#lighting)
-18. [Window & Camera Settings](#window--camera-settings)
-19. [Network Functionality](#network-functionality)
-20. [Shader Effects](#shader-effects)
-21. [Input History](#input-history)
-22. [The Log Window](#the-log-window)
-23. [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode)
-24. [Theme](#theme)
-25. [Data Directory & Backups](#data-directory--backups)
-26. [Troubleshooting](#troubleshooting)
+1. [What's New in 1.3.3](#whats-new-in-133)
+2. [What's New in 1.3.2](#whats-new-in-132)
+3. [What's New in 1.3.1](#whats-new-in-131)
+4. [What's New in 1.3.0](#whats-new-in-130)
+5. [What's New in 1.2.0](#whats-new-in-120)
+6. [What's New in 1.1.1](#whats-new-in-111)
+7. [What's New in 1.1.0](#whats-new-in-110)
+8. [First Launch](#first-launch)
+9. [Opening a Controller Window](#opening-a-controller-window)
+10. [Mapping Inputs](#mapping-inputs)
+11. [Additional Bindings](#additional-bindings)
+12. [Gyro Support](#gyro-support)
+13. [Touchpads](#touchpads)
+14. [Highlighting & Press Feedback](#highlighting--press-feedback)
+15. [Smooth Travel Animation](#smooth-travel-animation)
+16. [Importing a Custom Model](#importing-a-custom-model)
+17. [Textures & UV Mapping](#textures--uv-mapping)
+18. [Materials](#materials)
+19. [Lighting](#lighting)
+20. [Window & Camera Settings](#window--camera-settings)
+21. [Network Functionality](#network-functionality)
+22. [Shader Effects](#shader-effects)
+23. [Input History](#input-history)
+24. [The Log Window](#the-log-window)
+25. [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode)
+26. [Theme](#theme)
+27. [Data Directory & Backups](#data-directory--backups)
+28. [Troubleshooting](#troubleshooting)
 
 ---
 
 ![Demo](images/demo.webp)
+
+## What's New in 1.3.3
+
+- [Additional Bindings](#additional-bindings) – a mesh can now respond to more than one input, each with its own Travel/Travel Rotation and Smooth Travel settings, all added together every frame. Built for joystick hats (one physical mesh, a different tilt per direction), but works for any "press"-style input.
+- Two new bundled models, **Flightstick DAT L** and **Flightstick DAT R**, by [DAT](https://www.youtube.com/@gitardat) – their hat already uses Additional Bindings.
+- Fixed: the opacity (alpha) of **Highlight Color (Global)** reset to fully opaque on every restart – only its RGB was being saved.
+- Fixed: a mesh's highlight value wasn't saved to `info.json` and always reloaded as 0.
+- The input picker in Additional Bindings and the **Pick meshes... / Copy Travel to Selected** row no longer overflow the width of the rest of the Movement & Animation panel.
+
+---
 
 ## What's New in 1.3.2
 
@@ -150,6 +162,23 @@ Use the **Invert** checkbox to flip axis direction.
 
 ---
 
+## Additional Bindings
+
+A mesh's input binding (above) and its **Travel**/**Travel Rotation** are its _primary_ binding. For a part that needs to react to more than one input in its own way – the classic case is a joystick hat: one physical mesh, but each direction should tilt it differently – add more under **Movement & Animation → Additional Bindings**:
+
+1. Select the mesh and click **Add Binding**.
+2. Pick its input with the same capture/dropdown picker used in the Mesh List.
+3. Set that binding's own **Invert**, **Travel X/Y/Z**, **Rot X/Y/Z**, and optionally **Smooth Travel Animation** with its own duration.
+4. Repeat for each extra input; each block has its own remove button.
+
+Every active binding's Travel and Travel Rotation (primary included) are **added together** each frame. A diagonal hat press that triggers both "up" and "left" tilts both ways at once; two bindings moving +0.010 and -0.010 on the same axis, both active, cancel out to 0. The mesh highlights if any of its bindings is active.
+
+**Supported inputs:** buttons, hat directions, axis-as-direction, keyboard keys, and mouse buttons. Sticks, raw axis passthrough, and touchpads aren't available here – they drive one continuous position rather than several contributions that can be summed.
+
+Additional bindings save with the model (`extra_bindings` in `info.json`). Models without any behave exactly as before. The bundled **Flightstick DAT L/R** models use this for their hat, if you want a working example.
+
+---
+
 ## Gyro Support
 
 ![Gyro settings](images/gyro.webp)
@@ -184,7 +213,9 @@ Touchpoints that go idle for 5 seconds auto‑hide.
 By default, pressing a button glows the mesh in a global highlight colour.  
 **Per‑mesh override:** set a custom colour.
 
-**Highlight Blend Mode** (next to the global highlight colour): **Replace** (default) fully covers the part's own texture with the highlight colour at full strength; **Add** layers the highlight colour on top instead, so the underlying texture stays visible and brightens/tints rather than disappearing - closer to how a real backlit key looks. Applies everywhere a highlight shows, whether it's the global colour or a mesh's own custom one.
+**Highlight Blend Mode** (next to the global highlight colour): **Add** (default) layers the highlight colour on top of the part's own texture, so the underlying texture stays visible and brightens/tints rather than disappearing - closer to how a real backlit key looks; **Replace** fully covers the texture with the highlight colour at full strength. It can also be set per mesh under **Highlight Override**, alongside that mesh's custom colour.
+
+The global highlight colour's opacity (alpha) is saved along with its colour, so a semi-transparent highlight stays that way after a restart.
 
 ![Dual Highlight color picker](images/highlight_dual.webp)
 
@@ -204,7 +235,10 @@ Per mesh, under **Movement & Animation**:
 - **Smooth Travel Animation** – on/off.
 - **Duration (s)** – roughly how long the press/release takes to settle once enabled. Lower is snappier, higher is softer/slower.
 - **Copy to All Buttons** / **Unassign from All Buttons** – apply (or clear) the current enabled state and duration across every other button-type mesh on the controller in one click, instead of setting each one individually.
-- **Copy Travel to All Buttons** / **Copy Travel to Matching Name** – applies this mesh's own Travel and Travel Rotation values (the actual press-offset numbers, not the Smooth Travel settings above) to every other button-type mesh, or only to meshes whose name contains a text filter you type in. Aimed at keyboards and other models with many mechanically-identical parts - type a shared prefix like "Key\_" to target just those, or use "All Buttons" for the whole model.
+- **Copy Travel to All Buttons** / **Remove Travel from All Buttons** – applies this mesh's own Travel and Travel Rotation values (the actual press-offset numbers, not the Smooth Travel settings above) to every other button-type mesh, or zeroes them back out across all of them.
+- **Pick meshes... / Copy Travel to Selected** – the same copy, but only to the meshes you tick in the checkbox picker. Aimed at keyboards and other models with many mechanically-identical parts, without depending on a shared naming convention.
+
+Each extra binding under [Additional Bindings](#additional-bindings) has its own Smooth Travel toggle and duration, independent of the mesh's primary one.
 
 **Not available on sticks, triggers, or touchpads/touchpoints** – those track a live physical position every frame (how far a trigger is actually pulled, where a finger actually is on a touchpad right now), so easing them would make the rendered part visibly lag behind the real input instead of just looking like a nice animation. The control is hidden for those mesh types for exactly that reason; regular buttons, bumpers, and paddles are unaffected and can use it normally.
 
@@ -292,6 +326,7 @@ Set a texture or material property once at the model level instead of assigning 
 
 1. Set the model's **Global Material** (ambient, diffuse, specular, shininess, color) once, in the Model tab.
 2. For any part that needs different values, enable **Use Custom Material** on that part, then set its own ambient/diffuse/specular/shininess/color.
+3. **Reset All Meshes to Global Material** turns Use Custom Material back off on every mesh at once – the material-side counterpart to Reset All Meshes to Global Textures, and just as reversible (each mesh's own values are kept).
 
 The override is per part — some parts can use their own textures/material while others use the model's global ones — but for any one part, it's all-or-nothing (the whole texture list, or the whole material) rather than mixed field by field.
 
@@ -390,7 +425,7 @@ A separate always-on-top window per controller/keyboard/mouse window, showing a 
 Build your own icon set instead of (or alongside) the bundled ones, in its own window — works the same way as mapping a custom controller model:
 
 1. In the Display Style area, click **New Glyph Mapping...** and enter a name, or pick **Edit Existing Mapping** to modify one of the bundled styles (or one you made earlier) — this opens the Glyph Mapping Editor in its own window, separate from Settings.
-2. An empty table appears. Click **Add Row** for each input you want to map: choose its type (Gamepad Button, D-Pad Direction, Gamepad Motion, Trigger, Keyboard, or Mouse), the specific input, then **Browse...** (the last column) to assign an image — either an existing glyph from the `glyphs/` folder or your own picture, which gets automatically converted and resized. **Gamepad Motion** is a fixed dropdown of the compound sequences the bundled FGC Motion art has icons for (`236`, `623`, `360`, and similar) — worth being clear-eyed about what this is: there's no actual runtime detection of a player performing a multi-direction motion to match against, so this only lets you assign a glyph to one of those known strings for whatever other use, not a claim the app recognizes them during play.
+2. An empty table appears. Click **Add Row** for each input you want to map: choose its type (Gamepad Button, D-Pad Direction, Gamepad Motion, Trigger, Keyboard, or Mouse), the specific input, then **Browse...** (the last column) to assign an image — either an existing glyph from the `glyphs/` folder or your own picture, which gets automatically converted and resized. **Gamepad Motion** is a fixed dropdown of the compound sequences the bundled FGC Motion art has icons for (`236`, `623`, `360`, and similar). These motions are detected during play (see **Motion Timeout** above), so this only chooses which glyph represents each one.
 3. Optionally set **Combine With** to another style, so anything you don't define yourself falls back to that style's glyphs instead of a bare text label — a mapping can also exclude specific input types from that fallback (FGC Motion does this for D-Pad glyphs, since it already represents direction its own way). An **Ignore Button** rule (inputs this style should never show or track at all, set elsewhere in the mapping editor) follows this same Combine With chain — a rule set on either half of a combined pair applies while viewing the other.
 4. **Save Mapping** — it's written to its own folder under `glyphs/` and immediately shows up as a Display Style choice, for any window. If a standard bundled style's folder ever goes missing (deleted by accident, an interrupted install), it's silently restored from the bundled pack the next time you launch.
 
@@ -416,7 +451,7 @@ Log lines are copyable: click-drag to select text like any other text field, use
 
 Next to each other in a controller window's **Window** section:
 
-- **Enable Taskbar Icon** – adds a system tray icon (Windows and Linux) showing the app's own icon. Click it to minimize/restore the main window; right-click for a menu with per-controller minimize/restore, network status, and Quit. Not yet available on macOS.
+- **Enable Taskbar Icon** – adds a system tray / menu bar icon (Windows, Linux, and macOS) showing the app's own icon. Click it to minimize/restore the main window; right-click for a menu with per-controller minimize/restore, network status, and Quit. On Windows and Linux each controller's submenu also has **Click-Through** and **Drag to Move** toggles (plus the same two for its Input History window, if open) – handy when a shortcut can't be used. Not yet in the macOS menu.
 - **Enable Debug Mode** – turns on more verbose diagnostic logging (e.g. a line per mesh loaded). Off by default, since it adds a small delay when loading models with a lot of parts — turn it on before opening the Log Window if you're reporting a bug.
 
 ---
