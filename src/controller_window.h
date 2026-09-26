@@ -552,8 +552,14 @@ typedef struct controller_window_struct {
   float net_joystick_axes[128] = {};
   std::set<SDL_Scancode> net_keyboard_keys; // held keys
   bool net_mouse_buttons[8] = {};
+  // Mouse motion/scroll are relative deltas, not held state: the sender
+  // accumulates them every frame and buildNetworkStateJson() sends and
+  // zeroes them, so nothing is lost when the send rate is below the
+  // frame rate. The receiver consumes them per packet.
   float net_mouse_dx = 0;
   float net_mouse_dy = 0;
+  float net_scroll_dx = 0;
+  float net_scroll_dy = 0;
 
   // Network status for UI indicator
   int network_status =
@@ -586,8 +592,6 @@ typedef struct controller_window_struct {
   float last_sent_joystick_axes[128] = {};
   std::set<SDL_Scancode> last_sent_keyboard_keys;
   bool last_sent_mouse_buttons[8] = {};
-  float last_sent_mouse_dx = 0;
-  float last_sent_mouse_dy = 0;
   float last_sent_gyro[3] = {0, 0, 0};
   bool last_sent_touchpad_finger[4][2] = {};
   float last_sent_touchpad_x[4][2] = {};

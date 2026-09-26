@@ -132,13 +132,20 @@ COPY --from=builder /app/assets/icon.png /app/icon.png
 COPY --from=builder /app/assets/models /app/models
 COPY --from=builder /app/assets/gamecontrollerdb.txt /app/gamecontrollerdb.txt
 
-# Create AppDir
-RUN mkdir -p /app/AppDir/usr/bin && \
+# Plain X.Y.Z written by cmake/GenerateVersion.cmake - the same version
+# baked into the binary, so the AppImage's own metadata matches it.
+COPY --from=builder /app/build/generated/app_version.txt /app/app_version.txt
+
+# Create AppDir. X-AppImage-Version is what AppImage installers
+# (AppImageLauncher, Gear Lever, etc.) show as the version - without it
+# they show none, even though the app itself knows its version.
+RUN APPVER=$(head -n1 /app/app_version.txt) && \
+    mkdir -p /app/AppDir/usr/bin && \
     cp /app/3dco+ /app/AppDir/usr/bin/ && \
     cp /app/gamecontrollerdb.txt /app/AppDir/usr/bin/ && \
     cp -r /app/models /app/AppDir/usr/bin/models/ && \
     mkdir -p /app/AppDir/usr/share/applications /app/AppDir/usr/share/icons/hicolor/256x256/apps && \
-    echo "[Desktop Entry]\nName=3D Controller Overlay +\nComment=3D controller visualization overlay\nExec=3dco+\nIcon=3dco+\nTerminal=false\nType=Application\nCategories=Utility;Graphics;" > /app/AppDir/usr/share/applications/3dco+.desktop && \
+    echo "[Desktop Entry]\nName=3D Controller Overlay +\nComment=3D controller visualization overlay\nExec=3dco+\nIcon=3dco+\nTerminal=false\nType=Application\nCategories=Utility;Graphics;\nX-AppImage-Version=${APPVER}" > /app/AppDir/usr/share/applications/3dco+.desktop && \
     cp /app/icon.png /app/AppDir/usr/share/icons/hicolor/256x256/apps/3dco+.png && \
     cp /app/icon.png /app/AppDir/3dco+.png && \
     ln -s usr/share/applications/3dco+.desktop /app/AppDir/3dco+.desktop
@@ -160,4 +167,6 @@ RUN wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous
     rm /tmp/appimagetool
 
 # Build the AppImage
-ENTRYPOINT ["/appimagetool-root/AppRun", "/app/AppDir", "/dist/linux/3dco+.AppImage"]
+# VERSION is appimagetool's own input for the version it records in the
+# AppImage (and would otherwise warn about being unset).
+ENTRYPOINT ["/bin/sh", "-c", "VERSION=$(head -n1 /app/app_version.txt) exec /appimagetool-root/AppRun /app/AppDir /dist/linux/3dco+.AppImage"]
