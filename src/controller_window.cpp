@@ -295,6 +295,22 @@ bool updateShortcutToggle(bool &persistentValue, bool &wasActiveLastFrame,
 // ------------------------------------------------------------------
 // Network helper functions (UDP/TCP sender & receiver)
 // ------------------------------------------------------------------
+static const std::unordered_map<std::string, SDL_Scancode> &getKeyNameMap();
+
+// Maps a mouse-button binding value ("mouse_left" ... "mouse_8") to its
+// button index, or -1 if it isn't a mouse-button binding.
+static int mouseButtonIndex(const std::string &value) {
+  if (value == "mouse_left") return 0;
+  if (value == "mouse_right") return 1;
+  if (value == "mouse_middle") return 2;
+  if (value == "mouse_4") return 3;
+  if (value == "mouse_5") return 4;
+  if (value == "mouse_6") return 5;
+  if (value == "mouse_7") return 6;
+  if (value == "mouse_8") return 7;
+  return -1;
+}
+
 void applyNetworkInputToMeshes(controller_window &w) {
   for (int meshIdx = 0; meshIdx < (int)w.model.meshes.size(); ++meshIdx) {
     Mesh &mesh = w.model.meshes[meshIdx];
@@ -430,21 +446,19 @@ void applyNetworkInputToMeshes(controller_window &w) {
       }
       // For hat etc., we can skip for now or implement similar.
     } else if (type == "keyboard") {
-      // parse key name from value (e.g., "key_w")
-      std::string keyName = value.substr(4);
-      SDL_Scancode sc = SDL_SCANCODE_UNKNOWN;
-      for (int i = 0; i < SDL_SCANCODE_COUNT; ++i) {
-        if (strcmp(SDL_GetScancodeName((SDL_Scancode)i), keyName.c_str()) ==
-            0) {
-          sc = (SDL_Scancode)i;
-          break;
-        }
-      }
-      bool pressed = w.net_keyboard_keys.count(sc) > 0;
+      // Bindings are stored lowercased ("key_w", "key_left shift"), the
+      // same form applyMappingToMeshes() looks up - go through the same
+      // map rather than comparing against SDL's mixed-case names.
+      const auto &keyMap = getKeyNameMap();
+      auto it = keyMap.find(value);
+      if (it == keyMap.end())
+        continue;
+      bool pressed = w.net_keyboard_keys.count(it->second) > 0;
       if (mesh.invert)
         pressed = !pressed;
       mesh.press = pressed ? 1.0f : 0.0f;
       mesh.highlight_value = mesh.press;
+      mesh.travel_value = mesh.press;
     } else if (type == "mouse") {
       if (value == "mouse_xy" || value == "mouse_x" || value == "mouse_y") {
         float dx = w.net_mouse_dx * w.mouse_sensitivity * 0.005f;
@@ -469,25 +483,31 @@ void applyNetworkInputToMeshes(controller_window &w) {
               (fabs(dx) > 0.1f || fabs(dy) > 0.1f) ? 1.0f : 0.0f;
         }
       }
+      // Scroll wheel - lit briefly per scroll tick, same as the local
+      // path in applyMappingToMeshes().
+      else if (value == "mouse_scroll_xy" || value == "mouse_scroll_x" ||
+               value == "mouse_scroll_y") {
+        bool scrolledX =
+            value != "mouse_scroll_y" && fabs(w.net_scroll_dx) > 0.001f;
+        bool scrolledY =
+            value != "mouse_scroll_x" && fabs(w.net_scroll_dy) > 0.001f;
+        if (scrolledX || scrolledY)
+          w.scroll_highlight_until =
+              glfwGetTime() + (double)w.scroll_highlight_duration_ms / 1000.0;
+        bool lit = glfwGetTime() < w.scroll_highlight_until;
+        mesh.press = lit ? 1.0f : 0.0f;
+        mesh.highlight_value = mesh.press;
+      }
       // mouse buttons
-      else if (value.find("mouse_") == 0) {
-        int button = -1;
-        if (value == "mouse_left")
-          button = 0;
-        else if (value == "mouse_right")
-          button = 1;
-        else if (value == "mouse_middle")
-          button = 2;
-        else if (value == "mouse_4")
-          button = 3;
-        else if (value == "mouse_5")
-          button = 4;
-        if (button >= 0 && button < 8) {
+      else {
+        int button = mouseButtonIndex(value);
+        if (button >= 0) {
           bool pressed = w.net_mouse_buttons[button];
           if (mesh.invert)
             pressed = !pressed;
           mesh.press = pressed ? 1.0f : 0.0f;
           mesh.highlight_value = mesh.press;
+          mesh.travel_value = mesh.press;
         }
       }
     }
@@ -580,15 +600,23 @@ std::string buildNetworkStateJson(controller_window &w) {
     w.last_sent_keyboard_keys = current_keys;
   }
 
-  // ---- Mouse (delta + button changes) ----
+  // ---- Mouse (accumulated deltas + button changes) ----
+  // dx/dy and sx/sy are motion since the last packet (accumulated per
+  // frame in controller_window_input()), so they are sent whenever
+  // non-zero and then cleared - not diffed against the last packet,
+  // which dropped steady movement (same delta twice = "no change").
   {
     nlohmann::json mouse = nlohmann::json::object();
     bool has_change = false;
 
-    if (fabs(w.net_mouse_dx - w.last_sent_mouse_dx) > 0.001f ||
-        fabs(w.net_mouse_dy - w.last_sent_mouse_dy) > 0.001f) {
+    if (fabs(w.net_mouse_dx) > 0.001f || fabs(w.net_mouse_dy) > 0.001f) {
       mouse["dx"] = w.net_mouse_dx;
       mouse["dy"] = w.net_mouse_dy;
+      has_change = true;
+    }
+    if (fabs(w.net_scroll_dx) > 0.001f || fabs(w.net_scroll_dy) > 0.001f) {
+      mouse["sx"] = w.net_scroll_dx;
+      mouse["sy"] = w.net_scroll_dy;
       has_change = true;
     }
     for (int i = 0; i < 8; ++i) {
@@ -601,11 +629,11 @@ std::string buildNetworkStateJson(controller_window &w) {
 
     if (has_change) {
       j["mouse"] = mouse;
-      w.last_sent_mouse_dx = w.net_mouse_dx;
-      w.last_sent_mouse_dy = w.net_mouse_dy;
       memcpy(w.last_sent_mouse_buttons, w.net_mouse_buttons,
              sizeof(w.last_sent_mouse_buttons));
     }
+    w.net_mouse_dx = w.net_mouse_dy = 0.0f;
+    w.net_scroll_dx = w.net_scroll_dy = 0.0f;
   }
 
   // ---- Gyro matrix (if enabled and changed) ----
@@ -712,16 +740,15 @@ void applyNetworkStateJson(controller_window &w, const std::string &data) {
       for (auto &key : j["keyboard"]) {
         std::string k = key.value("key", "");
         bool pressed = key.value("pressed", false);
-        // Convert "key_w" to scancode
-        std::string sc_name = k.substr(4);
-        SDL_Scancode sc = SDL_SCANCODE_UNKNOWN;
-        for (int i = 0; i < SDL_SCANCODE_COUNT; ++i) {
-          if (strcmp(SDL_GetScancodeName((SDL_Scancode)i), sc_name.c_str()) ==
-              0) {
-            sc = (SDL_Scancode)i;
-            break;
-          }
-        }
+        // Sender uses SDL's own name ("key_W", "key_Left Shift");
+        // lowercase it to match getKeyNameMap()'s keys.
+        std::string lower;
+        for (char c : k)
+          lower.push_back((char)tolower((unsigned char)c));
+        const auto &keyMap = getKeyNameMap();
+        auto it = keyMap.find(lower);
+        SDL_Scancode sc =
+            it != keyMap.end() ? it->second : SDL_SCANCODE_UNKNOWN;
         if (sc != SDL_SCANCODE_UNKNOWN) {
           if (pressed)
             w.net_keyboard_keys.insert(sc);
@@ -738,6 +765,8 @@ void applyNetworkStateJson(controller_window &w, const std::string &data) {
         w.net_mouse_dx = mouse["dx"].get<float>();
       if (mouse.contains("dy"))
         w.net_mouse_dy = mouse["dy"].get<float>();
+      w.net_scroll_dx = mouse.value("sx", 0.0f);
+      w.net_scroll_dy = mouse.value("sy", 0.0f);
       if (mouse.contains("buttons") && mouse["buttons"].is_array()) {
         for (auto &btn : mouse["buttons"]) {
           int idx = btn.value("index", -1);
@@ -777,9 +806,11 @@ void applyNetworkStateJson(controller_window &w, const std::string &data) {
     // Apply inputs to meshes
     applyNetworkInputToMeshes(w);
 
-    // Reset mouse deltas (they were consumed)
+    // Reset mouse/scroll deltas (they were consumed)
     w.net_mouse_dx = 0.0f;
     w.net_mouse_dy = 0.0f;
+    w.net_scroll_dx = 0.0f;
+    w.net_scroll_dy = 0.0f;
 
   } catch (const std::exception &e) {
     spdlog::warn("Failed to parse network JSON: {}", e.what());
@@ -3711,8 +3742,24 @@ void controller_window_input() {
             if (GlobalKeyboard::isPressed((SDL_Scancode)i))
               w.net_keyboard_keys.insert((SDL_Scancode)i);
           }
-          // Mouse
-          GlobalKeyboard::getMouseDelta(w.net_mouse_dx, w.net_mouse_dy);
+          // Mouse - the global deltas were already taken (and zeroed)
+          // by getMouseDelta()/getScrollDelta() at the top of this
+          // function, so reuse those instead of reading the drained
+          // accumulator again (which always returned 0). Accumulate
+          // until the next send - see buildNetworkStateJson().
+          // Only while a link is up, so motion made before the
+          // receiver connects doesn't arrive as one big jump.
+          bool link_up = w.network_protocol == 0 ? w.network_handshake_ack
+                                                 : w.network_tcp_connected;
+          if (link_up) {
+            w.net_mouse_dx += globalMouseDx;
+            w.net_mouse_dy += globalMouseDy;
+            w.net_scroll_dx += globalScrollDx;
+            w.net_scroll_dy += globalScrollDy;
+          } else {
+            w.net_mouse_dx = w.net_mouse_dy = 0.0f;
+            w.net_scroll_dx = w.net_scroll_dy = 0.0f;
+          }
           for (int i = 0; i < 8; ++i)
             w.net_mouse_buttons[i] = GlobalKeyboard::isMouseButtonPressed(i);
         }

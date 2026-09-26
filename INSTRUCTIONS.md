@@ -2,40 +2,48 @@
 
 ## Table of Contents
 
-1. [What's New in 1.4.0](#whats-new-in-140)
-2. [What's New in 1.3.3](#whats-new-in-133)
-3. [What's New in 1.3.2](#whats-new-in-132)
-4. [What's New in 1.3.1](#whats-new-in-131)
-5. [What's New in 1.3.0](#whats-new-in-130)
-6. [What's New in 1.2.0](#whats-new-in-120)
-7. [What's New in 1.1.1](#whats-new-in-111)
-8. [What's New in 1.1.0](#whats-new-in-110)
-9. [First Launch](#first-launch)
-10. [Opening a Controller Window](#opening-a-controller-window)
-11. [Mapping Inputs](#mapping-inputs)
-12. [Additional Bindings](#additional-bindings)
-13. [Gyro Support](#gyro-support)
-14. [Touchpads](#touchpads)
-15. [Highlighting & Press Feedback](#highlighting--press-feedback)
-16. [Smooth Travel Animation](#smooth-travel-animation)
-17. [Importing a Custom Model](#importing-a-custom-model)
-18. [Textures & UV Mapping](#textures--uv-mapping)
-19. [Materials](#materials)
-20. [Lighting](#lighting)
-21. [Window & Camera Settings](#window--camera-settings)
-22. [Network Functionality](#network-functionality)
-23. [Shader Effects](#shader-effects)
-24. [Input History](#input-history)
-25. [The Log Window](#the-log-window)
-26. [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode)
-27. [Theme](#theme)
-28. [Updates & Bundled Models](#updates--bundled-models)
-29. [Data Directory & Backups](#data-directory--backups)
-30. [Troubleshooting](#troubleshooting)
+1. [What's New in 1.4.1](#whats-new-in-141)
+2. [What's New in 1.4.0](#whats-new-in-140)
+3. [What's New in 1.3.3](#whats-new-in-133)
+4. [What's New in 1.3.2](#whats-new-in-132)
+5. [What's New in 1.3.1](#whats-new-in-131)
+6. [What's New in 1.3.0](#whats-new-in-130)
+7. [What's New in 1.2.0](#whats-new-in-120)
+8. [What's New in 1.1.1](#whats-new-in-111)
+9. [What's New in 1.1.0](#whats-new-in-110)
+10. [First Launch](#first-launch)
+11. [Opening a Controller Window](#opening-a-controller-window)
+12. [Mapping Inputs](#mapping-inputs)
+13. [Additional Bindings](#additional-bindings)
+14. [Gyro Support](#gyro-support)
+15. [Touchpads](#touchpads)
+16. [Highlighting & Press Feedback](#highlighting--press-feedback)
+17. [Smooth Travel Animation](#smooth-travel-animation)
+18. [Importing a Custom Model](#importing-a-custom-model)
+19. [Textures & UV Mapping](#textures--uv-mapping)
+20. [Materials](#materials)
+21. [Lighting](#lighting)
+22. [Window & Camera Settings](#window--camera-settings)
+23. [Network Functionality](#network-functionality)
+24. [Shader Effects](#shader-effects)
+25. [Input History](#input-history)
+26. [The Log Window](#the-log-window)
+27. [Taskbar/Tray Icon & Debug Mode](#taskbartray-icon--debug-mode)
+28. [Theme](#theme)
+29. [Updates & Bundled Models](#updates--bundled-models)
+30. [Data Directory & Backups](#data-directory--backups)
+31. [Troubleshooting](#troubleshooting)
 
 ---
 
 ![Demo](images/demo.webp)
+
+## What's New in 1.4.1
+
+- Fixed: keyboard and mouse models showed nothing on a network receiver; only controller and joystick input came through. Keys, mouse movement, mouse buttons and the scroll wheel are now sent too. Update both the sender and the receiver.
+- Fixed: the Linux AppImage showed no version in AppImage installers (AppImageLauncher, Gear Lever and similar).
+
+---
 
 ## What's New in 1.4.0
 

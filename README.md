@@ -11,6 +11,11 @@ This is a **fork, not a replacement**. It exists as an homage to the original to
 
 The **`+`** in the name means exactly that: **improvements and extra features** layered on top of the original — more controllers, more rendering features, more input paths, more build tooling — while keeping the same "point it at your input device and it just works" spirit. It's also a personal passion project: a way for me to see what I'm actually capable of building and maintaining with AI as a collaborator rather than a crutch.
 
+## What's new in 1.4.1
+
+- **Fixed: keyboard and mouse input over the network.** A receiver only showed controller and joystick input: key bindings never matched (a key-name case mismatch) and mouse movement was always sent as zero. Keys, mouse movement, mouse buttons (including 6 to 8) and the scroll wheel now all come through. Update both the sender and the receiver.
+- **Fixed: the Linux AppImage showing no version** in AppImage installers such as AppImageLauncher or Gear Lever. The AppImage's desktop entry now carries the app's version.
+
 ## What's new in 1.4.0
 
 - **"What's New" after an update.** The first launch of a new version shows its release notes once, and offers any bundled models that are new in that version (pre-ticked), so new models no longer require deleting your models folder. Never shown on a normal launch or a fresh install.
@@ -84,7 +89,7 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 
 ## What's new in 1.1.0
 
-- **Network functionality** – send a window's live mesh state (button/axis/touch data) over UDP or TCP to another instance of the app on the same machine or over the network, so you can render the overlay on a second PC (e.g. a dedicated streaming/capture box) instead of the one you're playing on.
+- **Network functionality** – send a window's live mesh state (button/axis/touch, keyboard and mouse data) over UDP or TCP to another instance of the app on the same machine or over the network, so you can render the overlay on a second PC (e.g. a dedicated streaming/capture box) instead of the one you're playing on.
 - **Fixed transparent background compositing on AMD and NVIDIA.** The "Transparent Background" option now actually produces a transparent framebuffer on drivers/compositors where it previously silently failed.
 - **Overlay performance fixes.** Resolved input lag and stuttering that showed up specifically when running with click-through enabled while something else (e.g. a game) had foreground focus.
 - **Custom shader effects.** Pixel-art and cel-shaded/toon looks rewritten for genuine depth (hue-graded bands, view-angle form shading) instead of a subtle color tweak; Aurora, Infernal, and Rainbow reworked for a much more convincing look; a new **Galaxy** shader; and a fully-replaced **Black Hole** effect (previously a generic ported ShaderToy pattern, now an actual swirling accretion disk). Plus ShaderToy-compatible shader import — including channel textures (`iChannel0`-`iChannel3`): drop in your own image via the new **Add Resource** button, or leave it unset and a channel that a shader expects (e.g. a noise texture) is generated automatically instead of rendering black.
@@ -120,6 +125,7 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 
 - [What stayed the same](#what-stayed-the-same)
 - [What's new in the `+`](#whats-new-in-the-)
+- [What's new in 1.4.1](#whats-new-in-141)
 - [What's new in 1.4.0](#whats-new-in-140)
 - [What's new in 1.3.3](#whats-new-in-133)
 - [What's new in 1.3.2](#whats-new-in-132)
@@ -285,7 +291,7 @@ Gamepad button/axis layouts are resolved through SDL3's community-maintained [`g
 
 Note the example im showing is a steamdeck running the software and sending it to the other pcs which are a Windows, Mac and Linux machine. The app is downloaded directly from the repository and i added it as a "Non Steam Game". Start the network as a "Sender" and just start a game. Just note that you need to open a port in your pc to make it connect. It is not meant to be used with encryption or security this feature was made for a simple and direct purpose (to connect to another device in your netowrk).
 
-Each controller window can send its live mesh state (button presses, axis values, touch positions) over the network to another running instance of the app, instead of only rendering it locally. This is aimed at setups where the machine generating input isn't the one you want doing the capture/overlay compositing — for example, rendering the overlay on a dedicated streaming PC while the game runs on a separate gaming PC. Or running the software on a steamdeck and sending the input to another PC, your world your rules!
+Each controller window can send its live mesh state (button presses, axis values, touch positions, keyboard keys, mouse movement, buttons and scroll) over the network to another running instance of the app, instead of only rendering it locally. This is aimed at setups where the machine generating input isn't the one you want doing the capture/overlay compositing — for example, rendering the overlay on a dedicated streaming PC while the game runs on a separate gaming PC. Or running the software on a steamdeck and sending the input to another PC, your world your rules!
 
 Open a controller window's **Window** section to find the network controls:
 
