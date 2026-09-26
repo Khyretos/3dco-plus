@@ -13,7 +13,7 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 
 ## What's new in 1.4.1
 
-- **Fixed: keyboard and mouse input over the network.** A receiver only showed controller and joystick input: key bindings never matched (a key-name case mismatch) and mouse movement was always sent as zero. Keys, mouse movement, mouse buttons (including 6 to 8) and the scroll wheel now all come through. Update both the sender and the receiver.
+- **Fixed: keyboard and mouse input over the network.** A receiver only showed controller and joystick input: key bindings never matched (a key-name case mismatch) and mouse movement was always sent as zero. Keys, mouse movement, mouse buttons (including 6 to 8) and the scroll wheel now all come through. Only the keys and mouse inputs the model is bound to are sent, never everything you type. Update both the sender and the receiver.
 - **Fixed: the Linux AppImage showing no version** in AppImage installers such as AppImageLauncher or Gear Lever. The AppImage's desktop entry now carries the app's version.
 
 ## What's new in 1.4.0
