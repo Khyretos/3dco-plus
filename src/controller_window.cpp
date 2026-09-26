@@ -2773,6 +2773,49 @@ getKeyNameMap() {
   return keyMap;
 }
 
+// Keyboard keys and mouse inputs this window's model is bound to
+// (primary and extra bindings) - the network sender only forwards
+// these. See controller_window_input().
+struct NetBoundInputs {
+  std::vector<SDL_Scancode> keys;
+  bool mouse_buttons[8] = {};
+  bool mouse_motion = false;
+  bool mouse_scroll = false;
+};
+
+static NetBoundInputs collectNetBoundInputs(const controller_window &w) {
+  NetBoundInputs out;
+  const auto &keyMap = getKeyNameMap();
+  std::set<SDL_Scancode> keys;
+  auto add = [&](const std::string &binding) {
+    size_t colon = binding.find(':');
+    if (colon == std::string::npos)
+      return;
+    std::string type = binding.substr(0, colon);
+    std::string value = binding.substr(colon + 1);
+    if (type == "keyboard") {
+      auto it = keyMap.find(value);
+      if (it != keyMap.end())
+        keys.insert(it->second);
+    } else if (type == "mouse") {
+      if (value == "mouse_xy" || value == "mouse_x" || value == "mouse_y")
+        out.mouse_motion = true;
+      else if (value == "mouse_scroll_xy" || value == "mouse_scroll_x" ||
+               value == "mouse_scroll_y")
+        out.mouse_scroll = true;
+      else if (int b = mouseButtonIndex(value); b >= 0)
+        out.mouse_buttons[b] = true;
+    }
+  };
+  for (const Mesh &mesh : w.model.meshes) {
+    add(mesh.inputBinding);
+    for (const MeshBinding &b : mesh.extraBindings)
+      add(b.inputBinding);
+  }
+  out.keys.assign(keys.begin(), keys.end());
+  return out;
+}
+
 // Resolves one MeshBinding's own travel_value/travel_signed from its
 // own live input state - the "extra bindings" equivalent of the
 // button/hat/axis-as-direction/keyboard-key/mouse-button branches in
@@ -3736,11 +3779,14 @@ void controller_window_input() {
               w.net_joystick_axes[i] =
                   SDL_GetJoystickAxis(w.sdl_joystick, i) / 32767.0f;
           }
-          // Keyboard
+          // Keyboard/mouse: only what this window's model actually
+          // binds is sent - never every key typed or every click, so
+          // the network never carries input the overlay doesn't show.
+          NetBoundInputs bound = collectNetBoundInputs(w);
           w.net_keyboard_keys.clear();
-          for (int i = 0; i < SDL_SCANCODE_COUNT; ++i) {
-            if (GlobalKeyboard::isPressed((SDL_Scancode)i))
-              w.net_keyboard_keys.insert((SDL_Scancode)i);
+          for (SDL_Scancode sc : bound.keys) {
+            if (GlobalKeyboard::isPressed(sc))
+              w.net_keyboard_keys.insert(sc);
           }
           // Mouse - the global deltas were already taken (and zeroed)
           // by getMouseDelta()/getScrollDelta() at the top of this
@@ -3752,16 +3798,21 @@ void controller_window_input() {
           bool link_up = w.network_protocol == 0 ? w.network_handshake_ack
                                                  : w.network_tcp_connected;
           if (link_up) {
-            w.net_mouse_dx += globalMouseDx;
-            w.net_mouse_dy += globalMouseDy;
-            w.net_scroll_dx += globalScrollDx;
-            w.net_scroll_dy += globalScrollDy;
+            if (bound.mouse_motion) {
+              w.net_mouse_dx += globalMouseDx;
+              w.net_mouse_dy += globalMouseDy;
+            }
+            if (bound.mouse_scroll) {
+              w.net_scroll_dx += globalScrollDx;
+              w.net_scroll_dy += globalScrollDy;
+            }
           } else {
             w.net_mouse_dx = w.net_mouse_dy = 0.0f;
             w.net_scroll_dx = w.net_scroll_dy = 0.0f;
           }
           for (int i = 0; i < 8; ++i)
-            w.net_mouse_buttons[i] = GlobalKeyboard::isMouseButtonPressed(i);
+            w.net_mouse_buttons[i] =
+                bound.mouse_buttons[i] && GlobalKeyboard::isMouseButtonPressed(i);
         }
 
         applyMappingToMeshes(w, globalMouseDx, globalMouseDy, globalScrollDx,
