@@ -151,6 +151,7 @@ The **`+`** in the name means exactly that: **improvements and extra features** 
 - [Controller showcase](#controller-showcase)
 - [Work in progress / known bugs](#work-in-progress--known-bugs)
 - [Known issues (tracked)](#known-issues-tracked)
+- [Installing on Arch Linux (AUR)](#installing-on-arch-linux-aur)
 - [Building](#building)
 - [Releasing](#releasing)
 - [Contributing](#contributing)
@@ -473,6 +474,16 @@ Live demo clips for every controller in the built-in model library. (The `+` bad
 | Minimized windows aren't capturable by OBS/other capture tools             | By design (OS-level)         | Minimized windows generally aren't composited by any OS, so no capture method can see their content. Not specific to this app.                                                                                                                                                      |
 
 ---
+
+## Installing on Arch Linux (AUR)
+
+Arch and Arch-based distributions (Manjaro, EndeavourOS, CachyOS, ...) can install 3dco+ from the AUR package [`3dco-plus-git`](https://aur.archlinux.org/packages/3dco-plus-git), made and maintained by [thingsiplay](https://github.com/thingsiplay). It builds the latest code straight from this repository and adds a menu entry with the app's icon:
+
+```bash
+yay -S 3dco-plus-git
+```
+
+(or `paru -S 3dco-plus-git`, or any other AUR helper). It's a community package rather than an official release: thank you, thingsiplay! Problems with the package itself go to its [AUR page](https://aur.archlinux.org/packages/3dco-plus-git); problems with the app go to this repository's issues.
 
 ## Building
 
