@@ -1,0 +1,136 @@
+name: Build
+
+# Forgejo port of .github/workflows/build.yml, run by git.kreative-kompas.com
+# (which mirrors this repo) on the Kompas server runner. GitHub ignores the
+# .forgejo folder, and Forgejo ignores .github/workflows while this exists.
+#
+# Differences from the GitHub version:
+# - Builder images are built with plain `docker build`: the runner's own
+#   Docker daemon keeps its layer cache between runs, so no gha cache.
+# - Jobs run inside a container, so `docker run -v $workspace:/dist` would
+#   mount a path the daemon can't see. Each build writes to a volume inside
+#   the builder container and `docker cp` copies the result out.
+# - No free-disk-space step (not a GitHub VM).
+# - The release job creates a Forgejo release.
+
+on:
+  workflow_dispatch: {}
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: build-${{ forgejo.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - name: Linux AppImage
+            platform: linux
+            dockerfile: packaging/docker/Dockerfile.appimage
+            artifact: 3dco-linux-appimage
+          - name: Windows executable
+            platform: windows
+            dockerfile: packaging/docker/Dockerfile.windows
+            artifact: 3dco-windows
+          - name: macOS Universal App
+            platform: macos
+            dockerfile: packaging/docker/Dockerfile.macos
+            artifact: 3dco-macos
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        run: echo "APP_VERSION=$(git describe --tags --match 'v[0-9]*' 2>/dev/null || echo 0.0.0-dev)" >> "$GITHUB_ENV"
+
+      - name: Build builder image
+        run: >
+          docker build -f ${{ matrix.dockerfile }}
+          --build-arg APP_VERSION="$APP_VERSION"
+          -t 3dco-${{ matrix.platform }}-builder:latest .
+
+      - name: Run build
+        run: |
+          name="3dco-${{ matrix.platform }}-${{ forgejo.run_id }}"
+          docker rm -f "$name" 2>/dev/null || true
+          docker run --name "$name" -v /dist/${{ matrix.platform }} 3dco-${{ matrix.platform }}-builder:latest
+          mkdir -p dist
+          docker cp "$name:/dist/${{ matrix.platform }}" dist/
+          docker rm -v "$name"
+          ls -la dist/${{ matrix.platform }}
+
+      - name: Zip macOS app bundle
+        if: matrix.platform == 'macos'
+        run: cd dist/macos && zip -qr "3dco+-macos.zip" "3dco+.app"
+
+      - name: Upload Linux artifact
+        if: matrix.platform == 'linux'
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: 3dco-linux-appimage
+          path: dist/linux/*.AppImage
+          if-no-files-found: error
+
+      - name: Upload Windows artifact
+        if: matrix.platform == 'windows'
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: 3dco-windows
+          path: dist/windows/3dco+.exe
+          if-no-files-found: error
+
+      - name: Upload Windows debug symbols
+        if: matrix.platform == 'windows'
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: 3dco-windows-debug-symbols
+          path: dist/windows/3dco+.debug
+          if-no-files-found: warn
+
+      - name: Upload macOS artifact
+        if: matrix.platform == 'macos'
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: 3dco-macos
+          path: dist/macos/3dco+-macos.zip
+          if-no-files-found: error
+
+  release:
+    name: Create release
+    if: startsWith(forgejo.ref, 'refs/tags/v')
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: https://code.forgejo.org/forgejo/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: 3dco-*
+          merge-multiple: true
+
+      - name: Release notes
+        run: |
+          f="release-notes/${GITHUB_REF_NAME}.md"
+          if [ -f "$f" ]; then cp "$f" release-notes.md; else echo "No $f - release will have no description"; : > release-notes.md; fi
+          ls -la release-assets
+
+      - name: Create release
+        uses: https://code.forgejo.org/actions/forgejo-release@v2
+        with:
+          direction: upload
+          tag: ${{ forgejo.ref_name }}
+          release-dir: release-assets
+          release-notes-file: release-notes.md
+          token: ${{ secrets.GITHUB_TOKEN }}
