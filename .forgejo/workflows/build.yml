@@ -2,7 +2,9 @@ name: Build
 
 # Forgejo port of .github/workflows/build.yml, run by git.kreative-kompas.com
 # (which mirrors this repo) on the Kompas server runner. GitHub ignores the
-# .forgejo folder, and Forgejo ignores .github/workflows while this exists. Differences from the GitHub version:
+# .forgejo folder, and Forgejo ignores .github/workflows while this exists.
+#
+# Differences from the GitHub version:
 # - Builder images are built with plain `docker build`: the runner's own
 #   Docker daemon keeps its layer cache between runs, so no gha cache.
 # - Jobs run inside a container, so `docker run -v $workspace:/dist` would
@@ -15,7 +17,6 @@ on:
   workflow_dispatch: {}
   push:
     tags: ["v*"]
-    branches: [forgejo-ci]  # temporary: tests that mirror syncs start builds
 
 concurrency:
   group: build-${{ forgejo.ref }}
