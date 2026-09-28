@@ -2779,6 +2779,50 @@ static void requestNoticeAttention() {
   glfwRequestWindowAttention(glfw_settings_window);
 }
 
+// Centered panel shown while no controller exists yet. Returns true
+// when its "Create Controller" button was pressed this frame.
+static bool drawNoControllersHint() {
+  const ImVec2 avail = ImGui::GetContentRegionAvail();
+  const ImVec2 panel_size(avail.x * 0.8f, avail.y * 0.7f);
+  ImGui::SetCursorPos(
+      ImVec2(ImGui::GetCursorPosX() + (avail.x - panel_size.x) * 0.5f,
+             ImGui::GetCursorPosY() + (avail.y - panel_size.y) * 0.5f));
+
+  bool pressed = false;
+  ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                        ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
+  ImGui::BeginChild("NoControllersHint", panel_size, true);
+
+  auto centered_text = [](const char *text, float scale) {
+    ImGui::SetWindowFontScale(scale);
+    const float w = ImGui::CalcTextSize(text).x;
+    ImGui::SetCursorPosX((ImGui::GetWindowWidth() - w) * 0.5f);
+    ImGui::TextUnformatted(text);
+    ImGui::SetWindowFontScale(1.0f);
+  };
+
+  ImGui::Dummy(ImVec2(0.0f, panel_size.y * 0.15f));
+  centered_text("No controllers created yet", 1.6f);
+  ImGui::Spacing();
+  centered_text("Press \"New\" at the top, or the button below, to create",
+                1.0f);
+  centered_text("your first controller overlay.", 1.0f);
+  centered_text("The first controller also unpacks the bundled models.", 1.0f);
+  ImGui::Spacing();
+  ImGui::Spacing();
+
+  const ImVec2 button_size(ImGui::CalcTextSize("Create Controller").x +
+                               ImGui::GetStyle().FramePadding.x * 6.0f,
+                           ImGui::GetFrameHeight() * 1.5f);
+  ImGui::SetCursorPosX((ImGui::GetWindowWidth() - button_size.x) * 0.5f);
+  if (ImGui::Button("Create Controller", button_size))
+    pressed = true;
+
+  ImGui::EndChild();
+  ImGui::PopStyleColor();
+  return pressed;
+}
+
 static void drawWhatsNewPopup() {
   if (g_show_whats_new && !ImGui::IsPopupOpen("What's New")) {
     ImGui::OpenPopup("What's New");
@@ -3226,26 +3270,32 @@ void drawSettingsWindow() {
       ImGuiTabBarFlags_AutoSelectNewTabs | ImGuiTabBarFlags_Reorderable |
       ImGuiTabBarFlags_FittingPolicyResizeDown;
 
+  // Shared by the tab bar's "New" button and the empty-state button
+  // below, so both create the tab the same way.
+  auto add_new_controller_tab = [&]() {
+    // Was computed unconditionally every single frame regardless of
+    // whether this button was ever pressed - moved here so the
+    // check_tab_title_exists() search (itself O(tabs.size()) per
+    // candidate number, worse the more "Controller N" tabs already
+    // exist) only runs on the one frame it's actually needed.
+    int new_tab_number = 1;
+    while (check_tab_title_exists(
+        std::string("Controller ").append(std::to_string(new_tab_number)))) {
+      new_tab_number++;
+    }
+    new_tab_title = "Controller " + std::to_string(new_tab_number);
+
+    window_tab new_tab;
+    tabs_made++;
+    new_tab.title = new_tab_title;
+    tabs.push_back(new_tab);
+    new_controller_window = true;
+  };
+
   if (ImGui::BeginTabBar("MyTabBar", tab_bar_flags)) {
     if (ImGui::TabItemButton("New", ImGuiTabItemFlags_Trailing |
                                         ImGuiTabItemFlags_NoTooltip)) {
-      // Was computed unconditionally every single frame regardless of
-      // whether this button was ever pressed - moved here so the
-      // check_tab_title_exists() search (itself O(tabs.size()) per
-      // candidate number, worse the more "Controller N" tabs already
-      // exist) only runs on the one frame it's actually needed.
-      int new_tab_number = 1;
-      while (check_tab_title_exists(
-          std::string("Controller ").append(std::to_string(new_tab_number)))) {
-        new_tab_number++;
-      }
-      new_tab_title = "Controller " + std::to_string(new_tab_number);
-
-      window_tab new_tab;
-      tabs_made++;
-      new_tab.title = new_tab_title;
-      tabs.push_back(new_tab);
-      new_controller_window = true;
+      add_new_controller_tab();
     }
     for (unsigned i = 0; i < tabs.size(); ++i) {
       bool open = true;
@@ -3262,6 +3312,16 @@ void drawSettingsWindow() {
       }
     }
     ImGui::EndTabBar();
+  }
+
+  // Empty state: on a fresh install there are no controllers yet (the
+  // first one is what unpacks the bundled models into the data
+  // folder), so instead of a blank window, say so and offer the same
+  // action as the "New" tab button. This is also what the AppImage
+  // catalog's launch test screenshots.
+  if (tabs.empty() && !new_controller_window) {
+    if (drawNoControllersHint())
+      add_new_controller_tab();
   }
 
   if (tabs.size() > 0 && new_controller_window == false) {

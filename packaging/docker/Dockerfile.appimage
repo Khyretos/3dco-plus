@@ -159,14 +159,20 @@ RUN echo '#!/bin/sh\n\
     exec "${HERE}/usr/bin/3dco+" "$@"' > /app/AppDir/AppRun && \
     chmod +x /app/AppDir/AppRun
 
-# Download and extract appimagetool
-RUN wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O /tmp/appimagetool && \
+# Download and extract appimagetool, plus the static type 2 runtime it
+# embeds. This is the maintained AppImage/appimagetool, not the old
+# AppImageKit one: its runtime is statically linked, so the resulting
+# AppImage no longer needs libfuse2 on the user's system (the AppImage
+# catalog's test flags the old runtime). Passing --runtime-file keeps
+# appimagetool from downloading the runtime itself when the container runs.
+RUN wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -O /tmp/appimagetool && \
     chmod +x /tmp/appimagetool && \
     /tmp/appimagetool --appimage-extract && \
     mv squashfs-root /appimagetool-root && \
-    rm /tmp/appimagetool
+    rm /tmp/appimagetool && \
+    wget -q https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64 -O /appimagetool-runtime
 
 # Build the AppImage
 # VERSION is appimagetool's own input for the version it records in the
 # AppImage (and would otherwise warn about being unset).
-ENTRYPOINT ["/bin/sh", "-c", "VERSION=$(head -n1 /app/app_version.txt) exec /appimagetool-root/AppRun /app/AppDir /dist/linux/3dco+.AppImage"]
+ENTRYPOINT ["/bin/sh", "-c", "VERSION=$(head -n1 /app/app_version.txt) exec /appimagetool-root/AppRun --runtime-file /appimagetool-runtime /app/AppDir /dist/linux/3dco+.AppImage"]
